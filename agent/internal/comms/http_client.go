@@ -9,13 +9,20 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"time"
 
 	"github.com/edgeguardian/agent/internal/model"
 	"go.uber.org/zap"
+)
+
+const (
+	maxRetries     = 3
+	initialBackoff = 1 * time.Second
 )
 
 // ControllerClient communicates with the EdgeGuardian controller over HTTP/JSON.
@@ -39,7 +46,7 @@ func NewControllerClient(address string, port int, logger *zap.Logger) *Controll
 // Register sends a registration request to the controller.
 func (c *ControllerClient) Register(ctx context.Context, req *model.RegisterRequest) (*model.RegisterResponse, error) {
 	var resp model.RegisterResponse
-	if err := c.doJSON(ctx, http.MethodPost, "/api/v1/agent/register", req, &resp); err != nil {
+	if err := c.doWithRetry(ctx, http.MethodPost, "/api/v1/agent/register", req, &resp); err != nil {
 		return nil, fmt.Errorf("registration failed: %w", err)
 	}
 	return &resp, nil
@@ -48,7 +55,7 @@ func (c *ControllerClient) Register(ctx context.Context, req *model.RegisterRequ
 // Heartbeat sends a heartbeat and receives manifest updates or commands.
 func (c *ControllerClient) Heartbeat(ctx context.Context, req *model.HeartbeatRequest) (*model.HeartbeatResponse, error) {
 	var resp model.HeartbeatResponse
-	if err := c.doJSON(ctx, http.MethodPost, "/api/v1/agent/heartbeat", req, &resp); err != nil {
+	if err := c.doWithRetry(ctx, http.MethodPost, "/api/v1/agent/heartbeat", req, &resp); err != nil {
 		return nil, fmt.Errorf("heartbeat failed: %w", err)
 	}
 	return &resp, nil
@@ -58,7 +65,7 @@ func (c *ControllerClient) Heartbeat(ctx context.Context, req *model.HeartbeatRe
 func (c *ControllerClient) GetDesiredState(ctx context.Context, deviceID string) (*model.DesiredStateResponse, error) {
 	var resp model.DesiredStateResponse
 	path := fmt.Sprintf("/api/v1/agent/desired-state/%s", deviceID)
-	if err := c.doJSON(ctx, http.MethodGet, path, nil, &resp); err != nil {
+	if err := c.doWithRetry(ctx, http.MethodGet, path, nil, &resp); err != nil {
 		return nil, fmt.Errorf("get desired state failed: %w", err)
 	}
 	return &resp, nil
@@ -67,7 +74,7 @@ func (c *ControllerClient) GetDesiredState(ctx context.Context, deviceID string)
 // ReportState reports the observed state to the controller.
 func (c *ControllerClient) ReportState(ctx context.Context, req *model.ReportStateRequest) error {
 	var resp model.ReportStateResponse
-	if err := c.doJSON(ctx, http.MethodPost, "/api/v1/agent/report-state", req, &resp); err != nil {
+	if err := c.doWithRetry(ctx, http.MethodPost, "/api/v1/agent/report-state", req, &resp); err != nil {
 		return fmt.Errorf("report state failed: %w", err)
 	}
 	return nil
@@ -77,6 +84,79 @@ func (c *ControllerClient) ReportState(ctx context.Context, req *model.ReportSta
 func (c *ControllerClient) Close() error {
 	c.httpClient.CloseIdleConnections()
 	return nil
+}
+
+// httpError wraps an HTTP response error with its status code, enabling
+// the retry logic to distinguish retryable 5xx errors from non-retryable 4xx.
+type httpError struct {
+	StatusCode int
+	Message    string
+}
+
+func (e *httpError) Error() string {
+	return e.Message
+}
+
+// isRetryable returns true if the error is a network-level failure or a 5xx
+// server error. Client errors (4xx) are never retried.
+func isRetryable(err error) bool {
+	if err == nil {
+		return false
+	}
+
+	// 5xx server errors are retryable.
+	var he *httpError
+	if errors.As(err, &he) {
+		return he.StatusCode >= 500
+	}
+
+	// Network-level errors (connection refused, timeout, DNS) are retryable.
+	var netErr net.Error
+	if errors.As(err, &netErr) {
+		return true
+	}
+
+	// Treat any other transport error as potentially retryable.
+	return true
+}
+
+// doWithRetry wraps doJSON with exponential backoff retries.
+// Retries up to maxRetries times on network errors and 5xx responses.
+// 4xx client errors are returned immediately without retry.
+func (c *ControllerClient) doWithRetry(ctx context.Context, method, path string, body interface{}, result interface{}) error {
+	var lastErr error
+	backoff := initialBackoff
+
+	for attempt := 0; attempt < maxRetries; attempt++ {
+		lastErr = c.doJSON(ctx, method, path, body, result)
+		if lastErr == nil {
+			return nil
+		}
+
+		if !isRetryable(lastErr) {
+			return lastErr
+		}
+
+		if attempt < maxRetries-1 {
+			c.logger.Warn("request failed, retrying",
+				zap.String("method", method),
+				zap.String("path", path),
+				zap.Int("attempt", attempt+1),
+				zap.Duration("backoff", backoff),
+				zap.Error(lastErr),
+			)
+
+			select {
+			case <-ctx.Done():
+				return ctx.Err()
+			case <-time.After(backoff):
+			}
+
+			backoff *= 2
+		}
+	}
+
+	return fmt.Errorf("all %d attempts failed: %w", maxRetries, lastErr)
 }
 
 // doJSON performs an HTTP request with JSON body and decodes the JSON response.
@@ -114,7 +194,10 @@ func (c *ControllerClient) doJSON(ctx context.Context, method, path string, body
 	}
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return fmt.Errorf("HTTP %d from %s: %s", resp.StatusCode, path, string(respBody))
+		return &httpError{
+			StatusCode: resp.StatusCode,
+			Message:    fmt.Sprintf("HTTP %d from %s: %s", resp.StatusCode, path, string(respBody)),
+		}
 	}
 
 	if result != nil && len(respBody) > 0 {

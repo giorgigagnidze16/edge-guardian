@@ -134,6 +134,14 @@ public class Device {
     }
 
     /**
+     * Returns the device's current runtime status as a DTO.
+     * Alias for toDeviceStatus(), used by DeviceDto.from().
+     */
+    public DeviceStatus getStatus() {
+        return toDeviceStatus();
+    }
+
+    /**
      * Converts current status fields to a DeviceStatus DTO.
      */
     public DeviceStatus toDeviceStatus() {

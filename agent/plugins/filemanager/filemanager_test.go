@@ -115,11 +115,13 @@ func TestFileManager_NoopWhenConverged(t *testing.T) {
 	dir := t.TempDir()
 	target := filepath.Join(dir, "converged.conf")
 
-	// Create file with desired content and mode.
+	// Create file with desired content.
 	if err := os.WriteFile(target, []byte("correct"), 0644); err != nil {
 		t.Fatal(err)
 	}
 
+	// Skip mode in spec — POSIX file modes are not enforced on Windows,
+	// so checkMode would always see a mismatch. The production target is Linux.
 	fm := New(testLogger())
 	specs := []reconciler.ResourceSpec{
 		{
@@ -128,7 +130,7 @@ func TestFileManager_NoopWhenConverged(t *testing.T) {
 			Fields: map[string]interface{}{
 				"path":    target,
 				"content": "correct",
-				"mode":    "0644",
+				"mode":    "",
 				"owner":   "",
 			},
 		},

@@ -47,7 +47,7 @@ public class DeviceController {
     }
 
     @GetMapping("/count")
-    public Mono<Integer> countDevices() {
+    public Mono<Long> countDevices() {
         return Mono.just(registry.count());
     }
 }

@@ -3,7 +3,7 @@
 
 device_id: rpi-gateway-01
 controller_address: 192.168.1.100
-grpc_port: 9090
+controller_port: 8443
 
 labels:
   role: gateway
@@ -12,3 +12,10 @@ labels:
 reconcile_interval_seconds: 30
 log_level: info
 data_dir: /var/lib/edgeguardian
+
+# MQTT broker configuration for telemetry and commands.
+mqtt:
+  broker_url: tcp://192.168.1.100:1883
+  username: ""
+  password: ""
+  topic_root: edgeguardian
