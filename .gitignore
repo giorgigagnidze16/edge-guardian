@@ -1,0 +1,50 @@
+# Go
+agent/agent
+agent/watchdog
+*.exe
+*.test
+*.out
+
+# Gradle / Java
+controller/build/
+controller/.gradle/
+controller/bin/
+*.class
+*.jar
+
+# Generated protobuf (regenerable)
+agent/internal/comms/proto/*.pb.go
+controller/src/main/java/com/edgeguardian/controller/grpc/proto/
+
+# Node / Next.js
+ui/node_modules/
+ui/.next/
+ui/out/
+
+# IDE
+.idea/
+.vscode/
+*.iml
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Build output
+build/
+
+# Secrets / certs (never commit)
+*.pem
+*.key
+*.crt
+*.p12
+*.env
+*.env.local
+
+# Data
+*.db
+*.bolt
+.claude

@@ -1,0 +1,153 @@
+syntax = "proto3";
+
+package edgeguardian.v1;
+
+option go_package = "github.com/edgeguardian/agent/internal/comms/proto";
+option java_multiple_files = true;
+option java_package = "com.edgeguardian.controller.grpc.proto";
+
+import "google/protobuf/timestamp.proto";
+
+// DeviceSyncService handles device registration and state synchronization.
+service DeviceSyncService {
+  // Register a new device with the controller.
+  rpc RegisterDevice(RegisterDeviceRequest) returns (RegisterDeviceResponse);
+
+  // Send a heartbeat and receive desired state updates.
+  rpc Heartbeat(HeartbeatRequest) returns (HeartbeatResponse);
+
+  // Pull the full desired state for a device.
+  rpc GetDesiredState(GetDesiredStateRequest) returns (GetDesiredStateResponse);
+
+  // Report the current observed state of the device.
+  rpc ReportState(ReportStateRequest) returns (ReportStateResponse);
+}
+
+// --- Registration ---
+
+message RegisterDeviceRequest {
+  string device_id = 1;
+  string hostname = 2;
+  string architecture = 3;    // e.g. "arm64", "armv7l", "x86_64"
+  string os = 4;               // e.g. "linux"
+  string agent_version = 5;
+  map<string, string> labels = 6;
+}
+
+message RegisterDeviceResponse {
+  bool accepted = 1;
+  string message = 2;
+  DeviceManifest initial_manifest = 3;
+}
+
+// --- Heartbeat ---
+
+message HeartbeatRequest {
+  string device_id = 1;
+  string agent_version = 2;
+  DeviceStatus status = 3;
+  google.protobuf.Timestamp timestamp = 4;
+}
+
+message HeartbeatResponse {
+  bool manifest_updated = 1;
+  DeviceManifest manifest = 2;       // only set if manifest_updated=true
+  repeated Command pending_commands = 3;
+}
+
+// --- Desired State ---
+
+message GetDesiredStateRequest {
+  string device_id = 1;
+}
+
+message GetDesiredStateResponse {
+  DeviceManifest manifest = 1;
+  int64 version = 2;
+}
+
+// --- State Reporting ---
+
+message ReportStateRequest {
+  string device_id = 1;
+  DeviceStatus status = 2;
+  repeated PluginState plugin_states = 3;
+  google.protobuf.Timestamp timestamp = 4;
+}
+
+message ReportStateResponse {
+  bool acknowledged = 1;
+}
+
+// --- Shared Messages ---
+
+message DeviceManifest {
+  string api_version = 1;           // e.g. "edgeguardian/v1"
+  string kind = 2;                   // "DeviceManifest"
+  ManifestMetadata metadata = 3;
+  ManifestSpec spec = 4;
+  int64 version = 5;
+}
+
+message ManifestMetadata {
+  string name = 1;
+  map<string, string> labels = 2;
+  map<string, string> annotations = 3;
+}
+
+message ManifestSpec {
+  repeated FileResource files = 1;
+  repeated ServiceResource services = 2;
+  HealthCheckSpec health = 3;
+}
+
+message FileResource {
+  string path = 1;
+  string content = 2;
+  string mode = 3;                   // e.g. "0644"
+  string owner = 4;                  // e.g. "root:root"
+}
+
+message ServiceResource {
+  string name = 1;
+  string enabled = 2;               // "true" / "false"
+  string state = 3;                  // "running" / "stopped"
+}
+
+message HealthCheckSpec {
+  int32 interval_seconds = 1;
+  repeated HealthCheck checks = 2;
+}
+
+message HealthCheck {
+  string name = 1;
+  string type = 2;                   // "http", "tcp", "exec"
+  string target = 3;                 // URL, host:port, or command
+  int32 timeout_seconds = 4;
+}
+
+message DeviceStatus {
+  string state = 1;                  // "online", "degraded", "offline"
+  double cpu_usage_percent = 2;
+  int64 memory_used_bytes = 3;
+  int64 memory_total_bytes = 4;
+  int64 disk_used_bytes = 5;
+  int64 disk_total_bytes = 6;
+  double temperature_celsius = 7;
+  int64 uptime_seconds = 8;
+  google.protobuf.Timestamp last_reconcile = 9;
+  string reconcile_status = 10;      // "converged", "drifted", "error"
+}
+
+message PluginState {
+  string plugin_name = 1;
+  string status = 2;
+  map<string, string> details = 3;
+}
+
+message Command {
+  string id = 1;
+  string type = 2;                   // "ota_update", "restart", "exec", "vpn_configure"
+  map<string, string> params = 3;
+  google.protobuf.Timestamp created_at = 4;
+}

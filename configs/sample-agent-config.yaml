@@ -1,0 +1,14 @@
+# EdgeGuardian agent configuration.
+# Place at /etc/edgeguardian/agent.yaml on the device.
+
+device_id: rpi-gateway-01
+controller_address: 192.168.1.100
+grpc_port: 9090
+
+labels:
+  role: gateway
+  location: office
+
+reconcile_interval_seconds: 30
+log_level: info
+data_dir: /var/lib/edgeguardian

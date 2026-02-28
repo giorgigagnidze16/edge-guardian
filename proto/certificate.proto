@@ -1,0 +1,56 @@
+syntax = "proto3";
+
+package edgeguardian.v1;
+
+option go_package = "github.com/edgeguardian/agent/internal/comms/proto";
+option java_multiple_files = true;
+option java_package = "com.edgeguardian.controller.grpc.proto";
+
+import "google/protobuf/timestamp.proto";
+
+// CertificateService handles mTLS certificate lifecycle.
+service CertificateService {
+  // Enroll a new device — exchange enrollment token for a client certificate.
+  rpc Enroll(EnrollRequest) returns (EnrollResponse);
+
+  // Request certificate renewal before expiry.
+  rpc RenewCertificate(RenewCertificateRequest) returns (RenewCertificateResponse);
+
+  // Get the CA certificate chain for trust verification.
+  rpc GetCACertificate(GetCACertificateRequest) returns (GetCACertificateResponse);
+}
+
+message EnrollRequest {
+  string device_id = 1;
+  string enrollment_token = 2;
+  bytes csr = 3;                     // PEM-encoded CSR
+  string hostname = 4;
+  string architecture = 5;
+}
+
+message EnrollResponse {
+  bool accepted = 1;
+  string message = 2;
+  bytes certificate = 3;            // PEM-encoded signed certificate
+  bytes ca_certificate = 4;         // PEM-encoded CA cert
+  int64 expires_at_unix = 5;
+}
+
+message RenewCertificateRequest {
+  string device_id = 1;
+  bytes csr = 2;                     // PEM-encoded CSR
+}
+
+message RenewCertificateResponse {
+  bool accepted = 1;
+  string message = 2;
+  bytes certificate = 3;            // PEM-encoded signed certificate
+  int64 expires_at_unix = 4;
+}
+
+message GetCACertificateRequest {}
+
+message GetCACertificateResponse {
+  bytes ca_certificate = 1;         // PEM-encoded CA cert chain
+  bytes ca_fingerprint = 2;         // SHA-256 fingerprint
+}

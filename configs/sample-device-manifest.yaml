@@ -1,0 +1,42 @@
+apiVersion: edgeguardian/v1
+kind: DeviceManifest
+metadata:
+  name: rpi-gateway-01
+  labels:
+    role: gateway
+    location: office
+    tier: edge
+  annotations:
+    description: "Raspberry Pi 4 acting as office gateway"
+
+spec:
+  files:
+    - path: /etc/edgeguardian/managed.conf
+      content: |
+        # Managed by EdgeGuardian — do not edit manually
+        device_id=rpi-gateway-01
+        role=gateway
+      mode: "0644"
+      owner: "root:root"
+
+    - path: /etc/motd
+      content: |
+        ============================================
+        EdgeGuardian Managed Device: rpi-gateway-01
+        Role: gateway | Location: office
+        ============================================
+      mode: "0644"
+      owner: "root:root"
+
+  services:
+    - name: ssh
+      enabled: "true"
+      state: running
+
+  health:
+    interval_seconds: 30
+    checks:
+      - name: disk-space
+        type: exec
+        target: "df -h / | awk 'NR==2 {print $5}'"
+        timeout_seconds: 5

@@ -1,0 +1,22 @@
+[Unit]
+Description=EdgeGuardian Agent
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/edgeguardian-agent --config /etc/edgeguardian/agent.yaml
+Restart=on-failure
+RestartSec=5
+User=edgeguardian
+Group=edgeguardian
+LimitNOFILE=65536
+
+# Security hardening
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/edgeguardian /etc/edgeguardian
+
+[Install]
+WantedBy=multi-user.target
