@@ -12,10 +12,6 @@ controller/bin/
 *.class
 *.jar
 
-# Generated protobuf (regenerable)
-agent/internal/comms/proto/*.pb.go
-controller/src/main/java/com/edgeguardian/controller/grpc/proto/
-
 # Node / Next.js
 ui/node_modules/
 ui/.next/

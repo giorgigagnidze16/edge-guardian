@@ -30,11 +30,11 @@ public class DeviceManifestEntity {
     private String kind = "DeviceManifest";
 
     @JdbcTypeCode(SqlTypes.JSON)
-    @Column(name = "metadata", columnDefinition = "jsonb")
+    @Column(name = "metadata")
     private Map<String, Object> metadata;
 
     @JdbcTypeCode(SqlTypes.JSON)
-    @Column(name = "spec", columnDefinition = "jsonb")
+    @Column(name = "spec")
     private Map<String, Object> spec;
 
     @Column(name = "version", nullable = false)

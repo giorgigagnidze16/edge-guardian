@@ -40,7 +40,7 @@ public class Device {
     private DeviceState state;
 
     @JdbcTypeCode(SqlTypes.JSON)
-    @Column(name = "labels", columnDefinition = "jsonb")
+    @Column(name = "labels")
     private Map<String, String> labels;
 
     @Column(name = "registered_at", nullable = false)

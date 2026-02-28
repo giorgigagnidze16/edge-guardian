@@ -1,7 +1,6 @@
 // Package model defines the core data types for EdgeGuardian agent.
-// These types mirror the protobuf definitions but use plain Go structs
-// with JSON tags, eliminating the heavy protobuf/gRPC dependency from
-// the agent binary. The proto files remain the canonical contract.
+// These are plain Go structs with JSON tags that serve as the contract
+// between the agent and controller over HTTP/JSON.
 package model
 
 import "time"
@@ -24,7 +23,7 @@ type ManifestMetadata struct {
 
 // ManifestSpec defines the desired resources on the device.
 type ManifestSpec struct {
-	Files    []FileResource   `json:"files,omitempty" yaml:"files,omitempty"`
+	Files    []FileResource    `json:"files,omitempty" yaml:"files,omitempty"`
 	Services []ServiceResource `json:"services,omitempty" yaml:"services,omitempty"`
 	Health   *HealthCheckSpec  `json:"health,omitempty" yaml:"health,omitempty"`
 }
@@ -33,8 +32,8 @@ type ManifestSpec struct {
 type FileResource struct {
 	Path    string `json:"path" yaml:"path"`
 	Content string `json:"content" yaml:"content"`
-	Mode    string `json:"mode" yaml:"mode"`       // e.g. "0644"
-	Owner   string `json:"owner" yaml:"owner"`     // e.g. "root:root"
+	Mode    string `json:"mode" yaml:"mode"`   // e.g. "0644"
+	Owner   string `json:"owner" yaml:"owner"` // e.g. "root:root"
 }
 
 // ServiceResource declares a systemd service and its desired state.
@@ -53,14 +52,14 @@ type HealthCheckSpec struct {
 // HealthCheck defines a single health probe.
 type HealthCheck struct {
 	Name           string `json:"name" yaml:"name"`
-	Type           string `json:"type" yaml:"type"`                       // "http", "tcp", "exec"
+	Type           string `json:"type" yaml:"type"` // "http", "tcp", "exec"
 	Target         string `json:"target" yaml:"target"`
 	TimeoutSeconds int32  `json:"timeoutSeconds" yaml:"timeout_seconds"`
 }
 
 // DeviceStatus holds runtime metrics reported by the agent.
 type DeviceStatus struct {
-	State              string  `json:"state"`                        // "online", "degraded", "offline"
+	State              string  `json:"state"` // "online", "degraded", "offline"
 	CPUUsagePercent    float64 `json:"cpuUsagePercent"`
 	MemoryUsedBytes    int64   `json:"memoryUsedBytes"`
 	MemoryTotalBytes   int64   `json:"memoryTotalBytes"`
@@ -68,8 +67,8 @@ type DeviceStatus struct {
 	DiskTotalBytes     int64   `json:"diskTotalBytes"`
 	TemperatureCelsius float64 `json:"temperatureCelsius"`
 	UptimeSeconds      int64   `json:"uptimeSeconds"`
-	LastReconcile      string  `json:"lastReconcile,omitempty"`      // RFC3339
-	ReconcileStatus    string  `json:"reconcileStatus"`              // "converged", "drifted", "error"
+	LastReconcile      string  `json:"lastReconcile,omitempty"` // RFC3339
+	ReconcileStatus    string  `json:"reconcileStatus"`         // "converged", "drifted", "error"
 }
 
 // PluginState reports per-plugin reconciliation results.
@@ -82,7 +81,7 @@ type PluginState struct {
 // Command represents a controller-issued command for the agent.
 type Command struct {
 	ID        string            `json:"id"`
-	Type      string            `json:"type"`   // "ota_update", "restart", "exec", "vpn_configure"
+	Type      string            `json:"type"` // "ota_update", "restart", "exec", "vpn_configure"
 	Params    map[string]string `json:"params,omitempty"`
 	CreatedAt time.Time         `json:"createdAt"`
 }

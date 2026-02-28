@@ -5,7 +5,7 @@ spring:
   application:
     name: edgeguardian-controller
 
-  # PostgreSQL (Phase 2)
+  # PostgreSQL
   datasource:
     url: jdbc:postgresql://localhost:5432/edgeguardian
     username: edgeguardian
@@ -27,15 +27,9 @@ spring:
     locations: classpath:db/migration
     baseline-on-migrate: true
 
-# gRPC server configuration
-grpc:
-  server:
-    port: 9090
-
 # EdgeGuardian controller settings
 edgeguardian:
   controller:
-    grpc-port: 9090
     mqtt:
       broker-url: tcp://localhost:1883
       client-id: edgeguardian-controller
