@@ -4,6 +4,7 @@
 #   ./scripts/build-agent.sh                  # build for current platform
 #   ./scripts/build-agent.sh linux arm64       # cross-compile for RPi (64-bit)
 #   ./scripts/build-agent.sh linux arm         # cross-compile for RPi (32-bit)
+#   ./scripts/build-agent.sh android arm64     # cross-compile for Android
 
 set -euo pipefail
 

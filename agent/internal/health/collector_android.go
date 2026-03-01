@@ -1,4 +1,4 @@
-//go:build linux && !android
+//go:build android
 
 package health
 
@@ -13,7 +13,7 @@ import (
 )
 
 // collectCPU reads /proc/stat to calculate CPU usage as a percentage.
-// Uses delta between two reads (stored in Collector state).
+// Android exposes the same /proc/stat interface as Linux.
 func (c *Collector) collectCPU(status *model.DeviceStatus) {
 	f, err := os.Open("/proc/stat")
 	if err != nil {
@@ -92,10 +92,11 @@ func (c *Collector) collectMemory(status *model.DeviceStatus) {
 }
 
 // collectDisk uses statfs on the configured disk path.
+// Default disk path on Android is /data.
 func (c *Collector) collectDisk(status *model.DeviceStatus) {
 	path := c.diskPath
 	if path == "" {
-		path = "/"
+		path = "/data"
 	}
 
 	var stat syscall.Statfs_t
@@ -111,7 +112,6 @@ func (c *Collector) collectDisk(status *model.DeviceStatus) {
 
 // collectTemperature reads the CPU thermal zone from sysfs.
 func (c *Collector) collectTemperature(status *model.DeviceStatus) {
-	// Try common thermal zone paths.
 	paths := []string{
 		"/sys/class/thermal/thermal_zone0/temp",
 		"/sys/class/hwmon/hwmon0/temp1_input",

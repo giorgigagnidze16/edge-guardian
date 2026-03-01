@@ -1,4 +1,4 @@
-//go:build linux && !android
+//go:build android
 
 package filemanager
 
@@ -10,7 +10,8 @@ import (
 	"syscall"
 )
 
-// checkOwnerPlatform verifies file ownership on Linux.
+// checkOwnerPlatform verifies file ownership on Android.
+// Android uses the same syscall.Stat_t as Linux.
 func checkOwnerPlatform(path, desiredOwner string) bool {
 	parts := strings.SplitN(desiredOwner, ":", 2)
 	if len(parts) != 2 {

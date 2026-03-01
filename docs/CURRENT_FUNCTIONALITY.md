@@ -1,6 +1,5 @@
 # EdgeGuardian — Current Functionality
 
-> Last updated: 2026-03-01 · Phases 1-3 + 5 complete · Agent v0.2.0
 
 ---
 
@@ -18,6 +17,92 @@ gRPC was evaluated and removed in favor of HTTP/JSON to keep the agent binary un
 
 ---
 
+## Implementation Progress
+
+### Phase 1: Foundation (Weeks 1-4) — COMPLETE
+
+| Deliverable | Status | Notes |
+|-------------|--------|-------|
+| Go agent scaffold (cmd/agent) | Done | Entry point, config loading, signal handler |
+| HTTP agent-controller comms | Done | Register, heartbeat, desired-state, report-state |
+| Spring Boot controller scaffold | Done | Spring Boot 3.4, JPA, REST controllers |
+| PostgreSQL + Flyway V1 migration | Done | devices, device_manifests tables |
+| YAML config parser | Done | Platform-specific defaults |
+| Basic health collector | Done | CPU, RAM, disk, temperature, uptime |
+| Cross-compile script | Done | `scripts/build-agent.sh` with UPX + 5MB gate |
+
+### Phase 2: Core (Weeks 5-8) — COMPLETE
+
+| Deliverable | Status | Notes |
+|-------------|--------|-------|
+| Reconciliation engine | Done | 30s loop, manifest diff, plugin dispatch |
+| Plugin system (interface + dispatch) | Done | Name(), CanHandle(), Reconcile() |
+| File Manager plugin | Done | Atomic writes, mode/ownership, parent dir creation |
+| Service Manager plugin | Done | systemctl (Linux), launchctl (macOS), Windows SCM |
+| BoltDB persistence | Done | Desired state cache, offline queue, metadata |
+| MQTT client (Paho v3) | Done | Telemetry publish, command subscribe, auto-reconnect |
+| MQTT integration (controller) | Done | TelemetryListener, LogIngestionListener, CommandPublisher |
+| Cross-platform build tags | Done | `_linux.go`, `_windows.go`, `_darwin.go`, `_fallback.go` |
+| 112 agent tests | Done | 80 unit + 32 integration (MQTT, /proc, systemd, filemanager) |
+| 17+ controller tests | Done | AgentApiController, DeviceRegistry (Testcontainers PostgreSQL) |
+
+### Phase 3: Security + OTA (Weeks 9-12) — COMPLETE
+
+| Deliverable | Status | Notes |
+|-------------|--------|-------|
+| Keycloak OIDC integration | Done | Stateless JWT, Google/GitHub federated login |
+| Multi-tenant organizations | Done | Roles: owner/admin/operator/viewer |
+| RBAC + tenant interceptor | Done | Per-request org membership resolution |
+| Enrollment tokens | Done | Single-use device enrollment |
+| API key management | Done | SHA-256 hashed, one-time reveal |
+| Audit trail | Done | Immutable log, user attribution |
+| OTA artifact upload | Done | Ed25519 signature verification |
+| OTA rolling deployments | Done | Label-based targeting, progress tracking |
+| Agent OTA updater | Done | Streaming download, SHA-256 + Ed25519 verify, exit code 42 watchdog trigger |
+| Command dispatcher | Done | Routes: ota_update, restart, exec, vpn_configure |
+| Log forwarding (agent) | Done | Ring buffer, journalctl (Linux), file tailer |
+| Log ingestion (controller → Loki) | Done | MQTT → Loki HTTP push |
+| EMQX broker (replaced Mosquitto) | Done | Device-scoped ACL |
+| Flyway V2 (auth) + V3 (OTA) | Done | 11 new tables |
+| **NOT done**: Embedded CA + mTLS | Deferred | Planned but skipped — would add complexity without thesis value |
+| **NOT done**: Agent cert enrollment | Deferred | Requires embedded CA |
+| **NOT done**: Health-gated OTA rollback | Partial | Agent downloads + verifies, but no automatic health-gate rollback |
+
+### Phase 4: VPN + Monitoring (Weeks 13-16) — NOT STARTED
+
+| Deliverable | Status | Notes |
+|-------------|--------|-------|
+| WireGuard VPN integration | Not started | `agent/internal/vpn/` is empty scaffold |
+| VPN group management (controller) | Not started | |
+| Health check probes (HTTP/TCP/exec) | Not started | |
+| Auto-restart on health failure | Not started | |
+| Full watchdog implementation | Partial | Minimal supervisor done (exponential backoff, exit code 42), full version deferred |
+
+### Phase 5: Dashboard (Weeks 17-20) — COMPLETE
+
+| Deliverable | Status | Notes |
+|-------------|--------|-------|
+| Next.js 15 dashboard (11 pages) | Done | Fleet overview, devices, logs, manifest editor, OTA, settings, audit, integrations |
+| Keycloak OIDC login (NextAuth v5) | Done | PKCE flow, JWT cookie, middleware protection |
+| Command palette (Cmd+K) | Done | Navigation, device search, theme toggle |
+| Dark/light mode ("Midnight Luminance") | Done | Cyan accent, glass morphism, Plus Jakarta Sans |
+| Landing page | Done | Scroll-driven design, animated terminal demo, platform marquee |
+| Responsive design | Done | Mobile sidebar, responsive grids |
+| **NOT done**: Fleet simulation | Partial | `scripts/simulate-fleet.sh` exists but not battle-tested |
+| **NOT done**: E2E integration tests | Not started | |
+| **NOT done**: Performance benchmarks | Not started | |
+
+### Phase 6: Buffer / Polish (Weeks 21-24) — NOT STARTED
+
+| Deliverable | Status | Notes |
+|-------------|--------|-------|
+| GPIO plugin | Not started | Empty scaffold at `agent/plugins/gpio/` |
+| CI/CD pipeline | Not started | |
+| Android agent support | Planned | See "Android Support" section below |
+| Thesis writing | Not started | |
+
+---
+
 ## Infrastructure (Docker Compose)
 
 All services run via `deployments/docker-compose.yml`:
@@ -30,10 +115,11 @@ All services run via `deployments/docker-compose.yml`:
 | **Loki** | grafana/loki:3.3.0 | 3100 | Log aggregation (agent → controller → Loki) |
 | **Grafana** | grafana/grafana:11.4.0 | 3000 | Visualization (Loki datasource, Keycloak SSO) |
 
-**Credentials:**
+**Credentials (dev):**
 - PostgreSQL: `edgeguardian` / `edgeguardian-dev`
 - Keycloak admin: `admin` / `admin`
 - Grafana admin: `admin` / `admin`
+- EMQX admin: `admin` / `public`
 
 ```bash
 cd deployments && docker compose up -d
@@ -92,15 +178,15 @@ health:
 
 Full build-tag separation (`_linux.go`, `_windows.go`, `_darwin.go`, `_fallback.go`). No cgo required.
 
-| Capability | Linux | Windows | macOS | Other |
-|------------|-------|---------|-------|-------|
-| CPU usage | `/proc/stat` delta | `GetSystemTimes` Win32 | `ps -A -o %cpu` | stub (0%) |
-| Memory | `/proc/meminfo` | `GlobalMemoryStatusEx` | `sysctl hw.memsize` | Go runtime only |
-| Disk usage | `statfs` | `GetDiskFreeSpaceExW` | `unix.Statfs` | stub |
-| Temperature | `/sys/class/thermal` | no-op | no-op | stub |
-| Uptime | `/proc/uptime` | `GetTickCount64` | `sysctl kern.boottime` | stub |
-| Service mgmt | `systemctl` | Windows SCM API | `launchctl` | unsupported |
-| File ownership | `syscall.Stat_t` | no-op | `syscall.Stat_t` | no-op |
+| Capability | Linux | Windows | macOS | Android (planned) | Other |
+|------------|-------|---------|-------|--------------------|-------|
+| CPU usage | `/proc/stat` delta | `GetSystemTimes` Win32 | `ps -A -o %cpu` | `/proc/stat` (shared w/ Linux) | stub (0%) |
+| Memory | `/proc/meminfo` | `GlobalMemoryStatusEx` | `sysctl hw.memsize` | `/proc/meminfo` (shared w/ Linux) | Go runtime only |
+| Disk usage | `statfs` | `GetDiskFreeSpaceExW` | `unix.Statfs` | `statfs` (shared w/ Linux) | stub |
+| Temperature | `/sys/class/thermal` | no-op | no-op | `/sys/class/thermal` (shared w/ Linux) | stub |
+| Uptime | `/proc/uptime` | `GetTickCount64` | `sysctl kern.boottime` | `/proc/uptime` (shared w/ Linux) | stub |
+| Service mgmt | `systemctl` | Windows SCM API | `launchctl` | Termux/init.d (planned) | unsupported |
+| File ownership | `syscall.Stat_t` | no-op | `syscall.Stat_t` | `syscall.Stat_t` (shared w/ Linux) | no-op |
 
 ### Reconciliation Engine
 
@@ -286,7 +372,7 @@ Keycloak OIDC via NextAuth v5 with PKCE. JWT stored in cookie with access token 
 | `/settings` | Org settings: general info, members, enrollment tokens, API keys (all with CRUD dialogs) |
 | `/audit` | Audit log: timeline with action/resource badges, user attribution, filtering |
 | `/integrations` | Integration cards: REST API, CI/CD, MQTT, device enrollment |
-| `/auth/login` | Login page with Keycloak OAuth2 |
+| `/auth/login` | Landing page: scroll-driven hero, animated terminal demo, platform marquee, light/dark mode |
 
 ### UI Features
 
@@ -298,23 +384,79 @@ Keycloak OIDC via NextAuth v5 with PKCE. JWT stored in cookie with access token 
 - **Responsive** (mobile sidebar via Sheet, responsive grids)
 - **Performance optimized**: Turbopack, lazy-loaded recharts/command palette/dialogs, `optimizePackageImports`
 
-### Build Output
+---
 
-```
-Route (app)                             Size  First Load JS
-┌ ○ /                                6.97 kB         135 kB
-├ ○ /audit                          11.5 kB          165 kB
-├ ○ /auth/login                     4.72 kB         117 kB
-├ ○ /devices                        9.25 kB         177 kB
-├ ƒ /devices/[id]                   9.74 kB         195 kB
-├ ƒ /devices/[id]/logs              7.3 kB          160 kB
-├ ƒ /devices/[id]/manifest          7.57 kB         138 kB
-├ ○ /integrations                   5.9 kB          126 kB
-├ ○ /ota                            9.4 kB          187 kB
-├ ƒ /ota/[deploymentId]             5.63 kB         130 kB
-└ ○ /settings                      10.6 kB          182 kB
-+ First Load JS shared by all        103 kB
-```
+## Supported Platforms
+
+### Architectures
+
+| Architecture | Agent Binary | Status |
+|--------------|-------------|--------|
+| ARM64 (aarch64) | `linux/arm64` | Supported |
+| ARMv7 (armhf) | `linux/arm` | Supported |
+| x86_64 (amd64) | `linux/amd64` | Supported |
+| RISC-V (riscv64) | `linux/riscv64` | Planned (Go supports it, untested) |
+
+### Operating Systems & Devices
+
+| OS / Platform | Status | Notes |
+|---------------|--------|-------|
+| Linux (generic) | Supported | Primary target. Full `/proc` + systemd integration |
+| Raspberry Pi (all models) | Supported | ARM64/ARMv7, systemd, `/sys/class/thermal` |
+| Ubuntu / Debian | Supported | systemd service management |
+| Alpine Linux | Supported | Lightweight containers, OpenRC via fallback |
+| NVIDIA Jetson | Supported | ARM64 Linux, full agent features |
+| Intel NUC | Supported | x86_64 Linux |
+| ESP32 (via Termux/Linux) | Experimental | Limited — ESP-IDF native agent not planned |
+| Windows | Supported | SCM service management, Win32 health APIs |
+| macOS | Supported | launchctl, sysctl health APIs |
+| **Android** | **Planned** | See "Android Support" section below |
+
+---
+
+## Android Support (Planned)
+
+### Overview
+
+Android devices run the Linux kernel, so the Go agent can cross-compile to `linux/arm64` or `linux/arm` and run on Android. The primary deployment targets are:
+
+- **Rooted Android devices** — agent runs as a system service
+- **Termux** — agent runs in userland without root
+- **Android Things / dedicated IoT boards** — full Linux-like environment
+
+### Implementation Plan
+
+| Component | Approach | Complexity |
+|-----------|----------|------------|
+| **Agent binary** | Cross-compile `GOOS=linux GOARCH=arm64` — already works | None (already supported) |
+| **Health metrics** | `/proc/stat`, `/proc/meminfo` — shared with Linux build tags | None (already works) |
+| **Disk usage** | `statfs` on `/data` or `/sdcard` instead of `/` | Low — config change |
+| **Temperature** | `/sys/class/thermal` — same as Linux | None (already works) |
+| **Service management** | New `_android.go` build tag: `am start/stop` for apps, `init.d` scripts for Termux | Medium |
+| **File management** | Works as-is (atomic writes, mode management) | None |
+| **OTA updates** | APK sideload for Android apps, binary swap for Termux | Medium |
+| **Log forwarding** | `logcat` reader (replaces `journalctl`) | Low — new log source |
+| **Data directory** | `/data/local/tmp/edgeguardian` (rooted) or `$HOME/.edgeguardian` (Termux) | Low — config default |
+| **Connectivity** | HTTP + MQTT work over Android's network stack | None |
+
+### What's Needed
+
+1. **`_android.go` build tags** for service management and log reading
+2. **`logcat` log source** as alternative to `journalctl`
+3. **Android-specific default paths** in config
+4. **Build script addition**: `GOOS=linux GOARCH=arm64` target for Android
+5. **Dashboard**: add "android" as a recognized OS in device display
+
+### What Already Works (Zero Changes)
+
+- Agent binary compiles and runs on Android (Termux confirmed for `GOOS=linux GOARCH=arm64`)
+- Health metrics via `/proc` (Android exposes same Linux procfs)
+- Temperature via `/sys/class/thermal`
+- HTTP + MQTT communication
+- BoltDB persistence
+- File manager plugin
+- OTA download + verification
+- Reconciliation loop
 
 ---
 
@@ -368,12 +510,12 @@ version: 1
 | Unit | 80 | config, health, HTTP comms, model, reconciler, storage, filemanager, service |
 | Integration | 32 | MQTT (real Mosquitto), Linux health (/proc), filemanager (chmod/chown), systemd |
 
-### Controller (Java) — 17+ tests
+### Controller (Java) — 19+ tests
 
 | Class | Tests | Scope |
 |-------|-------|-------|
 | AgentApiControllerTest | 7 | Registration, heartbeat, desired-state, report-state |
-| DeviceRegistryTest | 10 | CRUD, labels, manifest versioning (real PostgreSQL via Testcontainers) |
+| DeviceRegistryTest | 10+ | CRUD, labels, manifest versioning (real PostgreSQL via Testcontainers) |
 
 ---
 
@@ -383,30 +525,6 @@ version: 1
 |-----|----------|-----------|
 | ADR-001 | HTTP/JSON over gRPC | gRPC adds 6.7 MB to binary (11 MB vs 4.3 MB) |
 | ADR-002 | UPX binary compression | 7.2 MB → 2.6 MB (65% reduction), 50-200 ms startup overhead |
-
----
-
-## Implementation Status
-
-| Phase | Description | Status |
-|-------|-------------|--------|
-| Phase 1 | Foundation — scaffolding, HTTP comms, basic agent+controller | **Complete** |
-| Phase 2 | Core — reconciler, BoltDB, MQTT, PostgreSQL, plugins | **Complete** |
-| Phase 3 | Security+OTA — Keycloak OIDC, RBAC, OTA pipeline, Loki, EMQX | **Complete** |
-| Phase 4 | VPN+Monitoring — WireGuard, health probes, full watchdog | Not started |
-| Phase 5 | Dashboard — Next.js 11-page SaaS UI | **Complete** |
-| Phase 6 | Buffer — polish, thesis, optional features | Not started |
-
-### Not Yet Implemented
-
-| Feature | Planned Phase |
-|---------|---------------|
-| WireGuard VPN integration | Phase 4 |
-| Health check probes (HTTP/TCP/exec) | Phase 4 |
-| Full watchdog (resource limits, health gating) | Phase 4 |
-| Fleet simulation (10-50 agents) | Phase 6 |
-| GPIO plugin | Phase 6 (optional) |
-| CI/CD pipeline | Not scheduled |
 
 ---
 
