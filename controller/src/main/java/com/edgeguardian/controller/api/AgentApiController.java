@@ -5,6 +5,7 @@ import com.edgeguardian.controller.model.Device;
 import com.edgeguardian.controller.model.DeviceManifestEntity;
 import com.edgeguardian.controller.model.DeviceStatus;
 import com.edgeguardian.controller.service.DeviceRegistry;
+import com.edgeguardian.controller.service.EnrollmentService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
@@ -31,9 +32,42 @@ public class AgentApiController {
     private static final Logger log = LoggerFactory.getLogger(AgentApiController.class);
 
     private final DeviceRegistry registry;
+    private final EnrollmentService enrollmentService;
 
-    public AgentApiController(DeviceRegistry registry) {
+    public AgentApiController(DeviceRegistry registry, EnrollmentService enrollmentService) {
         this.registry = registry;
+        this.enrollmentService = enrollmentService;
+    }
+
+    /**
+     * Enroll a device using an enrollment token.
+     * Returns device info and MQTT connection details.
+     */
+    @PostMapping("/enroll")
+    public ResponseEntity<AgentRegisterResponse> enroll(@RequestBody EnrollDeviceRequest request) {
+        log.info("Agent enroll: deviceId={}, token-present={}", request.deviceId(), request.enrollmentToken() != null);
+
+        if (request.deviceId() == null || request.deviceId().isBlank()) {
+            return ResponseEntity.badRequest().body(
+                    new AgentRegisterResponse(false, "deviceId is required", null));
+        }
+        if (request.enrollmentToken() == null || request.enrollmentToken().isBlank()) {
+            return ResponseEntity.badRequest().body(
+                    new AgentRegisterResponse(false, "enrollmentToken is required", null));
+        }
+
+        Device device = enrollmentService.enrollDevice(
+                request.enrollmentToken(), request.deviceId(), request.hostname(),
+                request.architecture(), request.os(), request.agentVersion(), request.labels());
+
+        Map<String, Object> manifestMap = null;
+        Optional<DeviceManifestEntity> manifest = registry.getManifest(device.getDeviceId());
+        if (manifest.isPresent()) {
+            manifestMap = toManifestMap(manifest.get());
+        }
+
+        return ResponseEntity.ok(new AgentRegisterResponse(
+                true, "Device enrolled successfully", manifestMap));
     }
 
     /**

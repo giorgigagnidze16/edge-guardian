@@ -1,0 +1,123 @@
+{
+  "realm": "edgeguardian",
+  "enabled": true,
+  "displayName": "EdgeGuardian",
+  "registrationAllowed": true,
+  "loginWithEmailAllowed": true,
+  "duplicateEmailsAllowed": false,
+  "verifyEmail": false,
+  "sslRequired": "none",
+  "roles": {
+    "realm": [
+      { "name": "user", "description": "Default user role" },
+      { "name": "admin", "description": "Platform admin role" }
+    ]
+  },
+  "defaultRoles": ["user"],
+  "clients": [
+    {
+      "clientId": "edgeguardian-ui",
+      "name": "EdgeGuardian Dashboard",
+      "enabled": true,
+      "publicClient": true,
+      "standardFlowEnabled": true,
+      "directAccessGrantsEnabled": false,
+      "redirectUris": [
+        "http://localhost:3000/*",
+        "http://localhost:3000/api/auth/callback/keycloak"
+      ],
+      "webOrigins": [
+        "http://localhost:3000"
+      ],
+      "protocol": "openid-connect",
+      "attributes": {
+        "pkce.code.challenge.method": "S256",
+        "post.logout.redirect.uris": "http://localhost:3000/*"
+      }
+    },
+    {
+      "clientId": "edgeguardian-controller",
+      "name": "EdgeGuardian Controller (API)",
+      "enabled": true,
+      "publicClient": false,
+      "bearerOnly": true,
+      "protocol": "openid-connect"
+    }
+  ],
+  "identityProviders": [
+    {
+      "alias": "google",
+      "providerId": "google",
+      "enabled": true,
+      "trustEmail": true,
+      "firstBrokerLoginFlowAlias": "first broker login",
+      "config": {
+        "clientId": "${GOOGLE_CLIENT_ID}",
+        "clientSecret": "${GOOGLE_CLIENT_SECRET}",
+        "defaultScope": "openid email profile",
+        "syncMode": "IMPORT"
+      }
+    },
+    {
+      "alias": "github",
+      "providerId": "github",
+      "enabled": true,
+      "trustEmail": true,
+      "firstBrokerLoginFlowAlias": "first broker login",
+      "config": {
+        "clientId": "${GITHUB_CLIENT_ID}",
+        "clientSecret": "${GITHUB_CLIENT_SECRET}",
+        "defaultScope": "user:email",
+        "syncMode": "IMPORT"
+      }
+    }
+  ],
+  "authenticationFlows": [
+    {
+      "alias": "first broker login",
+      "description": "Actions taken after first broker login with identity provider account, which is not yet linked to any Keycloak account",
+      "providerId": "basic-flow",
+      "topLevel": true,
+      "builtIn": false,
+      "authenticationExecutions": [
+        {
+          "authenticatorConfig": "review profile config",
+          "authenticator": "idp-review-profile",
+          "requirement": "REQUIRED",
+          "priority": 10
+        },
+        {
+          "authenticator": "idp-auto-link",
+          "requirement": "ALTERNATIVE",
+          "priority": 20
+        },
+        {
+          "authenticatorConfig": "create unique user config",
+          "authenticator": "idp-create-user-if-unique",
+          "requirement": "ALTERNATIVE",
+          "priority": 30
+        }
+      ]
+    }
+  ],
+  "authenticatorConfig": [
+    {
+      "alias": "review profile config",
+      "config": {
+        "update.profile.on.first.login": "missing"
+      }
+    },
+    {
+      "alias": "create unique user config",
+      "config": {
+        "require.password.update.after.registration": "false"
+      }
+    }
+  ],
+  "scopeMappings": [
+    {
+      "client": "edgeguardian-ui",
+      "roles": ["user"]
+    }
+  ]
+}

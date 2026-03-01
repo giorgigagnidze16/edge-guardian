@@ -1,6 +1,7 @@
 package com.edgeguardian.controller.model;
 
 import jakarta.persistence.*;
+import lombok.*;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
 
@@ -14,6 +15,10 @@ import java.util.Map;
  */
 @Entity
 @Table(name = "devices")
+@Data
+@NoArgsConstructor
+@AllArgsConstructor
+@Builder
 public class Device {
 
     @Id
@@ -37,11 +42,13 @@ public class Device {
 
     @Enumerated(EnumType.STRING)
     @Column(name = "state", nullable = false)
-    private DeviceState state;
+    @Builder.Default
+    private DeviceState state = DeviceState.ONLINE;
 
     @JdbcTypeCode(SqlTypes.JSON)
     @Column(name = "labels")
-    private Map<String, String> labels;
+    @Builder.Default
+    private Map<String, String> labels = new HashMap<>();
 
     @Column(name = "registered_at", nullable = false)
     private Instant registeredAt;
@@ -49,7 +56,10 @@ public class Device {
     @Column(name = "last_heartbeat")
     private Instant lastHeartbeat;
 
-    // Runtime status fields (updated on heartbeat).
+    @Column(name = "organization_id")
+    private Long organizationId;
+
+    // Runtime status fields (updated on heartbeat)
     @Column(name = "cpu_usage_percent")
     private double cpuUsagePercent;
 
@@ -75,7 +85,8 @@ public class Device {
     private Instant lastReconcile;
 
     @Column(name = "reconcile_status")
-    private String reconcileStatus;
+    @Builder.Default
+    private String reconcileStatus = "converged";
 
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
@@ -83,19 +94,15 @@ public class Device {
     @Column(name = "updated_at", nullable = false)
     private Instant updatedAt;
 
-    public Device() {
-        this.labels = new HashMap<>();
-        this.state = DeviceState.ONLINE;
-        this.reconcileStatus = "converged";
-    }
-
     public Device(String deviceId, String hostname, String architecture, String os, String agentVersion) {
-        this();
         this.deviceId = deviceId;
         this.hostname = hostname;
         this.architecture = architecture;
         this.os = os;
         this.agentVersion = agentVersion;
+        this.labels = new HashMap<>();
+        this.state = DeviceState.ONLINE;
+        this.reconcileStatus = "converged";
     }
 
     @PrePersist
@@ -135,7 +142,6 @@ public class Device {
 
     /**
      * Returns the device's current runtime status as a DTO.
-     * Alias for toDeviceStatus(), used by DeviceDto.from().
      */
     public DeviceStatus getStatus() {
         return toDeviceStatus();
@@ -157,51 +163,6 @@ public class Device {
         s.setReconcileStatus(this.reconcileStatus);
         return s;
     }
-
-    // Getters and setters
-
-    public Long getId() { return id; }
-    public void setId(Long id) { this.id = id; }
-
-    public String getDeviceId() { return deviceId; }
-    public void setDeviceId(String deviceId) { this.deviceId = deviceId; }
-
-    public String getHostname() { return hostname; }
-    public void setHostname(String hostname) { this.hostname = hostname; }
-
-    public String getArchitecture() { return architecture; }
-    public void setArchitecture(String architecture) { this.architecture = architecture; }
-
-    public String getOs() { return os; }
-    public void setOs(String os) { this.os = os; }
-
-    public String getAgentVersion() { return agentVersion; }
-    public void setAgentVersion(String agentVersion) { this.agentVersion = agentVersion; }
-
-    public Map<String, String> getLabels() { return labels; }
-    public void setLabels(Map<String, String> labels) { this.labels = labels; }
-
-    public DeviceState getState() { return state; }
-    public void setState(DeviceState state) { this.state = state; }
-
-    public Instant getRegisteredAt() { return registeredAt; }
-    public void setRegisteredAt(Instant registeredAt) { this.registeredAt = registeredAt; }
-
-    public Instant getLastHeartbeat() { return lastHeartbeat; }
-    public void setLastHeartbeat(Instant lastHeartbeat) { this.lastHeartbeat = lastHeartbeat; }
-
-    public double getCpuUsagePercent() { return cpuUsagePercent; }
-    public long getMemoryUsedBytes() { return memoryUsedBytes; }
-    public long getMemoryTotalBytes() { return memoryTotalBytes; }
-    public long getDiskUsedBytes() { return diskUsedBytes; }
-    public long getDiskTotalBytes() { return diskTotalBytes; }
-    public double getTemperatureCelsius() { return temperatureCelsius; }
-    public long getUptimeSeconds() { return uptimeSeconds; }
-    public Instant getLastReconcile() { return lastReconcile; }
-    public String getReconcileStatus() { return reconcileStatus; }
-
-    public Instant getCreatedAt() { return createdAt; }
-    public Instant getUpdatedAt() { return updatedAt; }
 
     public enum DeviceState {
         ONLINE, DEGRADED, OFFLINE

@@ -28,8 +28,14 @@ const (
 // ControllerClient communicates with the EdgeGuardian controller over HTTP/JSON.
 type ControllerClient struct {
 	baseURL    string
+	authToken  string
 	httpClient *http.Client
 	logger     *zap.Logger
+}
+
+// SetAuthToken sets the Bearer token used for authenticated API calls.
+func (c *ControllerClient) SetAuthToken(token string) {
+	c.authToken = token
 }
 
 // NewControllerClient creates a new HTTP client for the controller REST API.
@@ -78,6 +84,15 @@ func (c *ControllerClient) ReportState(ctx context.Context, req *model.ReportSta
 		return fmt.Errorf("report state failed: %w", err)
 	}
 	return nil
+}
+
+// Enroll sends an enrollment request with a token.
+func (c *ControllerClient) Enroll(ctx context.Context, req *model.EnrollRequest) (*model.RegisterResponse, error) {
+	var resp model.RegisterResponse
+	if err := c.doWithRetry(ctx, http.MethodPost, "/api/v1/agent/enroll", req, &resp); err != nil {
+		return nil, fmt.Errorf("enrollment failed: %w", err)
+	}
+	return &resp, nil
 }
 
 // Close is a no-op for HTTP clients (kept for interface compatibility).
@@ -181,6 +196,10 @@ func (c *ControllerClient) doJSON(ctx context.Context, method, path string, body
 		req.Header.Set("Content-Type", "application/json")
 	}
 	req.Header.Set("Accept", "application/json")
+
+	if c.authToken != "" {
+		req.Header.Set("Authorization", "Bearer "+c.authToken)
+	}
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {

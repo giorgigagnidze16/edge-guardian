@@ -21,6 +21,38 @@ type Config struct {
 
 	// Health monitoring configuration
 	Health HealthConfig `yaml:"health"`
+
+	// OTA update configuration
+	OTA OTAConfig `yaml:"ota"`
+
+	// Authentication configuration
+	Auth AuthConfig `yaml:"auth"`
+
+	// Log forwarding configuration
+	LogForwarding LogForwardingConfig `yaml:"log_forwarding"`
+}
+
+// OTAConfig holds OTA update settings.
+type OTAConfig struct {
+	Enabled  bool   `yaml:"enabled"`
+	SignKey  string `yaml:"sign_key"`  // Ed25519 public key hex for signature verification
+	CacheDir string `yaml:"cache_dir"` // Directory for staging downloaded artifacts
+}
+
+// AuthConfig holds authentication settings for enrolled devices.
+type AuthConfig struct {
+	EnrollmentToken string `yaml:"enrollment_token"` // Token for initial enrollment
+	DeviceToken     string `yaml:"device_token"`     // JWT for authenticated API calls
+	TokenFile       string `yaml:"token_file"`       // Path to persist device token
+}
+
+// LogForwardingConfig holds log forwarding settings.
+type LogForwardingConfig struct {
+	Enabled       bool   `yaml:"enabled"`
+	Source        string `yaml:"source"`         // "journald" or "file"
+	FilePath      string `yaml:"file_path"`      // Path to log file (when source=file)
+	BatchSize     int    `yaml:"batch_size"`     // Number of lines per MQTT batch
+	FlushInterval int    `yaml:"flush_interval"` // Seconds between flushes
 }
 
 // MQTTConfig holds MQTT broker connection settings.

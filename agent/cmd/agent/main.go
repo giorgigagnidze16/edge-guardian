@@ -10,10 +10,12 @@ import (
 	"runtime"
 	"time"
 
+	"github.com/edgeguardian/agent/internal/commands"
 	"github.com/edgeguardian/agent/internal/comms"
 	"github.com/edgeguardian/agent/internal/config"
 	"github.com/edgeguardian/agent/internal/health"
 	"github.com/edgeguardian/agent/internal/model"
+	"github.com/edgeguardian/agent/internal/ota"
 	"github.com/edgeguardian/agent/internal/reconciler"
 	"github.com/edgeguardian/agent/internal/storage"
 	"github.com/edgeguardian/agent/plugins/filemanager"
@@ -106,6 +108,10 @@ func main() {
 	// Create health collector.
 	healthCollector := health.New(cfg.Health.DiskPath)
 
+	// Create OTA updater and command dispatcher.
+	updater := ota.NewUpdater(cfg.DataDir, logger)
+	dispatcher := commands.NewDispatcher(updater, logger)
+
 	// Create and connect MQTT client.
 	mqttClient := comms.NewMQTTClient(comms.MQTTConfig{
 		BrokerURL: cfg.MQTT.BrokerURL,
@@ -116,13 +122,14 @@ func main() {
 		Store:     store,
 	}, logger)
 
-	// Set MQTT command handler.
+	// Set MQTT command handler — dispatch to OTA, restart, exec handlers.
 	mqttClient.SetCommandHandler(func(cmd model.Command) {
-		logger.Info("received command via MQTT",
-			zap.String("id", cmd.ID),
-			zap.String("type", cmd.Type),
-		)
-		// Phase 2: log commands. Phase 3+: dispatch to OTA, VPN, exec handlers.
+		if err := dispatcher.Dispatch(cmd); err != nil {
+			logger.Error("command dispatch failed",
+				zap.String("id", cmd.ID),
+				zap.String("type", cmd.Type),
+				zap.Error(err))
+		}
 	})
 
 	if err := mqttClient.Connect(10 * time.Second); err != nil {
@@ -134,7 +141,7 @@ func main() {
 	go rec.Run(ctx)
 
 	// Start heartbeat loop.
-	go heartbeatLoop(ctx, httpClient, cfg.DeviceID, rec, store, healthCollector, logger)
+	go heartbeatLoop(ctx, httpClient, cfg.DeviceID, rec, store, healthCollector, dispatcher, logger)
 
 	// Start MQTT telemetry loop.
 	go mqttClient.RunTelemetryLoop(ctx, 30*time.Second, func() *model.DeviceStatus {
@@ -216,6 +223,7 @@ func heartbeatLoop(
 	rec *reconciler.Reconciler,
 	store *storage.Store,
 	healthCollector *health.Collector,
+	dispatcher *commands.Dispatcher,
 	logger *zap.Logger,
 ) {
 	ticker := time.NewTicker(30 * time.Second)
@@ -259,12 +267,14 @@ func heartbeatLoop(
 				}
 			}
 
-			// Log any pending commands (full dispatch in later phases).
+			// Dispatch any pending commands from the heartbeat response.
 			for _, cmd := range resp.PendingCommands {
-				logger.Info("pending command from heartbeat",
-					zap.String("id", cmd.ID),
-					zap.String("type", cmd.Type),
-				)
+				if err := dispatcher.Dispatch(cmd); err != nil {
+					logger.Error("heartbeat command dispatch failed",
+						zap.String("id", cmd.ID),
+						zap.String("type", cmd.Type),
+						zap.Error(err))
+				}
 			}
 		}
 	}

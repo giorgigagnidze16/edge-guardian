@@ -1,14 +1,22 @@
 package com.edgeguardian.controller.config;
 
+import com.edgeguardian.controller.security.TenantInterceptor;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.web.reactive.config.CorsRegistry;
-import org.springframework.web.reactive.config.WebFluxConfigurer;
+import org.springframework.web.servlet.config.annotation.CorsRegistry;
+import org.springframework.web.servlet.config.annotation.InterceptorRegistry;
+import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 
 /**
- * Web configuration for CORS (allows Next.js dashboard to connect).
+ * Web configuration for CORS and tenant context.
  */
 @Configuration
-public class WebConfig implements WebFluxConfigurer {
+public class WebConfig implements WebMvcConfigurer {
+
+    private final TenantInterceptor tenantInterceptor;
+
+    public WebConfig(TenantInterceptor tenantInterceptor) {
+        this.tenantInterceptor = tenantInterceptor;
+    }
 
     @Override
     public void addCorsMappings(CorsRegistry registry) {
@@ -17,5 +25,11 @@ public class WebConfig implements WebFluxConfigurer {
                 .allowedMethods("GET", "POST", "PUT", "DELETE", "OPTIONS")
                 .allowedHeaders("*")
                 .allowCredentials(true);
+    }
+
+    @Override
+    public void addInterceptors(InterceptorRegistry registry) {
+        registry.addInterceptor(tenantInterceptor)
+                .addPathPatterns("/api/**");
     }
 }

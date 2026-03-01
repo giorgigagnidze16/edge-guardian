@@ -5,6 +5,10 @@ spring:
   application:
     name: edgeguardian-controller
 
+  threads:
+    virtual:
+      enabled: true
+
   # PostgreSQL
   datasource:
     url: jdbc:postgresql://localhost:5432/edgeguardian
@@ -27,6 +31,13 @@ spring:
     locations: classpath:db/migration
     baseline-on-migrate: true
 
+  # Keycloak OIDC resource server
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: http://localhost:9090/realms/edgeguardian
+
 # EdgeGuardian controller settings
 edgeguardian:
   controller:
@@ -34,6 +45,9 @@ edgeguardian:
       broker-url: tcp://localhost:1883
       client-id: edgeguardian-controller
       topic-root: edgeguardian
+    loki:
+      push-url: http://localhost:3100/loki/api/v1/push
+      query-url: http://localhost:3100/loki/api/v1/query_range
 
 logging:
   level:
@@ -42,3 +56,12 @@ logging:
     org.flywaydb: INFO
   pattern:
     console: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n"
+
+management:
+  tracing:
+    sampling:
+      probability: 1.0
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus

@@ -1,4 +1,8 @@
-export const metadata = {
+import type { Metadata } from "next";
+import { Providers } from "@/components/providers";
+import "./globals.css";
+
+export const metadata: Metadata = {
   title: "EdgeGuardian Dashboard",
   description: "IoT fleet management dashboard",
 };
@@ -10,7 +14,9 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
-      <body>{children}</body>
+      <body className="min-h-screen antialiased">
+        <Providers>{children}</Providers>
+      </body>
     </html>
   );
 }

@@ -3,31 +3,48 @@ package com.edgeguardian.controller.api;
 import com.edgeguardian.controller.model.Device;
 import com.edgeguardian.controller.model.DeviceManifestEntity;
 import com.edgeguardian.controller.model.DeviceStatus;
+import com.edgeguardian.controller.repository.ApiKeyRepository;
+import com.edgeguardian.controller.repository.UserRepository;
 import com.edgeguardian.controller.service.DeviceRegistry;
+import com.edgeguardian.controller.service.EnrollmentService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.autoconfigure.web.reactive.WebFluxTest;
+import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.http.MediaType;
+import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
-import org.springframework.test.web.reactive.server.WebTestClient;
+import org.springframework.test.web.servlet.MockMvc;
 
 import java.util.Map;
 import java.util.Optional;
 
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.when;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
-@WebFluxTest(AgentApiController.class)
+@WebMvcTest(AgentApiController.class)
 class AgentApiControllerTest {
 
     @Autowired
-    private WebTestClient webTestClient;
+    private MockMvc mockMvc;
 
     @MockitoBean
     private DeviceRegistry registry;
 
+    @MockitoBean
+    private EnrollmentService enrollmentService;
+
+    @MockitoBean
+    private ApiKeyRepository apiKeyRepository;
+
+    @MockitoBean
+    private UserRepository userRepository;
+
     @Test
-    void registerNewDevice() {
+    @WithMockUser
+    void registerNewDevice() throws Exception {
         Device device = new Device("rpi-001", "host", "arm64", "linux", "0.2.0");
         when(registry.register(eq("rpi-001"), eq("host"), eq("arm64"), eq("linux"), eq("0.2.0"), any()))
                 .thenReturn(device);
@@ -43,19 +60,19 @@ class AgentApiControllerTest {
                 }
                 """;
 
-        webTestClient.post().uri("/api/v1/agent/register")
-                .contentType(MediaType.APPLICATION_JSON)
-                .bodyValue(body)
-                .exchange()
-                .expectStatus().isOk()
-                .expectBody()
-                .jsonPath("$.accepted").isEqualTo(true)
-                .jsonPath("$.message").isEqualTo("Device registered successfully")
-                .jsonPath("$.initialManifest").doesNotExist();
+        mockMvc.perform(post("/api/v1/agent/register")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body)
+                        .with(csrf()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.accepted").value(true))
+                .andExpect(jsonPath("$.message").value("Device registered successfully"))
+                .andExpect(jsonPath("$.initialManifest").doesNotExist());
     }
 
     @Test
-    void registerWithEmptyDeviceIdReturnsBadRequest() {
+    @WithMockUser
+    void registerWithEmptyDeviceIdReturnsBadRequest() throws Exception {
         String body = """
                 {
                     "deviceId": "",
@@ -63,17 +80,17 @@ class AgentApiControllerTest {
                 }
                 """;
 
-        webTestClient.post().uri("/api/v1/agent/register")
-                .contentType(MediaType.APPLICATION_JSON)
-                .bodyValue(body)
-                .exchange()
-                .expectStatus().isBadRequest()
-                .expectBody()
-                .jsonPath("$.accepted").isEqualTo(false);
+        mockMvc.perform(post("/api/v1/agent/register")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body)
+                        .with(csrf()))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.accepted").value(false));
     }
 
     @Test
-    void registerReturnsManifestIfConfigured() {
+    @WithMockUser
+    void registerReturnsManifestIfConfigured() throws Exception {
         Device device = new Device("rpi-001", "host", "arm64", "linux", "0.2.0");
         when(registry.register(any(), any(), any(), any(), any(), any())).thenReturn(device);
 
@@ -92,19 +109,19 @@ class AgentApiControllerTest {
                 }
                 """;
 
-        webTestClient.post().uri("/api/v1/agent/register")
-                .contentType(MediaType.APPLICATION_JSON)
-                .bodyValue(body)
-                .exchange()
-                .expectStatus().isOk()
-                .expectBody()
-                .jsonPath("$.accepted").isEqualTo(true)
-                .jsonPath("$.initialManifest").exists()
-                .jsonPath("$.initialManifest.apiVersion").isEqualTo("edgeguardian/v1");
+        mockMvc.perform(post("/api/v1/agent/register")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body)
+                        .with(csrf()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.accepted").value(true))
+                .andExpect(jsonPath("$.initialManifest").exists())
+                .andExpect(jsonPath("$.initialManifest.apiVersion").value("edgeguardian/v1"));
     }
 
     @Test
-    void heartbeatUpdatesDeviceStatus() {
+    @WithMockUser
+    void heartbeatUpdatesDeviceStatus() throws Exception {
         Device device = new Device("rpi-001", "host", "arm64", "linux", "0.2.0");
         when(registry.heartbeat(eq("rpi-001"), any(DeviceStatus.class))).thenReturn(Optional.of(device));
         when(registry.getManifest("rpi-001")).thenReturn(Optional.empty());
@@ -122,17 +139,17 @@ class AgentApiControllerTest {
                 }
                 """;
 
-        webTestClient.post().uri("/api/v1/agent/heartbeat")
-                .contentType(MediaType.APPLICATION_JSON)
-                .bodyValue(body)
-                .exchange()
-                .expectStatus().isOk()
-                .expectBody()
-                .jsonPath("$.manifestUpdated").isEqualTo(false);
+        mockMvc.perform(post("/api/v1/agent/heartbeat")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body)
+                        .with(csrf()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.manifestUpdated").value(false));
     }
 
     @Test
-    void heartbeatForUnknownDeviceReturnsNotFound() {
+    @WithMockUser
+    void heartbeatForUnknownDeviceReturnsNotFound() throws Exception {
         when(registry.heartbeat(eq("unknown"), any())).thenReturn(Optional.empty());
 
         String body = """
@@ -143,42 +160,41 @@ class AgentApiControllerTest {
                 }
                 """;
 
-        webTestClient.post().uri("/api/v1/agent/heartbeat")
-                .contentType(MediaType.APPLICATION_JSON)
-                .bodyValue(body)
-                .exchange()
-                .expectStatus().isNotFound();
+        mockMvc.perform(post("/api/v1/agent/heartbeat")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body)
+                        .with(csrf()))
+                .andExpect(status().isNotFound());
     }
 
     @Test
-    void getDesiredStateReturnsManifest() {
+    @WithMockUser
+    void getDesiredStateReturnsManifest() throws Exception {
         DeviceManifestEntity manifest = new DeviceManifestEntity("rpi-001",
                 Map.of("name", "rpi-001"),
                 Map.of("files", java.util.List.of(Map.of("path", "/etc/test.conf", "content", "data"))));
         when(registry.getManifest("rpi-001")).thenReturn(Optional.of(manifest));
 
-        webTestClient.get().uri("/api/v1/agent/desired-state/rpi-001")
-                .exchange()
-                .expectStatus().isOk()
-                .expectBody()
-                .jsonPath("$.manifest").exists()
-                .jsonPath("$.manifest.spec.files").isArray();
+        mockMvc.perform(get("/api/v1/agent/desired-state/rpi-001"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.manifest").exists())
+                .andExpect(jsonPath("$.manifest.spec.files").isArray());
     }
 
     @Test
-    void getDesiredStateReturnsEmptyWhenNoManifest() {
+    @WithMockUser
+    void getDesiredStateReturnsEmptyWhenNoManifest() throws Exception {
         when(registry.getManifest("rpi-001")).thenReturn(Optional.empty());
 
-        webTestClient.get().uri("/api/v1/agent/desired-state/rpi-001")
-                .exchange()
-                .expectStatus().isOk()
-                .expectBody()
-                .jsonPath("$.manifest").doesNotExist()
-                .jsonPath("$.version").isEqualTo(0);
+        mockMvc.perform(get("/api/v1/agent/desired-state/rpi-001"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.manifest").doesNotExist())
+                .andExpect(jsonPath("$.version").value(0));
     }
 
     @Test
-    void reportStateAcknowledges() {
+    @WithMockUser
+    void reportStateAcknowledges() throws Exception {
         when(registry.heartbeat(eq("rpi-001"), any())).thenReturn(Optional.of(
                 new Device("rpi-001", "host", "arm64", "linux", "0.2.0")));
 
@@ -192,12 +208,11 @@ class AgentApiControllerTest {
                 }
                 """;
 
-        webTestClient.post().uri("/api/v1/agent/report-state")
-                .contentType(MediaType.APPLICATION_JSON)
-                .bodyValue(body)
-                .exchange()
-                .expectStatus().isOk()
-                .expectBody()
-                .jsonPath("$.acknowledged").isEqualTo(true);
+        mockMvc.perform(post("/api/v1/agent/report-state")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body)
+                        .with(csrf()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.acknowledged").value(true));
     }
 }

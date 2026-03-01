@@ -148,3 +148,21 @@ type TelemetryMessage struct {
 type CommandMessage struct {
 	Command Command `json:"command"`
 }
+
+// EnrollRequest is sent by the agent to enroll with an enrollment token.
+type EnrollRequest struct {
+	EnrollmentToken string            `json:"enrollmentToken"`
+	DeviceID        string            `json:"deviceId"`
+	Hostname        string            `json:"hostname"`
+	Architecture    string            `json:"architecture"`
+	OS              string            `json:"os"`
+	AgentVersion    string            `json:"agentVersion"`
+	Labels          map[string]string `json:"labels,omitempty"`
+}
+
+// OTAStatus is included in heartbeat to report OTA progress.
+type OTAStatus struct {
+	DeploymentID int64  `json:"deploymentId,omitempty"`
+	State        string `json:"state,omitempty"`    // downloading, verifying, applying, completed, failed
+	Progress     int    `json:"progress,omitempty"` // 0-100
+}
