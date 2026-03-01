@@ -8,7 +8,6 @@ import (
 	"os/signal"
 	"path/filepath"
 	"runtime"
-	"syscall"
 	"time"
 
 	"github.com/edgeguardian/agent/internal/comms"
@@ -26,7 +25,7 @@ import (
 const agentVersion = "0.2.0"
 
 func main() {
-	configPath := flag.String("config", "/etc/edgeguardian/agent.yaml", "path to agent config file")
+	configPath := flag.String("config", config.DefaultConfigPath, "path to agent config file")
 	flag.Parse()
 
 	// Load configuration.
@@ -72,7 +71,7 @@ func main() {
 	defer cancel()
 
 	sigCh := make(chan os.Signal, 1)
-	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
+	signal.Notify(sigCh, platformSignals()...)
 
 	// Initialize reconciler.
 	rec := reconciler.New(cfg.ReconcileInterval, logger)
@@ -105,7 +104,7 @@ func main() {
 	registerWithController(ctx, cfg, httpClient, rec, store, logger)
 
 	// Create health collector.
-	healthCollector := health.New()
+	healthCollector := health.New(cfg.Health.DiskPath)
 
 	// Create and connect MQTT client.
 	mqttClient := comms.NewMQTTClient(comms.MQTTConfig{

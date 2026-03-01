@@ -5,7 +5,6 @@ import (
 	"os"
 	"os/exec"
 	"os/signal"
-	"syscall"
 	"time"
 )
 
@@ -14,8 +13,6 @@ import (
 // Full implementation in Phase 4; this is a placeholder skeleton.
 
 const (
-	agentBinary    = "/usr/local/bin/edgeguardian-agent"
-	agentConfig    = "/etc/edgeguardian/agent.yaml"
 	maxBackoff     = 5 * time.Minute
 	initialBackoff = 1 * time.Second
 )
@@ -24,7 +21,7 @@ func main() {
 	fmt.Println("EdgeGuardian watchdog starting")
 
 	sigCh := make(chan os.Signal, 1)
-	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
+	signal.Notify(sigCh, platformSignals()...)
 
 	backoff := initialBackoff
 
@@ -36,8 +33,8 @@ func main() {
 		default:
 		}
 
-		fmt.Printf("starting agent: %s --config %s\n", agentBinary, agentConfig)
-		cmd := exec.Command(agentBinary, "--config", agentConfig)
+		fmt.Printf("starting agent: %s --config %s\n", defaultAgentBinary, defaultAgentConfig)
+		cmd := exec.Command(defaultAgentBinary, "--config", defaultAgentConfig)
 		cmd.Stdout = os.Stdout
 		cmd.Stderr = os.Stderr
 

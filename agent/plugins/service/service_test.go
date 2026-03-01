@@ -9,7 +9,7 @@ import (
 	"go.uber.org/zap"
 )
 
-// mockExecutor records calls and returns configured responses.
+// mockExecutor implements ServiceExecutor for testing.
 type mockExecutor struct {
 	activeState  map[string]bool
 	enabledState map[string]bool

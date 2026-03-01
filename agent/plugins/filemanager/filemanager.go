@@ -256,7 +256,7 @@ func (fm *FileManager) checkOwner(path, desiredOwner string) bool {
 }
 
 // setOwner sets the file's ownership to "user:group" using chown.
-// This requires root privileges on Linux.
+// Linux and macOS only, requires root.
 func (fm *FileManager) setOwner(path, owner string) error {
 	parts := strings.SplitN(owner, ":", 2)
 	if len(parts) != 2 {
