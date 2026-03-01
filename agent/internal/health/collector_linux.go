@@ -4,7 +4,6 @@ package health
 
 import (
 	"bufio"
-	"fmt"
 	"os"
 	"strconv"
 	"strings"
@@ -92,10 +91,15 @@ func (c *Collector) collectMemory(status *model.DeviceStatus) {
 	}
 }
 
-// collectDisk uses statfs to get root filesystem usage.
+// collectDisk uses statfs on the configured disk path.
 func (c *Collector) collectDisk(status *model.DeviceStatus) {
+	path := c.diskPath
+	if path == "" {
+		path = "/"
+	}
+
 	var stat syscall.Statfs_t
-	if err := syscall.Statfs("/", &stat); err != nil {
+	if err := syscall.Statfs(path, &stat); err != nil {
 		return
 	}
 
@@ -144,35 +148,4 @@ func (c *Collector) collectUptime(status *model.DeviceStatus) {
 		return
 	}
 	status.UptimeSeconds = int64(uptimeFloat)
-
-	// Set state based on temperature thresholds.
-	if status.TemperatureCelsius > 80 {
-		status.State = "degraded"
-	}
-	// Check memory pressure (>95% used).
-	if status.MemoryTotalBytes > 0 {
-		memPct := float64(status.MemoryUsedBytes) / float64(status.MemoryTotalBytes) * 100
-		if memPct > 95 {
-			status.State = "degraded"
-		}
-	}
-	// Check disk pressure (>95% used).
-	if status.DiskTotalBytes > 0 {
-		diskPct := float64(status.DiskUsedBytes) / float64(status.DiskTotalBytes) * 100
-		if diskPct > 95 {
-			status.State = "degraded"
-		}
-	}
-}
-
-// FormatMetrics returns a human-readable summary of metrics (for logging).
-func FormatMetrics(s *model.DeviceStatus) string {
-	return fmt.Sprintf("cpu=%.1f%% mem=%d/%dMB disk=%d/%dGB temp=%.1fC uptime=%ds state=%s",
-		s.CPUUsagePercent,
-		s.MemoryUsedBytes/(1024*1024), s.MemoryTotalBytes/(1024*1024),
-		s.DiskUsedBytes/(1024*1024*1024), s.DiskTotalBytes/(1024*1024*1024),
-		s.TemperatureCelsius,
-		s.UptimeSeconds,
-		s.State,
-	)
 }

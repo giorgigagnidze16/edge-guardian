@@ -161,7 +161,7 @@ WireGuard VPN tunnels. Full health monitoring with auto-restart. Watchdog crash 
 
 Pages: Dashboard, Device List, Device Detail, Deployments, VPN Groups, YAML Editor, Certificates.
 
-Stack: Next.js 14+, TypeScript, shadcn/ui, TanStack Query, Recharts, Monaco Editor.
+Stack: Next.js 15, React 19, TypeScript, shadcn/ui, TanStack Query, Recharts, Monaco Editor.
 
 ### 5.2 — Fleet Simulation
 

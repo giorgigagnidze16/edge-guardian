@@ -1,20 +1,20 @@
-// Package service implements a reconciler plugin that manages systemd services.
+// Package service implements a reconciler plugin that manages system services.
 // It ensures services are in the desired state (running/stopped) and enabled/disabled
-// as declared in the device manifest.
+// as declared in the device manifest. Platform-specific executors are in
+// executor_linux.go, executor_windows.go, and executor_darwin.go.
 package service
 
 import (
 	"context"
 	"fmt"
-	"os/exec"
 	"strings"
 
 	"github.com/edgeguardian/agent/internal/reconciler"
 	"go.uber.org/zap"
 )
 
-// SystemdExecutor abstracts systemctl commands for testability.
-type SystemdExecutor interface {
+// ServiceExecutor abstracts platform-specific service management commands.
+type ServiceExecutor interface {
 	// IsActive returns true if the service is currently running.
 	IsActive(ctx context.Context, name string) (bool, error)
 	// IsEnabled returns true if the service is enabled at boot.
@@ -29,73 +29,22 @@ type SystemdExecutor interface {
 	Disable(ctx context.Context, name string) error
 }
 
-// RealSystemd executes actual systemctl commands.
-type RealSystemd struct{}
-
-func (r *RealSystemd) IsActive(ctx context.Context, name string) (bool, error) {
-	return r.runCheck(ctx, "is-active", name)
-}
-
-func (r *RealSystemd) IsEnabled(ctx context.Context, name string) (bool, error) {
-	return r.runCheck(ctx, "is-enabled", name)
-}
-
-func (r *RealSystemd) Start(ctx context.Context, name string) error {
-	return r.run(ctx, "start", name)
-}
-
-func (r *RealSystemd) Stop(ctx context.Context, name string) error {
-	return r.run(ctx, "stop", name)
-}
-
-func (r *RealSystemd) Enable(ctx context.Context, name string) error {
-	return r.run(ctx, "enable", name)
-}
-
-func (r *RealSystemd) Disable(ctx context.Context, name string) error {
-	return r.run(ctx, "disable", name)
-}
-
-func (r *RealSystemd) runCheck(ctx context.Context, verb, name string) (bool, error) {
-	cmd := exec.CommandContext(ctx, "systemctl", verb, name)
-	output, err := cmd.CombinedOutput()
-	result := strings.TrimSpace(string(output))
-
-	if err != nil {
-		// systemctl exits non-zero for "inactive"/"disabled" — that is not an error.
-		if result == "inactive" || result == "disabled" || result == "unknown" {
-			return false, nil
-		}
-		return false, fmt.Errorf("systemctl %s %s: %s: %w", verb, name, result, err)
-	}
-	return result == "active" || result == "enabled", nil
-}
-
-func (r *RealSystemd) run(ctx context.Context, verb, name string) error {
-	cmd := exec.CommandContext(ctx, "systemctl", verb, name)
-	output, err := cmd.CombinedOutput()
-	if err != nil {
-		return fmt.Errorf("systemctl %s %s: %s: %w", verb, name, strings.TrimSpace(string(output)), err)
-	}
-	return nil
-}
-
-// ServiceManager reconciles systemd service resources.
+// ServiceManager reconciles service resources using the platform executor.
 type ServiceManager struct {
 	logger   *zap.Logger
-	executor SystemdExecutor
+	executor ServiceExecutor
 }
 
-// New creates a ServiceManager plugin with real systemd execution.
+// New creates a ServiceManager plugin with the platform-native executor.
 func New(logger *zap.Logger) *ServiceManager {
 	return &ServiceManager{
 		logger:   logger,
-		executor: &RealSystemd{},
+		executor: newPlatformExecutor(),
 	}
 }
 
 // NewWithExecutor creates a ServiceManager with a custom executor (for testing).
-func NewWithExecutor(logger *zap.Logger, executor SystemdExecutor) *ServiceManager {
+func NewWithExecutor(logger *zap.Logger, executor ServiceExecutor) *ServiceManager {
 	return &ServiceManager{
 		logger:   logger,
 		executor: executor,

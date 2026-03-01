@@ -18,6 +18,9 @@ type Config struct {
 
 	// MQTT configuration
 	MQTT MQTTConfig `yaml:"mqtt"`
+
+	// Health monitoring configuration
+	Health HealthConfig `yaml:"health"`
 }
 
 // MQTTConfig holds MQTT broker connection settings.
@@ -26,6 +29,14 @@ type MQTTConfig struct {
 	Username  string `yaml:"username"`
 	Password  string `yaml:"password"`
 	TopicRoot string `yaml:"topic_root"`
+}
+
+// HealthConfig holds health monitoring settings.
+type HealthConfig struct {
+	// DiskPath is the filesystem path to monitor for disk usage.
+	// Linux/macOS default: "/", Windows default: "C:\".
+	// Override to monitor a specific partition or drive.
+	DiskPath string `yaml:"disk_path"`
 }
 
 // DefaultConfig returns a config with sensible defaults.
@@ -38,10 +49,13 @@ func DefaultConfig() *Config {
 		Labels:            map[string]string{},
 		ReconcileInterval: 30,
 		LogLevel:          "info",
-		DataDir:           "/var/lib/edgeguardian",
+		DataDir:           DefaultDataDir,
 		MQTT: MQTTConfig{
 			BrokerURL: "tcp://localhost:1883",
 			TopicRoot: "edgeguardian",
+		},
+		Health: HealthConfig{
+			DiskPath: DefaultDiskPath,
 		},
 	}
 }
