@@ -13,6 +13,8 @@ java {
     }
 }
 
+ext['testcontainers.version'] = '2.0.3'
+
 repositories {
     mavenCentral()
 }
@@ -38,9 +40,18 @@ dependencies {
 
     testImplementation 'org.springframework.boot:spring-boot-starter-test'
     testImplementation 'io.projectreactor:reactor-test'
-    testRuntimeOnly 'com.h2database:h2'
+    testImplementation 'org.springframework.boot:spring-boot-testcontainers'
+    testImplementation 'org.testcontainers:testcontainers-postgresql:2.0.3'
+    testImplementation 'org.testcontainers:testcontainers-junit-jupiter:2.0.3'
 }
 
 tasks.named('test') {
     useJUnitPlatform()
+
+    def cleanPath = System.getenv('PATH')
+            .split(File.pathSeparator)
+            .collect { it.trim() }
+            .findAll { !it.isEmpty() }
+            .join(File.pathSeparator)
+    environment 'PATH', cleanPath
 }
