@@ -1,64 +1,46 @@
 "use client";
 
-import { useState } from "react";
-import { Building2, ChevronDown } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { useOrganization } from "@/lib/hooks/use-organization";
+import { Building2 } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
-interface Org {
-  id: number;
-  name: string;
-  slug: string;
-  role: string;
-}
+export function OrgSwitcher() {
+  const { me, currentOrg, orgId, setOrgId } = useOrganization();
 
-interface OrgSwitcherProps {
-  organizations: Org[];
-  currentOrgId: number | null;
-  onSelect: (orgId: number) => void;
-}
-
-export function OrgSwitcher({
-  organizations,
-  currentOrgId,
-  onSelect,
-}: OrgSwitcherProps) {
-  const [open, setOpen] = useState(false);
-  const current = organizations.find((o) => o.id === currentOrgId);
+  if (!me || me.organizations.length === 0) {
+    return null;
+  }
 
   return (
-    <div className="relative">
-      <button
-        onClick={() => setOpen(!open)}
-        className="flex w-full items-center gap-2 rounded-md border px-3 py-2 text-sm hover:bg-accent"
-      >
-        <Building2 className="h-4 w-4" />
-        <span className="flex-1 truncate text-left">
-          {current?.name ?? "Select organization"}
-        </span>
-        <ChevronDown className="h-4 w-4" />
-      </button>
-
-      {open && (
-        <div className="absolute top-full z-50 mt-1 w-full rounded-md border bg-popover shadow-md">
-          {organizations.map((org) => (
-            <button
-              key={org.id}
-              onClick={() => {
-                onSelect(org.id);
-                setOpen(false);
-              }}
-              className={cn(
-                "flex w-full items-center gap-2 px-3 py-2 text-sm hover:bg-accent",
-                org.id === currentOrgId && "bg-accent",
-              )}
-            >
-              <Building2 className="h-3 w-3" />
-              <span className="flex-1 truncate text-left">{org.name}</span>
-              <span className="text-xs text-muted-foreground">{org.role}</span>
-            </button>
-          ))}
+    <Select
+      value={orgId ? String(orgId) : undefined}
+      onValueChange={(val) => setOrgId(Number(val))}
+    >
+      <SelectTrigger className="w-full">
+        <div className="flex items-center gap-2 truncate">
+          <Building2 className="h-4 w-4 shrink-0" />
+          <SelectValue placeholder="Select organization" />
         </div>
-      )}
-    </div>
+      </SelectTrigger>
+      <SelectContent>
+        {me.organizations.map((org) => (
+          <SelectItem key={org.id} value={String(org.id)}>
+            <div className="flex items-center gap-2">
+              <span>{org.name}</span>
+              <Badge variant="secondary" className="ml-auto text-[10px]">
+                {org.role}
+              </Badge>
+            </div>
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
   );
 }

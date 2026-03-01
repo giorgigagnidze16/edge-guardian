@@ -1,40 +1,366 @@
 @import "tailwindcss";
 
+/*
+ * ═══════════════════════════════════════════════════════════
+ *  EdgeGuardian — "Midnight Luminance" Design System
+ *  Dark-first IoT fleet management. Electric cyan on void.
+ * ═══════════════════════════════════════════════════════════
+ */
+
 @theme {
-  --color-background: #ffffff;
-  --color-foreground: #09090b;
+  /* ─── Light palette ─── */
+  --color-background: #f8fafc;
+  --color-foreground: #0a0a12;
   --color-card: #ffffff;
-  --color-card-foreground: #09090b;
+  --color-card-foreground: #0a0a12;
   --color-popover: #ffffff;
-  --color-popover-foreground: #09090b;
-  --color-primary: #18181b;
-  --color-primary-foreground: #fafafa;
-  --color-secondary: #f4f4f5;
-  --color-secondary-foreground: #18181b;
-  --color-muted: #f4f4f5;
-  --color-muted-foreground: #71717a;
-  --color-accent: #f4f4f5;
-  --color-accent-foreground: #18181b;
+  --color-popover-foreground: #0a0a12;
+  --color-primary: #0891b2;
+  --color-primary-foreground: #ffffff;
+  --color-secondary: #f0f4f8;
+  --color-secondary-foreground: #0a0a12;
+  --color-muted: #f0f4f8;
+  --color-muted-foreground: #64748b;
+  --color-accent: #ecfeff;
+  --color-accent-foreground: #0e7490;
   --color-destructive: #ef4444;
-  --color-destructive-foreground: #fafafa;
-  --color-border: #e4e4e7;
-  --color-input: #e4e4e7;
-  --color-ring: #18181b;
-  --radius: 0.5rem;
-  --color-sidebar-background: #fafafa;
-  --color-sidebar-foreground: #3f3f46;
-  --color-sidebar-primary: #18181b;
-  --color-sidebar-primary-foreground: #fafafa;
-  --color-sidebar-accent: #f4f4f5;
-  --color-sidebar-accent-foreground: #18181b;
-  --color-sidebar-border: #e4e4e7;
+  --color-destructive-foreground: #ffffff;
+  --color-border: #e2e8f0;
+  --color-input: #e2e8f0;
+  --color-ring: #06b6d4;
+  --radius: 0.625rem;
+
+  /* Sidebar — light */
+  --color-sidebar-background: #f8fafc;
+  --color-sidebar-foreground: #475569;
+  --color-sidebar-primary: #0891b2;
+  --color-sidebar-primary-foreground: #ffffff;
+  --color-sidebar-accent: #ecfeff;
+  --color-sidebar-accent-foreground: #0e7490;
+  --color-sidebar-border: #e2e8f0;
+
+  /* Charts */
+  --color-chart-1: #06b6d4;
+  --color-chart-2: #10b981;
+  --color-chart-3: #f59e0b;
+  --color-chart-4: #8b5cf6;
+  --color-chart-5: #ec4899;
+
+  --color-glow: #06b6d4;
+
+  /* Typography — Plus Jakarta Sans via next/font */
+  --font-sans: var(--font-sans), "Plus Jakarta Sans", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-mono), "JetBrains Mono", ui-monospace, "Cascadia Code", monospace;
 }
 
+/* ─── Dark palette (primary mode) ─── */
+.dark {
+  --color-background: #06060a;
+  --color-foreground: #e4e9f2;
+  --color-card: #0a0a11;
+  --color-card-foreground: #e4e9f2;
+  --color-popover: #0e0e16;
+  --color-popover-foreground: #e4e9f2;
+  --color-primary: #06b6d4;
+  --color-primary-foreground: #020617;
+  --color-secondary: #12121c;
+  --color-secondary-foreground: #c8d0df;
+  --color-muted: #12121c;
+  --color-muted-foreground: #6b7a8d;
+  --color-accent: #0b1820;
+  --color-accent-foreground: #22d3ee;
+  --color-destructive: #dc2626;
+  --color-destructive-foreground: #fef2f2;
+  --color-border: #1a1a2a;
+  --color-input: #1a1a2a;
+  --color-ring: #06b6d4;
+
+  /* Sidebar — dark */
+  --color-sidebar-background: #07070c;
+  --color-sidebar-foreground: #6b7a8d;
+  --color-sidebar-primary: #06b6d4;
+  --color-sidebar-primary-foreground: #020617;
+  --color-sidebar-accent: #0b1820;
+  --color-sidebar-accent-foreground: #22d3ee;
+  --color-sidebar-border: #1a1a2a;
+
+  /* Charts — brighter on dark */
+  --color-chart-1: #22d3ee;
+  --color-chart-2: #34d399;
+  --color-chart-3: #fbbf24;
+  --color-chart-4: #a78bfa;
+  --color-chart-5: #f472b6;
+
+  --color-glow: #06b6d4;
+}
+
+/* ═══════════════════════════════════════════════════════════
+ *  Base
+ * ═══════════════════════════════════════════════════════════ */
 @layer base {
   * {
     @apply border-border;
   }
+
   body {
     @apply bg-background text-foreground;
+    font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
   }
+
+  /* Text selection — cyan tint */
+  ::selection {
+    background: rgba(6, 182, 212, 0.25);
+    color: inherit;
+  }
+
+  /* ── Scrollbar ── */
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: rgba(148, 163, 184, 0.15);
+    border-radius: 999px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: rgba(148, 163, 184, 0.3);
+  }
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(148, 163, 184, 0.15) transparent;
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════
+ *  Utility classes
+ * ═══════════════════════════════════════════════════════════ */
+@layer utilities {
+
+  /* ── Glass morphism ── */
+  .glass {
+    background: rgba(10, 10, 17, 0.75);
+    backdrop-filter: blur(16px) saturate(180%);
+    -webkit-backdrop-filter: blur(16px) saturate(180%);
+  }
+  :root .glass {
+    background: rgba(255, 255, 255, 0.8);
+  }
+
+  .glass-strong {
+    background: rgba(10, 10, 17, 0.88);
+    backdrop-filter: blur(24px) saturate(200%);
+    -webkit-backdrop-filter: blur(24px) saturate(200%);
+  }
+  :root .glass-strong {
+    background: rgba(255, 255, 255, 0.92);
+  }
+
+  /* ── Glow effects ── */
+  .glow-sm {
+    box-shadow: 0 0 15px -3px rgba(6, 182, 212, 0.2);
+  }
+  .glow-md {
+    box-shadow: 0 0 30px -5px rgba(6, 182, 212, 0.25);
+  }
+  .glow-lg {
+    box-shadow: 0 0 50px -8px rgba(6, 182, 212, 0.3);
+  }
+  .glow-primary {
+    box-shadow:
+      0 0 20px -4px rgba(6, 182, 212, 0.35),
+      0 0 6px -2px rgba(6, 182, 212, 0.15);
+  }
+
+  /* ── Gradient text ── */
+  .text-gradient {
+    background: linear-gradient(135deg, #06b6d4, #22d3ee, #a78bfa);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  /* ── Ambient background glow ── */
+  .ambient-glow {
+    position: relative;
+    overflow: hidden;
+  }
+  .ambient-glow::before {
+    content: "";
+    position: fixed;
+    top: -30%;
+    right: -15%;
+    width: 55%;
+    height: 55%;
+    background: radial-gradient(
+      ellipse at center,
+      rgba(6, 182, 212, 0.06) 0%,
+      transparent 70%
+    );
+    pointer-events: none;
+    z-index: 0;
+  }
+  .ambient-glow::after {
+    content: "";
+    position: fixed;
+    bottom: -25%;
+    left: -10%;
+    width: 45%;
+    height: 45%;
+    background: radial-gradient(
+      ellipse at center,
+      rgba(139, 92, 246, 0.04) 0%,
+      transparent 70%
+    );
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  /* ── Gradient border (mask trick) ── */
+  .border-glow {
+    position: relative;
+    overflow: hidden;
+  }
+  .border-glow::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    padding: 1px;
+    background: linear-gradient(
+      135deg,
+      rgba(6, 182, 212, 0.4),
+      transparent 50%,
+      rgba(139, 92, 246, 0.2)
+    );
+    -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+    -webkit-mask-composite: xor;
+    mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+    mask-composite: exclude;
+    pointer-events: none;
+  }
+
+  /* ── Stagger children reveal ── */
+  .stagger-children > * {
+    animation: fadeSlideUp 0.4s ease-out both;
+  }
+  .stagger-children > *:nth-child(1) { animation-delay: 0ms; }
+  .stagger-children > *:nth-child(2) { animation-delay: 60ms; }
+  .stagger-children > *:nth-child(3) { animation-delay: 120ms; }
+  .stagger-children > *:nth-child(4) { animation-delay: 180ms; }
+  .stagger-children > *:nth-child(5) { animation-delay: 240ms; }
+  .stagger-children > *:nth-child(6) { animation-delay: 300ms; }
+  .stagger-children > *:nth-child(7) { animation-delay: 360ms; }
+  .stagger-children > *:nth-child(8) { animation-delay: 420ms; }
+
+  /* ── Noise texture overlay ── */
+  .noise::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.03'/%3E%3C/svg%3E");
+    background-repeat: repeat;
+    background-size: 256px;
+    border-radius: inherit;
+    pointer-events: none;
+    z-index: 1;
+    mix-blend-mode: overlay;
+  }
+
+  /* ── Shimmer loading effect ── */
+  .shimmer {
+    background: linear-gradient(
+      90deg,
+      transparent 25%,
+      rgba(6, 182, 212, 0.08) 50%,
+      transparent 75%
+    );
+    background-size: 200% 100%;
+    animation: shimmer 2s ease-in-out infinite;
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════
+ *  Keyframes
+ * ═══════════════════════════════════════════════════════════ */
+@keyframes fadeSlideUp {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes pulseRing {
+  0% {
+    opacity: 0.5;
+    transform: scale(1);
+  }
+  70% {
+    opacity: 0;
+    transform: scale(2);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(2);
+  }
+}
+
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+@keyframes gentleFloat {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-6px); }
+}
+
+@keyframes subtleRotate {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+/* ═══════════════════════════════════════════════════════════
+ *  Component overrides
+ * ═══════════════════════════════════════════════════════════ */
+
+/* Toast glass treatment */
+.toaster [data-sonner-toast] {
+  backdrop-filter: blur(16px) saturate(180%);
+  -webkit-backdrop-filter: blur(16px) saturate(180%);
+}
+
+/* Recharts — theme-aware tooltip */
+.recharts-default-tooltip {
+  background: var(--color-card) !important;
+  border-color: var(--color-border) !important;
+  border-radius: 0.625rem !important;
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.25) !important;
+}
+.recharts-tooltip-label {
+  color: var(--color-foreground) !important;
+  font-weight: 600 !important;
+}
+.recharts-legend-item-text {
+  color: var(--color-muted-foreground) !important;
+}
+
+/* Monaco editor — match dark theme */
+.monaco-editor,
+.monaco-editor .margin,
+.monaco-editor-background {
+  background-color: var(--color-card) !important;
 }

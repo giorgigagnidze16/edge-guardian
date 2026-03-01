@@ -137,3 +137,76 @@ export async function createApiKey(
     body: JSON.stringify(data),
   });
 }
+
+export async function updateOrganization(
+  token: string,
+  orgId: number,
+  data: { name?: string; description?: string },
+): Promise<Organization> {
+  return apiFetch<Organization>(`/api/v1/organizations/${orgId}`, {
+    method: "PATCH",
+    token,
+    body: JSON.stringify(data),
+  });
+}
+
+export async function removeMember(
+  token: string,
+  orgId: number,
+  userId: number,
+): Promise<void> {
+  return apiFetch(`/api/v1/organizations/${orgId}/members/${userId}`, {
+    method: "DELETE",
+    token,
+  });
+}
+
+export async function deleteEnrollmentToken(
+  token: string,
+  orgId: number,
+  tokenId: number,
+): Promise<void> {
+  return apiFetch(`/api/v1/organizations/${orgId}/enrollment-tokens/${tokenId}`, {
+    method: "DELETE",
+    token,
+  });
+}
+
+export async function deleteApiKey(
+  token: string,
+  orgId: number,
+  keyId: number,
+): Promise<void> {
+  return apiFetch(`/api/v1/organizations/${orgId}/api-keys/${keyId}`, {
+    method: "DELETE",
+    token,
+  });
+}
+
+export interface AuditLogEntry {
+  id: number;
+  userId: number;
+  userEmail: string;
+  action: string;
+  resourceType: string;
+  resourceId: string;
+  details: Record<string, unknown> | null;
+  createdAt: string;
+}
+
+export async function listAuditLog(
+  token: string,
+  orgId: number,
+  params?: { page?: number; size?: number; action?: string; resourceType?: string },
+): Promise<AuditLogEntry[]> {
+  const searchParams = new URLSearchParams();
+  if (params?.page !== undefined) searchParams.set("page", String(params.page));
+  if (params?.size !== undefined) searchParams.set("size", String(params.size));
+  if (params?.action) searchParams.set("action", params.action);
+  if (params?.resourceType) searchParams.set("resourceType", params.resourceType);
+  const qs = searchParams.toString();
+  return apiFetch<AuditLogEntry[]>(
+    `/api/v1/organizations/${orgId}/audit-log${qs ? `?${qs}` : ""}`,
+    { token },
+  );
+}

@@ -17,6 +17,17 @@ export interface OtaDeployment {
   state: string;
   labelSelector: Record<string, string>;
   createdAt: string;
+  totalDevices?: number;
+  completedDevices?: number;
+}
+
+export interface DeploymentDeviceStatus {
+  deviceId: string;
+  hostname: string;
+  state: string;
+  progress: number;
+  errorMessage: string | null;
+  updatedAt: string;
 }
 
 export async function listArtifacts(
@@ -58,5 +69,38 @@ export async function createDeployment(
   return apiFetch<OtaDeployment>(
     `/api/v1/organizations/${orgId}/ota/deployments`,
     { method: "POST", token, body: JSON.stringify(data) },
+  );
+}
+
+export async function getDeployment(
+  token: string,
+  orgId: number,
+  deploymentId: number,
+): Promise<OtaDeployment> {
+  return apiFetch<OtaDeployment>(
+    `/api/v1/organizations/${orgId}/ota/deployments/${deploymentId}`,
+    { token },
+  );
+}
+
+export async function getDeploymentDevices(
+  token: string,
+  orgId: number,
+  deploymentId: number,
+): Promise<DeploymentDeviceStatus[]> {
+  return apiFetch<DeploymentDeviceStatus[]>(
+    `/api/v1/organizations/${orgId}/ota/deployments/${deploymentId}/devices`,
+    { token },
+  );
+}
+
+export async function deleteArtifact(
+  token: string,
+  orgId: number,
+  artifactId: number,
+): Promise<void> {
+  return apiFetch(
+    `/api/v1/organizations/${orgId}/ota/artifacts/${artifactId}`,
+    { method: "DELETE", token },
   );
 }

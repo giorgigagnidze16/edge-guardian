@@ -2,27 +2,44 @@
 
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useSession } from "next-auth/react";
+import { useRouter } from "next/navigation";
 import {
   listArtifacts,
   listDeployments,
-  createDeployment,
+  deleteArtifact,
   type OtaArtifact,
   type OtaDeployment,
 } from "@/lib/api/ota";
-import { DataTable, type Column } from "@/components/data-table";
+import { useOrganization } from "@/lib/hooks/use-organization";
+import { PageHeader } from "@/components/page-header";
+import { UploadArtifactDialog } from "@/components/upload-artifact-dialog";
+import { CreateDeploymentDialog } from "@/components/create-deployment-dialog";
+import { ConfirmDialog } from "@/components/confirm-dialog";
 import { StateBadge } from "@/components/state-badge";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Progress } from "@/components/ui/progress";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Upload, Rocket } from "lucide-react";
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { TableRowSkeleton } from "@/components/loading-skeleton";
+import { EmptyState } from "@/components/empty-state";
+import { Upload, Rocket, MoreVertical, Trash2 } from "lucide-react";
 import { useState } from "react";
 import { formatDistanceToNow } from "date-fns";
+import { toast } from "sonner";
 
 function formatBytes(bytes: number): string {
   if (bytes === 0) return "0 B";
@@ -32,146 +49,231 @@ function formatBytes(bytes: number): string {
   return `${(bytes / Math.pow(k, i)).toFixed(1)} ${sizes[i]}`;
 }
 
-const artifactColumns: Column<OtaArtifact>[] = [
-  { header: "Name", accessorKey: "name" },
-  {
-    header: "Version",
-    cell: (row) => (
-      <Badge variant="secondary" className="font-mono text-xs">
-        {row.version}
-      </Badge>
-    ),
-  },
-  {
-    header: "Arch",
-    cell: (row) => (
-      <Badge variant="outline" className="font-mono text-xs">
-        {row.architecture}
-      </Badge>
-    ),
-  },
-  {
-    header: "Size",
-    cell: (row) => formatBytes(row.size),
-  },
-  {
-    header: "Uploaded",
-    cell: (row) =>
-      formatDistanceToNow(new Date(row.createdAt), { addSuffix: true }),
-  },
-];
-
-const deploymentColumns: Column<OtaDeployment>[] = [
-  {
-    header: "ID",
-    cell: (row) => (
-      <span className="font-mono text-xs">#{row.id}</span>
-    ),
-  },
-  {
-    header: "Artifact",
-    cell: (row) => (
-      <span className="font-mono text-xs">#{row.artifactId}</span>
-    ),
-  },
-  {
-    header: "Strategy",
-    cell: (row) => (
-      <Badge variant="outline">{row.strategy}</Badge>
-    ),
-  },
-  {
-    header: "State",
-    cell: (row) => <StateBadge state={row.state} />,
-  },
-  {
-    header: "Labels",
-    cell: (row) => {
-      const entries = Object.entries(row.labelSelector ?? {});
-      if (entries.length === 0)
-        return <span className="text-muted-foreground">all</span>;
-      return (
-        <div className="flex flex-wrap gap-1">
-          {entries.map(([k, v]) => (
-            <Badge key={k} variant="outline" className="text-xs font-mono">
-              {k}={v}
-            </Badge>
-          ))}
-        </div>
-      );
-    },
-  },
-  {
-    header: "Created",
-    cell: (row) =>
-      formatDistanceToNow(new Date(row.createdAt), { addSuffix: true }),
-  },
-];
-
 export default function OTAPage() {
   const { data: session } = useSession();
-  // Using org 1 as default for now; will be dynamic with org-switcher
-  const orgId = 1;
+  const { orgId } = useOrganization();
+  const router = useRouter();
+  const queryClient = useQueryClient();
+  const token = session?.accessToken ?? "";
+
+  const [uploadOpen, setUploadOpen] = useState(false);
+  const [deployOpen, setDeployOpen] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<OtaArtifact | null>(null);
 
   const { data: artifacts, isLoading: artifactsLoading } = useQuery({
     queryKey: ["ota-artifacts", orgId],
-    queryFn: () => listArtifacts(session?.accessToken ?? "", orgId),
-    enabled: !!session?.accessToken,
+    queryFn: () => listArtifacts(token, orgId!),
+    enabled: !!token && !!orgId,
   });
 
   const { data: deployments, isLoading: deploymentsLoading } = useQuery({
     queryKey: ["ota-deployments", orgId],
-    queryFn: () => listDeployments(session?.accessToken ?? "", orgId),
-    enabled: !!session?.accessToken,
+    queryFn: () => listDeployments(token, orgId!),
+    enabled: !!token && !!orgId,
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: (id: number) => deleteArtifact(token, orgId!, id),
+    onSuccess: () => {
+      toast.success("Artifact deleted");
+      queryClient.invalidateQueries({ queryKey: ["ota-artifacts"] });
+      setDeleteTarget(null);
+    },
+    onError: (err: Error) => toast.error(err.message),
   });
 
   return (
-    <div className="space-y-8">
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold">OTA Updates</h1>
-        <Button>
+    <div className="space-y-6">
+      <PageHeader title="OTA Updates" description="Manage firmware artifacts and deployments">
+        <Button variant="outline" onClick={() => setDeployOpen(true)}>
+          <Rocket className="mr-2 h-4 w-4" />
+          New Deployment
+        </Button>
+        <Button onClick={() => setUploadOpen(true)}>
           <Upload className="mr-2 h-4 w-4" />
           Upload Artifact
         </Button>
-      </div>
+      </PageHeader>
 
-      {/* Artifacts */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Artifacts</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <DataTable
-            columns={artifactColumns}
-            data={artifacts ?? []}
-            isLoading={artifactsLoading}
-            searchKey="name"
-            searchPlaceholder="Search artifacts..."
-            emptyTitle="No artifacts"
-            emptyDescription="Upload your first OTA artifact to get started."
-          />
-        </CardContent>
-      </Card>
+      <Tabs defaultValue="artifacts">
+        <TabsList>
+          <TabsTrigger value="artifacts">
+            Artifacts {artifacts ? `(${artifacts.length})` : ""}
+          </TabsTrigger>
+          <TabsTrigger value="deployments">
+            Deployments {deployments ? `(${deployments.length})` : ""}
+          </TabsTrigger>
+        </TabsList>
 
-      {/* Deployments */}
-      <Card>
-        <CardHeader className="flex flex-row items-center justify-between">
-          <CardTitle>Deployments</CardTitle>
-          <Button variant="outline" size="sm">
-            <Rocket className="mr-2 h-4 w-4" />
-            New Deployment
-          </Button>
-        </CardHeader>
-        <CardContent>
-          <DataTable
-            columns={deploymentColumns}
-            data={deployments ?? []}
-            isLoading={deploymentsLoading}
-            emptyTitle="No deployments"
-            emptyDescription="Create a deployment to push artifacts to your devices."
-          />
-        </CardContent>
-      </Card>
+        <TabsContent value="artifacts" className="mt-4">
+          <div className="rounded-xl border border-border/50 overflow-hidden">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Name</TableHead>
+                  <TableHead>Version</TableHead>
+                  <TableHead>Architecture</TableHead>
+                  <TableHead>Size</TableHead>
+                  <TableHead>Uploaded</TableHead>
+                  <TableHead className="w-10" />
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {artifactsLoading ? (
+                  Array.from({ length: 3 }).map((_, i) => (
+                    <TableRowSkeleton key={i} columns={6} />
+                  ))
+                ) : !artifacts || artifacts.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={6}>
+                      <EmptyState
+                        title="No artifacts"
+                        description="Upload your first OTA artifact to get started."
+                      />
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  artifacts.map((artifact) => (
+                    <TableRow key={artifact.id}>
+                      <TableCell className="font-medium">{artifact.name}</TableCell>
+                      <TableCell>
+                        <Badge variant="secondary" className="font-mono text-xs">
+                          {artifact.version}
+                        </Badge>
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant="outline" className="font-mono text-xs">
+                          {artifact.architecture}
+                        </Badge>
+                      </TableCell>
+                      <TableCell>{formatBytes(artifact.size)}</TableCell>
+                      <TableCell>
+                        {formatDistanceToNow(new Date(artifact.createdAt), { addSuffix: true })}
+                      </TableCell>
+                      <TableCell>
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button variant="ghost" size="icon" className="h-8 w-8">
+                              <MoreVertical className="h-4 w-4" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            <DropdownMenuItem onClick={() => setDeployOpen(true)}>
+                              <Rocket className="mr-2 h-4 w-4" />
+                              Deploy
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                              className="text-destructive"
+                              onClick={() => setDeleteTarget(artifact)}
+                            >
+                              <Trash2 className="mr-2 h-4 w-4" />
+                              Delete
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </TableCell>
+                    </TableRow>
+                  ))
+                )}
+              </TableBody>
+            </Table>
+          </div>
+        </TabsContent>
+
+        <TabsContent value="deployments" className="mt-4">
+          <div className="rounded-xl border border-border/50 overflow-hidden">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>ID</TableHead>
+                  <TableHead>Artifact</TableHead>
+                  <TableHead>Strategy</TableHead>
+                  <TableHead>State</TableHead>
+                  <TableHead>Progress</TableHead>
+                  <TableHead>Labels</TableHead>
+                  <TableHead>Created</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {deploymentsLoading ? (
+                  Array.from({ length: 3 }).map((_, i) => (
+                    <TableRowSkeleton key={i} columns={7} />
+                  ))
+                ) : !deployments || deployments.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={7}>
+                      <EmptyState
+                        title="No deployments"
+                        description="Create a deployment to push artifacts to your devices."
+                      />
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  deployments.map((d) => {
+                    const progress =
+                      d.totalDevices && d.totalDevices > 0
+                        ? Math.round(((d.completedDevices ?? 0) / d.totalDevices) * 100)
+                        : 0;
+                    return (
+                      <TableRow
+                        key={d.id}
+                        className="cursor-pointer"
+                        onClick={() => router.push(`/ota/${d.id}`)}
+                      >
+                        <TableCell className="font-mono text-xs">#{d.id}</TableCell>
+                        <TableCell className="font-mono text-xs">#{d.artifactId}</TableCell>
+                        <TableCell>
+                          <Badge variant="outline">{d.strategy}</Badge>
+                        </TableCell>
+                        <TableCell>
+                          <StateBadge state={d.state} />
+                        </TableCell>
+                        <TableCell className="w-32">
+                          <div className="flex items-center gap-2">
+                            <Progress value={progress} className="h-2" />
+                            <span className="text-xs text-muted-foreground">{progress}%</span>
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          {Object.entries(d.labelSelector ?? {}).length === 0 ? (
+                            <span className="text-muted-foreground">all</span>
+                          ) : (
+                            <div className="flex flex-wrap gap-1">
+                              {Object.entries(d.labelSelector).map(([k, v]) => (
+                                <Badge key={k} variant="outline" className="font-mono text-xs">
+                                  {k}={v}
+                                </Badge>
+                              ))}
+                            </div>
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          {formatDistanceToNow(new Date(d.createdAt), { addSuffix: true })}
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })
+                )}
+              </TableBody>
+            </Table>
+          </div>
+        </TabsContent>
+      </Tabs>
+
+      <UploadArtifactDialog open={uploadOpen} onOpenChange={setUploadOpen} />
+      <CreateDeploymentDialog open={deployOpen} onOpenChange={setDeployOpen} />
+      <ConfirmDialog
+        open={!!deleteTarget}
+        onOpenChange={(v) => { if (!v) setDeleteTarget(null); }}
+        title="Delete Artifact"
+        description={`Are you sure you want to delete "${deleteTarget?.name} v${deleteTarget?.version}"? This action cannot be undone.`}
+        confirmLabel="Delete"
+        variant="destructive"
+        onConfirm={() => {
+          if (deleteTarget) deleteMutation.mutate(deleteTarget.id);
+        }}
+        loading={deleteMutation.isPending}
+      />
     </div>
   );
 }

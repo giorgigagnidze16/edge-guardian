@@ -82,3 +82,15 @@ export async function updateDeviceManifest(
     body: JSON.stringify({ content: yamlContent }),
   });
 }
+
+export async function updateDeviceLabels(
+  token: string,
+  deviceId: string,
+  labels: Record<string, string>,
+): Promise<void> {
+  return apiFetch(`/api/v1/devices/${deviceId}/labels`, {
+    method: "PUT",
+    token,
+    body: JSON.stringify(labels),
+  });
+}

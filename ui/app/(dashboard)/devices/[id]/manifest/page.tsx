@@ -3,24 +3,25 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useSession } from "next-auth/react";
 import { useParams, useRouter } from "next/navigation";
+import { useTheme } from "next-themes";
 import { getDeviceManifest, updateDeviceManifest } from "@/lib/api/devices";
+import { PageHeader } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ArrowLeft, Save } from "lucide-react";
-import { useState, useCallback } from "react";
-import Editor from "@monaco-editor/react";
+import { useState, useEffect, useCallback } from "react";
+import { toast } from "sonner";
+import dynamic from "next/dynamic";
+
+const Editor = dynamic(() => import("@monaco-editor/react"), { ssr: false });
 
 export default function ManifestEditorPage() {
   const { id } = useParams<{ id: string }>();
   const { data: session } = useSession();
   const router = useRouter();
   const queryClient = useQueryClient();
+  const { resolvedTheme } = useTheme();
 
   const { data: manifest, isLoading } = useQuery({
     queryKey: ["device-manifest", id],
@@ -36,15 +37,17 @@ export default function ManifestEditorPage() {
         : "";
 
   const [editorValue, setEditorValue] = useState<string | undefined>(undefined);
-
   const currentValue = editorValue ?? initialYaml;
 
   const mutation = useMutation({
     mutationFn: (yamlContent: string) =>
       updateDeviceManifest(session?.accessToken ?? "", id, yamlContent),
     onSuccess: () => {
+      toast.success("Manifest saved. Changes will be applied on next reconciliation.");
       queryClient.invalidateQueries({ queryKey: ["device-manifest", id] });
+      setEditorValue(undefined);
     },
+    onError: (err: Error) => toast.error(`Failed to save: ${err.message}`),
   });
 
   const handleSave = useCallback(() => {
@@ -53,10 +56,22 @@ export default function ManifestEditorPage() {
     }
   }, [currentValue, mutation]);
 
+  // Ctrl+S shortcut
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === "s") {
+        e.preventDefault();
+        handleSave();
+      }
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [handleSave]);
+
   const hasChanges = editorValue !== undefined && editorValue !== initialYaml;
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-4">
           <Button
@@ -66,10 +81,7 @@ export default function ManifestEditorPage() {
           >
             <ArrowLeft className="h-4 w-4" />
           </Button>
-          <div>
-            <h1 className="text-2xl font-bold">Manifest Editor</h1>
-            <p className="text-sm text-muted-foreground font-mono">{id}</p>
-          </div>
+          <PageHeader title="Manifest Editor" description={`${id} | Ctrl+S to save`} />
         </div>
         <Button
           onClick={handleSave}
@@ -80,24 +92,8 @@ export default function ManifestEditorPage() {
         </Button>
       </div>
 
-      {mutation.isSuccess && (
-        <div className="rounded-md border border-green-200 bg-green-50 p-3 text-sm text-green-800 dark:border-green-800 dark:bg-green-900/30 dark:text-green-200">
-          Manifest saved successfully. Changes will be applied on next
-          reconciliation cycle.
-        </div>
-      )}
-
-      {mutation.isError && (
-        <div className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-800 dark:border-red-800 dark:bg-red-900/30 dark:text-red-200">
-          Failed to save manifest: {mutation.error.message}
-        </div>
-      )}
-
       <Card>
-        <CardHeader>
-          <CardTitle>YAML Manifest</CardTitle>
-        </CardHeader>
-        <CardContent>
+        <CardContent className="p-0">
           {isLoading ? (
             <Skeleton className="h-[500px] w-full" />
           ) : (
@@ -106,7 +102,7 @@ export default function ManifestEditorPage() {
               defaultLanguage="yaml"
               defaultValue={initialYaml}
               onChange={(value) => setEditorValue(value ?? "")}
-              theme="vs-dark"
+              theme={resolvedTheme === "dark" ? "vs-dark" : "vs"}
               options={{
                 minimap: { enabled: false },
                 fontSize: 13,
