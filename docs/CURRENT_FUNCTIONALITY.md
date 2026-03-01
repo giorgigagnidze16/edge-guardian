@@ -1,6 +1,6 @@
 # EdgeGuardian — Current Functionality
 
-> Last updated: 2026-03-01 · Phase 2 complete · Agent v0.2.0
+> Last updated: 2026-03-01 · Phases 1-3 + 5 complete · Agent v0.2.0
 
 ---
 
@@ -10,11 +10,34 @@ EdgeGuardian is a Kubernetes-style IoT device management system with three compo
 
 | Component | Tech | Status |
 |-----------|------|--------|
-| **Go Agent** | Go 1.24, BoltDB, MQTT, zap | Fully implemented (Phase 2) |
-| **Spring Boot Controller** | Java 21, Spring Boot 3.4, WebFlux, PostgreSQL 16, Flyway, MQTT 5 | Fully implemented (Phase 2) |
-| **Next.js Dashboard** | Next.js 15, React 19, TypeScript, shadcn/ui | Scaffolded (Phase 5) |
+| **Go Agent** | Go 1.24, BoltDB, MQTT, zap | Fully implemented (Phases 1-3) |
+| **Spring Boot Controller** | Java 21, Spring Boot 3.4, PostgreSQL 16, Flyway, MQTT 5, Keycloak OIDC | Fully implemented (Phases 1-3) |
+| **Next.js Dashboard** | Next.js 15, React 19, TypeScript, shadcn/ui, TanStack Query, Recharts, Monaco | Fully implemented (Phase 5) |
 
 gRPC was evaluated and removed in favor of HTTP/JSON to keep the agent binary under 5 MB (see `docs/ADR-001`).
+
+---
+
+## Infrastructure (Docker Compose)
+
+All services run via `deployments/docker-compose.yml`:
+
+| Service | Image | Port | Purpose |
+|---------|-------|------|---------|
+| **PostgreSQL** | postgres:16-alpine | 5432 | Device, manifest, org, OTA storage; Keycloak DB |
+| **Keycloak** | quay.io/keycloak:26.0 | 9090 | OIDC provider (Google/GitHub federated login) |
+| **EMQX** | emqx/emqx:5.8 | 1883, 8083, 18083 | MQTT broker (replaced Mosquitto for better ACL) |
+| **Loki** | grafana/loki:3.3.0 | 3100 | Log aggregation (agent → controller → Loki) |
+| **Grafana** | grafana/grafana:11.4.0 | 3000 | Visualization (Loki datasource, Keycloak SSO) |
+
+**Credentials:**
+- PostgreSQL: `edgeguardian` / `edgeguardian-dev`
+- Keycloak admin: `admin` / `admin`
+- Grafana admin: `admin` / `admin`
+
+```bash
+cd deployments && docker compose up -d
+```
 
 ---
 
@@ -35,10 +58,11 @@ gRPC was evaluated and removed in favor of HTTP/JSON to keep the agent binary un
 4. Load cached desired state from BoltDB (offline-first)
 5. Register with controller via HTTP (15 s timeout, non-fatal on failure)
 6. Connect to MQTT broker (10 s timeout, non-fatal on failure)
-7. Start four concurrent loops:
+7. Start concurrent loops:
    - **Reconciler** — applies desired state at configurable interval (default 30 s)
    - **Heartbeat** — POST to controller every 30 s, receives manifest updates
    - **MQTT telemetry** — publishes device status every 30 s
+   - **Log forwarding** — streams logs to MQTT (journalctl on Linux, file tailer elsewhere)
    - **Signal handler** — waits for shutdown signal, cancels context
 
 ### Configuration (`agent.yaml`)
@@ -64,136 +88,91 @@ health:
   disk_path: /                      # "/" on Linux/macOS, "C:\" on Windows
 ```
 
-**Platform defaults:**
-
-| Setting | Linux | macOS | Windows |
-|---------|-------|-------|---------|
-| Config path | `/etc/edgeguardian/agent.yaml` | `/etc/edgeguardian/agent.yaml` | `C:\ProgramData\EdgeGuardian\agent.yaml` |
-| Data dir | `/var/lib/edgeguardian` | `/var/lib/edgeguardian` | `C:\ProgramData\EdgeGuardian\data` |
-| Disk path | `/` | `/` | `C:\` |
-| Agent binary | `/usr/local/bin/edgeguardian-agent` | `/usr/local/bin/edgeguardian-agent` | `C:\Program Files\EdgeGuardian\edgeguardian-agent.exe` |
-
 ### Cross-Platform Support
 
 Full build-tag separation (`_linux.go`, `_windows.go`, `_darwin.go`, `_fallback.go`). No cgo required.
 
-| Capability | Linux | Windows | macOS | Other (FreeBSD, etc.) |
-|------------|-------|---------|-------|-----------------------|
+| Capability | Linux | Windows | macOS | Other |
+|------------|-------|---------|-------|-------|
 | CPU usage | `/proc/stat` delta | `GetSystemTimes` Win32 | `ps -A -o %cpu` | stub (0%) |
-| Memory | `/proc/meminfo` | `GlobalMemoryStatusEx` | `sysctl hw.memsize` + `vm_stat` | Go runtime only |
-| Disk usage | `statfs` (configurable path) | `GetDiskFreeSpaceExW` (configurable drive) | `unix.Statfs` (configurable path) | stub |
-| Temperature | `/sys/class/thermal` or `hwmon` | no-op (needs WMI) | no-op (needs IOKit + cgo) | stub |
+| Memory | `/proc/meminfo` | `GlobalMemoryStatusEx` | `sysctl hw.memsize` | Go runtime only |
+| Disk usage | `statfs` | `GetDiskFreeSpaceExW` | `unix.Statfs` | stub |
+| Temperature | `/sys/class/thermal` | no-op | no-op | stub |
 | Uptime | `/proc/uptime` | `GetTickCount64` | `sysctl kern.boottime` | stub |
-| Service mgmt | `systemctl` | Windows SCM API | `launchctl` (auto-detects system/gui domain) | returns "unsupported" errors |
-| File ownership | `syscall.Stat_t` + user lookup | no-op (POSIX N/A) | `syscall.Stat_t` + user lookup | no-op |
-| Signal handling | SIGINT + SIGTERM | os.Interrupt | SIGINT + SIGTERM | SIGINT + SIGTERM |
-
-**Degraded state thresholds** (shared across all platforms):
-- Temperature > 80 °C
-- Memory usage > 95%
-- Disk usage > 95%
+| Service mgmt | `systemctl` | Windows SCM API | `launchctl` | unsupported |
+| File ownership | `syscall.Stat_t` | no-op | `syscall.Stat_t` | no-op |
 
 ### Reconciliation Engine
 
 Periodic loop (default 30 s) that converges actual device state toward the desired manifest.
 
-**Flow:**
 1. Diff the `DeviceManifest` into `ResourceSpec` lists (files, services)
 2. Route each spec to the plugin that handles its `kind`
 3. Plugin compares actual vs desired, applies changes, returns `Action`
-4. Status set to `"converged"` (all noop), `"error"` (any action failed), or `"drifted"`
+4. Status set to `"converged"`, `"error"`, or `"drifted"`
 
-**Thread-safe state:** `sync.RWMutex` protects desired state, status, and action history.
-
-### Reconciler Plugins
+### Plugins
 
 #### File Manager (`kind: "file"`)
-
-Manages configuration files on disk.
-
-| Spec Field | Example | Description |
-|------------|---------|-------------|
-| `path` | `/etc/app/config.yaml` | Target file path |
-| `content` | `key: value\n` | Desired file content |
-| `mode` | `"0644"` | Octal permission string |
-| `owner` | `"root:root"` | `user:group` (Linux/macOS only) |
-
-**Features:**
-- Atomic writes (temp file → fsync → rename) to prevent corruption on power loss
+- Atomic writes (temp file → fsync → rename)
 - Auto-creates parent directories
-- Compares content, mode, and ownership before acting
-- Ownership failure is non-fatal (logs warning, reports success)
-
-**Actions:** `create` (new file), `update` (changed content/mode/owner), `noop` (already correct), `skipped` (error or context cancelled)
+- Compares content, mode, and ownership
 
 #### Service Manager (`kind: "service"`)
+- Linux: `systemctl start/stop/enable/disable`
+- macOS: `launchctl` (modern API, auto-detects system/gui domain)
+- Windows: SCM API via `golang.org/x/sys/windows/svc/mgr`
 
-Manages system services via the platform-native init system.
+### OTA Pipeline (Phase 3)
 
-| Spec Field | Example | Description |
-|------------|---------|-------------|
-| `name` | `nginx` | Service/unit name |
-| `state` | `"running"` or `"stopped"` | Desired running state |
-| `enabled` | `"true"` or `"false"` | Enabled at boot |
+- `internal/ota/updater.go` — streaming HTTP download with SHA-256 verification
+- Ed25519 signature validation
+- Apply: chmod + exit code 42 (signals watchdog to swap binary)
 
-**Platform behavior:**
-- **Linux:** `systemctl start/stop/enable/disable`. Non-zero exit for `inactive`/`disabled` is not treated as an error.
-- **macOS:** `launchctl kickstart/kill/enable/disable` (modern API) with fallback to legacy `start`/`stop`. Auto-detects `system` vs `gui/<uid>` domain based on current user.
-- **Windows:** SCM API via `golang.org/x/sys/windows/svc/mgr`. Stop waits up to 10 s with context-aware polling. Clear error messages for privilege failures.
+### Command Dispatcher (Phase 3)
+
+Routes MQTT commands by type: `ota_update`, `restart`, `exec`, `vpn_configure`
+
+### Log Forwarding (Phase 3)
+
+- Ring buffer forwarder: collects log entries, flushes batches via MQTT
+- Linux: `journalctl --follow` subprocess streaming
+- Other: file tailer (polls for new lines)
 
 ### Offline-First Persistence (BoltDB)
 
-Three buckets:
+| Bucket | Purpose |
+|--------|---------|
+| `desired_state` | Survive restarts without controller |
+| `offline_queue` | Buffer MQTT messages when broker unreachable |
+| `agent_meta` | Agent metadata (version, etc.) |
 
-| Bucket | Key | Value | Purpose |
-|--------|-----|-------|---------|
-| `desired_state` | `"current"` | JSON manifest | Survive agent restarts without controller |
-| `offline_queue` | Zero-padded sequence number | MQTT message payload | Buffer telemetry when broker unreachable |
-| `agent_meta` | Arbitrary string | String value | Agent metadata (e.g. version) |
+### HTTP Client
 
-**Offline queue behavior:**
-- Messages enqueued with topic, payload, and timestamp
-- On MQTT reconnection, drained in FIFO order (batches of 10)
-- Re-queued if drain publish fails
-- `QueueDepth()` exposed for monitoring
-
-### HTTP Controller Client
-
-Base URL: `http://<address>:<port>`, 15 s timeout per request.
+Base URL: `http://<address>:<port>`, 15 s timeout, 3 retries with exponential backoff.
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| POST | `/api/v1/agent/register` | Send device_id, hostname, arch, os, version, labels |
-| POST | `/api/v1/agent/heartbeat` | Send status metrics, receive manifest updates |
-| GET | `/api/v1/agent/desired-state/{deviceId}` | Fetch manifest on demand |
+| POST | `/api/v1/agent/register` | Device registration |
+| POST | `/api/v1/agent/heartbeat` | Status + receive manifest |
+| GET | `/api/v1/agent/desired-state/{deviceId}` | Fetch manifest |
 | POST | `/api/v1/agent/report-state` | Push observed state |
-
-**Retry logic:** Up to 3 attempts with exponential backoff (1 s → 2 s → 4 s). Retries on network errors and 5xx. No retry on 4xx.
+| POST | `/api/v1/agent/enroll` | Enrollment token + CSR exchange |
 
 ### MQTT Client
 
-Eclipse Paho v3 (`github.com/eclipse/paho.mqtt.golang`).
+Eclipse Paho v3 with persistent session, auto-reconnect, offline queue.
 
-| Topic Pattern | Direction | QoS | Description |
-|---------------|-----------|-----|-------------|
-| `{root}/device/{id}/telemetry` | Agent → Broker | 1 | Health metrics + reconcile status |
-| `{root}/device/{id}/command` | Broker → Agent | 1 | Commands from controller |
-
-**Features:**
-- Persistent session (`CleanSession=false`)
-- Auto-reconnect (max 30 s interval)
-- Keep-alive: 60 s
-- Offline queue: messages persisted to BoltDB when disconnected, drained on reconnect
-- Command handler registered via callback (currently logs; dispatch planned Phase 3+)
+| Topic | Direction | Description |
+|-------|-----------|-------------|
+| `{root}/device/{id}/telemetry` | Agent → Broker | Health metrics |
+| `{root}/device/{id}/command` | Broker → Agent | Commands from controller |
+| `{root}/device/{id}/status` | Agent → Broker | Reconcile status |
+| `{root}/device/{id}/logs` | Agent → Broker | Device logs |
 
 ### Watchdog
 
-Minimal supervisor for the agent process.
-
-- Restarts agent on crash with exponential backoff (1 s → 5 min cap)
-- Resets backoff on clean exit
-- Platform-aware binary and config paths
-- Full implementation deferred to Phase 4 (health checks, resource limits)
+Minimal supervisor: restarts on crash with exponential backoff (1 s → 5 min cap). Exit code 42 triggers binary swap. Full implementation deferred to Phase 4.
 
 ---
 
@@ -201,105 +180,145 @@ Minimal supervisor for the agent process.
 
 ### REST API
 
-#### Agent Endpoints (`/api/v1/agent`)
+#### Agent Endpoints (`/api/v1/agent/`, no auth required)
 
-| Method | Endpoint | Request | Response |
-|--------|----------|---------|----------|
-| POST | `/register` | `{deviceId, hostname, architecture, os, agentVersion, labels}` | `{accepted, message, initialManifest?}` |
-| POST | `/heartbeat` | `{deviceId, agentVersion, status, timestamp}` | `{manifestUpdated, manifest?, pendingCommands[]}` |
-| GET | `/desired-state/{deviceId}` | — | `{manifest?, version}` |
-| POST | `/report-state` | `{deviceId, status}` | `{acknowledged}` |
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| POST | `/register` | Device registration (idempotent upsert) |
+| POST | `/heartbeat` | Status update + manifest delivery |
+| GET | `/desired-state/{deviceId}` | Fetch manifest on demand |
+| POST | `/report-state` | Push observed state |
+| POST | `/enroll` | Enrollment token exchange |
 
-- Registration is idempotent (upsert). Returns initial manifest if one exists.
-- Heartbeat returns 404 if device not registered (triggers re-registration).
-- Heartbeat always includes manifest if one exists; agent compares versions locally.
-- `pendingCommands` is always empty in Phase 2 (populated in Phase 3+).
+#### Device Management (`/api/v1/devices/`, requires Keycloak JWT)
 
-#### Dashboard Endpoints (`/api/v1/devices`)
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/` | List all devices in org |
+| GET | `/{deviceId}` | Single device detail |
+| DELETE | `/{deviceId}` | Remove device + manifest |
+| GET | `/count` | Total device count |
+| GET | `/{deviceId}/logs` | Query logs from Loki (time range, level, search) |
 
-| Method | Endpoint | Response |
-|--------|----------|----------|
-| GET | `/` | `Flux<DeviceDto>` — all registered devices |
-| GET | `/{deviceId}` | `Mono<DeviceDto>` — single device (404 if not found) |
-| DELETE | `/{deviceId}` | 204 No Content — removes device + manifest |
-| GET | `/count` | `Mono<Long>` — total device count |
+#### Organizations (`/api/v1/organizations/`, requires JWT)
 
-**DeviceDto fields:** `deviceId`, `hostname`, `architecture`, `os`, `agentVersion`, `labels`, `state`, `registeredAt`, `lastHeartbeat`, `status` (nested: cpu, memory, disk, temp, uptime, reconcileStatus)
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET/POST | `/` | List/create organizations |
+| GET/PUT/DELETE | `/{orgId}` | Get/update/delete org |
+| GET/POST/DELETE | `/{orgId}/members` | Member CRUD with role management |
+| GET/POST/DELETE | `/{orgId}/enrollment-tokens` | Enrollment token CRUD |
+| GET/POST/DELETE | `/{orgId}/api-keys` | API key CRUD (one-time reveal) |
 
-### Database Schema (PostgreSQL 16, Flyway-managed)
+#### OTA Management (`/api/v1/organizations/{orgId}/ota/`)
 
-#### `devices` table
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET/POST | `/artifacts` | List/upload OTA artifacts |
+| GET/POST | `/deployments` | List/create deployments (label-based targeting) |
 
-| Column | Type | Notes |
-|--------|------|-------|
-| `id` | BIGSERIAL | PK |
-| `device_id` | VARCHAR(255) | UNIQUE, NOT NULL |
-| `hostname` | VARCHAR(255) | |
-| `architecture` | VARCHAR(64) | e.g. `arm64` |
-| `os` | VARCHAR(64) | e.g. `linux` |
-| `agent_version` | VARCHAR(64) | |
-| `state` | VARCHAR(32) | `ONLINE` / `DEGRADED` / `OFFLINE` |
-| `labels` | JSONB | Default `{}` |
-| `registered_at` | TIMESTAMPTZ | Set on first registration |
-| `last_heartbeat` | TIMESTAMPTZ | Updated every heartbeat |
-| `cpu_usage_percent` | DOUBLE PRECISION | |
-| `memory_used_bytes` | BIGINT | |
-| `memory_total_bytes` | BIGINT | |
-| `disk_used_bytes` | BIGINT | |
-| `disk_total_bytes` | BIGINT | |
-| `temperature_celsius` | DOUBLE PRECISION | |
-| `uptime_seconds` | BIGINT | |
-| `last_reconcile` | TIMESTAMPTZ | |
-| `reconcile_status` | VARCHAR(32) | Default `converged` |
-| `created_at` | TIMESTAMPTZ | |
-| `updated_at` | TIMESTAMPTZ | |
+#### User & Audit
 
-**Indexes:** `idx_devices_state` (B-tree on `state`), `idx_devices_labels` (GIN on `labels` JSONB)
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/me` | User profile + org memberships |
+| GET | `/organizations/{orgId}/audit` | Audit log (paginated, filterable) |
 
-#### `device_manifests` table
+### Database Schema (PostgreSQL 16, Flyway)
 
-| Column | Type | Notes |
-|--------|------|-------|
-| `id` | BIGSERIAL | PK |
-| `device_id` | VARCHAR(255) | UNIQUE, FK → `devices.device_id` ON DELETE CASCADE |
-| `api_version` | VARCHAR(64) | Default `edgeguardian/v1` |
-| `kind` | VARCHAR(64) | Default `DeviceManifest` |
-| `metadata` | JSONB | Default `{}` |
-| `spec` | JSONB | Files, services, health checks |
-| `version` | BIGINT | Default 1, auto-incremented on update |
-| `created_at` | TIMESTAMPTZ | |
-| `updated_at` | TIMESTAMPTZ | |
+| Migration | Tables |
+|-----------|--------|
+| V1__init | `devices`, `device_manifests` |
+| V2__auth_and_tenancy | `organizations`, `users`, `organization_members`, `enrollment_tokens`, `api_keys`, `audit_log` |
+| V3__ota | `ota_artifacts`, `ota_deployments`, `deployment_device_status` |
 
-**Index:** `idx_device_manifests_device_id` (B-tree)
+### Security
+
+- **Stateless** (no HTTP sessions, CSRF disabled)
+- **JWT validation** via Keycloak issuer
+- **API Key filter** (`X-API-Key` header, SHA-256 lookup)
+- **Tenant interceptor** resolves org membership per request
+- Agent endpoints are public (device-scoped)
+
+### Services
+
+| Service | Purpose |
+|---------|---------|
+| DeviceRegistry | Register/heartbeat/manifest CRUD |
+| OrganizationService | Org CRUD + role-based permissions |
+| EnrollmentService | Token validation for device enrollment |
+| ApiKeyService | Key generation (SHA-256) + revocation |
+| UserService | Keycloak sync on first login, auto-creates personal org |
+| AuditService | Immutable audit trail |
+| OTAService | Artifact upload + label-based deployment |
+| LogService | Loki HTTP client (push + LogQL query) |
+| DeviceHealthScheduler | Marks devices OFFLINE after 5 min |
 
 ### MQTT Integration
 
-| Component | Description |
-|-----------|-------------|
-| `TelemetryListener` | Subscribes to `{root}/device/+/telemetry` (wildcard). Parses JSON, extracts status, calls `registry.heartbeat()`. |
-| `CommandPublisher` | Publishes to `{root}/device/{id}/command` (QoS 1). Payload: `{command: {id, type, params, createdAt}}`. No-ops if MQTT not connected. |
-
-**Command types** (defined, not yet dispatched): `ota_update`, `restart`, `exec`, `vpn_configure`
-
-### CORS
-
-All `/api/**` endpoints allow `http://localhost:3000` with full CRUD methods and credentials.
-
-### Controller Configuration (`application.yaml`)
-
-| Setting | Default |
-|---------|---------|
-| Server port | `8443` |
-| PostgreSQL URL | `jdbc:postgresql://localhost:5432/edgeguardian` |
-| DB user / password | `edgeguardian` / `edgeguardian` |
-| Hibernate DDL | `validate` (Flyway manages schema) |
-| MQTT broker | `tcp://localhost:1883` |
-| MQTT client ID | `edgeguardian-controller` |
-| MQTT topic root | `edgeguardian` |
+- `TelemetryListener`: subscribes to `{root}/device/+/telemetry`, updates DB
+- `LogIngestionListener`: subscribes to `{root}/device/+/logs`, pushes to Loki
+- `CommandPublisher`: publishes commands to `{root}/device/{id}/command`
 
 ---
 
-## Data Model (Agent ↔ Controller Contract)
+## Next.js Dashboard (Phase 5)
+
+### Tech Stack
+
+Next.js 15, React 19, TypeScript 5.7, Tailwind CSS v4, shadcn/ui (Radix), TanStack Query v5, NextAuth v5 (Keycloak OIDC), Recharts, Monaco Editor, Sonner (toasts), cmdk (command palette)
+
+### Authentication
+
+Keycloak OIDC via NextAuth v5 with PKCE. JWT stored in cookie with access token for API calls. Middleware protects all dashboard routes.
+
+### Pages (11 routes)
+
+| Route | Description |
+|-------|-------------|
+| `/` | Fleet overview: metric cards, fleet health chart, resource consumers, recent deployments, devices needing attention, recent activity |
+| `/devices` | Device list with filters (state, architecture, labels), bulk actions, sorting, pagination |
+| `/devices/[id]` | Device detail: metric cards with sparklines, resource charts, device info, labels, action menu |
+| `/devices/[id]/logs` | Log viewer: Loki-backed, level filter, time range, auto-scroll, search |
+| `/devices/[id]/manifest` | Monaco YAML editor with theme-aware syntax highlighting, Ctrl+S save |
+| `/ota` | OTA management: artifacts table + deployments table, upload artifact dialog, create deployment wizard |
+| `/ota/[deploymentId]` | Deployment detail: progress bar, state counts, per-device status table |
+| `/settings` | Org settings: general info, members, enrollment tokens, API keys (all with CRUD dialogs) |
+| `/audit` | Audit log: timeline with action/resource badges, user attribution, filtering |
+| `/integrations` | Integration cards: REST API, CI/CD, MQTT, device enrollment |
+| `/auth/login` | Login page with Keycloak OAuth2 |
+
+### UI Features
+
+- **Dark-first "Midnight Luminance" design** with cyan (#06b6d4) accent, glass morphism, Plus Jakarta Sans + JetBrains Mono fonts
+- **Command palette** (Cmd+K): navigation, device search, theme toggle
+- **Collapsible sidebar** with org switcher, dark mode toggle, user info
+- **Toast notifications** on all mutations
+- **Error boundaries** with retry
+- **Responsive** (mobile sidebar via Sheet, responsive grids)
+- **Performance optimized**: Turbopack, lazy-loaded recharts/command palette/dialogs, `optimizePackageImports`
+
+### Build Output
+
+```
+Route (app)                             Size  First Load JS
+┌ ○ /                                6.97 kB         135 kB
+├ ○ /audit                          11.5 kB          165 kB
+├ ○ /auth/login                     4.72 kB         117 kB
+├ ○ /devices                        9.25 kB         177 kB
+├ ƒ /devices/[id]                   9.74 kB         195 kB
+├ ƒ /devices/[id]/logs              7.3 kB          160 kB
+├ ƒ /devices/[id]/manifest          7.57 kB         138 kB
+├ ○ /integrations                   5.9 kB          126 kB
+├ ○ /ota                            9.4 kB          187 kB
+├ ƒ /ota/[deploymentId]             5.63 kB         130 kB
+└ ○ /settings                      10.6 kB          182 kB
++ First Load JS shared by all        103 kB
+```
+
+---
+
+## Data Model
 
 ### Device Manifest (Desired State)
 
@@ -309,7 +328,6 @@ kind: DeviceManifest
 metadata:
   name: rpi-gateway-01
   labels: { role: gateway }
-  annotations: {}
 spec:
   files:
     - path: /etc/app/config.yaml
@@ -320,13 +338,6 @@ spec:
     - name: nginx
       enabled: "true"
       state: running
-  healthChecks:
-    intervalSeconds: 60
-    checks:
-      - name: disk-usage
-        type: exec
-        target: "df -h / | awk 'NR==2 {print $5}'"
-        timeoutSeconds: 5
 version: 1
 ```
 
@@ -342,31 +353,7 @@ version: 1
   "diskTotalBytes": 32212254720,
   "temperatureCelsius": 52.3,
   "uptimeSeconds": 86400,
-  "lastReconcile": "2026-03-01T12:00:00Z",
   "reconcileStatus": "converged"
-}
-```
-
-### MQTT Telemetry Message
-
-```json
-{
-  "deviceId": "rpi-gateway-01",
-  "timestamp": "2026-03-01T12:00:00Z",
-  "status": { /* DeviceStatus fields */ }
-}
-```
-
-### MQTT Command Message
-
-```json
-{
-  "command": {
-    "id": "uuid",
-    "type": "restart",
-    "params": {},
-    "createdAt": "2026-03-01T12:00:00Z"
-  }
 }
 ```
 
@@ -374,63 +361,19 @@ version: 1
 
 ## Test Coverage
 
-### Agent (Go) — 80 unit + 32 integration = 112 tests
+### Agent (Go) — 112 tests
 
-**Unit tests** (run on any OS with `go test ./...`):
+| Category | Tests | Scope |
+|----------|-------|-------|
+| Unit | 80 | config, health, HTTP comms, model, reconciler, storage, filemanager, service |
+| Integration | 32 | MQTT (real Mosquitto), Linux health (/proc), filemanager (chmod/chown), systemd |
 
-| Package | Tests | What's Covered |
-|---------|-------|----------------|
-| `internal/config` | 5 | Default values, YAML loading (valid, invalid, partial, missing file) |
-| `internal/health` | 10 | Constructor, `computeState` thresholds (healthy, high memory/disk/temp), `FormatMetrics`, `Collect` on host OS, CPU delta |
-| `internal/comms` | 13 | HTTP client via `httptest.NewServer`: register (success/conflict/retry/bad URL), heartbeat (success/401), desired-state (success/404), report-state, content-type, context cancellation, close |
-| `internal/model` | 6 | JSON round-trip for DeviceStatus, DeviceManifest, TelemetryMessage, Command; state string values; empty resources |
-| `internal/reconciler` | 18 | Diff (nil/empty/files/services/kind routing/flat list) + orchestration (no desired state, empty manifest, dispatch, plugin errors, context cancellation, concurrency, large manifest, status tracking) |
-| `internal/storage` | 10 | BoltDB save/load/overwrite, offline queue FIFO, metadata, empty cases |
-| `plugins/filemanager` | 9 | Create, update, noop, parent dirs, empty path, context cancellation, multiple files, name, can-handle |
-| `plugins/service` | 9 | Start, stop, enable, noop, failure, empty name, multiple changes, name, can-handle (all via mock executor) |
+### Controller (Java) — 17+ tests
 
-**Integration tests** (require Docker — run via `Dockerfile.test`):
-
-| Package | Tests | What's Covered |
-|---------|-------|----------------|
-| `internal/comms` (MQTT) | 10 | Real Mosquitto broker: connect/disconnect, publish telemetry, subscribe commands, offline queue, pub/sub E2E, telemetry loop, drain offline queue, topic format |
-| `internal/health` (Linux) | 9 | Real `/proc/stat`, `/proc/meminfo`, `/proc/uptime`; CPU/memory/disk/uptime collection; custom disk path; end-to-end state computation |
-| `plugins/filemanager` (Linux) | 7 | Real `chmod` (0644/0755/0600), mode change on existing file, `chown` with current user, atomic write verification, nested directory creation |
-| `plugins/service` (systemd) | 6 | Real `systemctl`: start, stop, enable, noop when converged, drift detection + correction, disable + stop |
-
-Integration tests run inside a systemd-enabled Ubuntu 22.04 container with Mosquitto:
-```
-docker build -f Dockerfile.test -t eg-agent-test .
-docker run --rm --privileged eg-agent-test /run-tests.sh
-```
-
-### Controller (Java) — 17 tests
-
-| Class | Tests | What's Covered |
-|-------|-------|----------------|
-| `AgentApiControllerTest` | 7 | Register (success, blank ID, with manifest), heartbeat (success, unknown device), desired-state (with/without manifest), report-state |
-| `DeviceRegistryTest` | 10 | Register new/existing/with-labels, heartbeat status update, find/remove/count, manifest save/update/version increment |
-
-All controller integration tests run against real PostgreSQL 16 via Testcontainers.
-
----
-
-## Deployment Artifacts
-
-### Docker Compose (`deployments/docker-compose.yml`)
-
-| Service | Image | Port | Purpose |
-|---------|-------|------|---------|
-| `postgres` | `postgres:16-alpine` | 5432 | Device and manifest storage |
-| `mosquitto` | `eclipse-mosquitto:2` | 1883, 9001 | MQTT broker (plain + WebSocket) |
-
-### Systemd Unit (`deployments/systemd/edgeguardian-agent.service`)
-
-Hardened unit file: `ProtectSystem=strict`, `NoNewPrivileges=true`, `LimitNOFILE=65536`, runs as `edgeguardian` user, restart on failure with 5 s delay.
-
-### Build Script (`scripts/build-agent.sh`)
-
-Cross-compilation with `CGO_ENABLED=0`. UPX compression if available. **Enforces 5 MB size gate** (fails build if agent binary exceeds 5 MB).
+| Class | Tests | Scope |
+|-------|-------|-------|
+| AgentApiControllerTest | 7 | Registration, heartbeat, desired-state, report-state |
+| DeviceRegistryTest | 10 | CRUD, labels, manifest versioning (real PostgreSQL via Testcontainers) |
 
 ---
 
@@ -438,25 +381,62 @@ Cross-compilation with `CGO_ENABLED=0`. UPX compression if available. **Enforces
 
 | ADR | Decision | Rationale |
 |-----|----------|-----------|
-| ADR-001 | HTTP/JSON over gRPC | gRPC adds 6.7 MB to binary (11 MB vs 4.3 MB). HTTP/JSON uses stdlib at zero cost. |
-| ADR-002 | UPX binary compression | Reduces 7.2 MB → 2.6 MB (65%). 50-200 ms startup overhead on RPi. |
+| ADR-001 | HTTP/JSON over gRPC | gRPC adds 6.7 MB to binary (11 MB vs 4.3 MB) |
+| ADR-002 | UPX binary compression | 7.2 MB → 2.6 MB (65% reduction), 50-200 ms startup overhead |
 
 ---
 
-## Not Yet Implemented
+## Implementation Status
+
+| Phase | Description | Status |
+|-------|-------------|--------|
+| Phase 1 | Foundation — scaffolding, HTTP comms, basic agent+controller | **Complete** |
+| Phase 2 | Core — reconciler, BoltDB, MQTT, PostgreSQL, plugins | **Complete** |
+| Phase 3 | Security+OTA — Keycloak OIDC, RBAC, OTA pipeline, Loki, EMQX | **Complete** |
+| Phase 4 | VPN+Monitoring — WireGuard, health probes, full watchdog | Not started |
+| Phase 5 | Dashboard — Next.js 11-page SaaS UI | **Complete** |
+| Phase 6 | Buffer — polish, thesis, optional features | Not started |
+
+### Not Yet Implemented
 
 | Feature | Planned Phase |
 |---------|---------------|
-| Embedded CA + mTLS enrollment | Phase 3 |
-| OTA update pipeline (Ed25519 signed) | Phase 3 |
-| Agent certificate renewal | Phase 3 |
 | WireGuard VPN integration | Phase 4 |
 | Health check probes (HTTP/TCP/exec) | Phase 4 |
 | Full watchdog (resource limits, health gating) | Phase 4 |
-| Next.js dashboard (7 pages) | Phase 5 |
-| Fleet simulation (10-50 agents) | Phase 5 |
-| Fleet simulation benchmarks | Phase 5 |
+| Fleet simulation (10-50 agents) | Phase 6 |
 | GPIO plugin | Phase 6 (optional) |
-| RBAC | Phase 6 (optional) |
-| MQTT command dispatch in agent | Phase 3+ |
 | CI/CD pipeline | Not scheduled |
+
+---
+
+## Quick Start (Local Development)
+
+```bash
+# 1. Infrastructure (PostgreSQL, Keycloak, EMQX, Loki, Grafana)
+cd deployments && docker compose up -d
+# Wait 30-60s for all services to be healthy
+
+# 2. Controller (Java 21 required)
+cd controller && ./gradlew bootRun
+# Runs on port 8443, Flyway auto-migrates
+
+# 3. Dashboard
+cd ui && pnpm install && pnpm dev
+# Runs on port 3001 (3000 is Grafana)
+# Open http://localhost:3001 → redirects to Keycloak login
+
+# 4. Agent (optional, for live device data)
+cd agent && go build -o edgeguardian-agent ./cmd/agent/
+./edgeguardian-agent --config ../configs/sample-agent-config.yaml
+```
+
+### Service URLs
+
+| Service | URL | Credentials |
+|---------|-----|-------------|
+| Dashboard | http://localhost:3001 | Keycloak login |
+| Keycloak Admin | http://localhost:9090 | admin / admin |
+| Grafana | http://localhost:3000 | admin / admin |
+| EMQX Dashboard | http://localhost:18083 | admin / public |
+| Controller API | http://localhost:8443 | Bearer JWT |

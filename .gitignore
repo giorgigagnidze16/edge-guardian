@@ -16,6 +16,7 @@ controller/bin/
 ui/node_modules/
 ui/.next/
 ui/out/
+*.tsbuildinfo
 
 # IDE
 .idea/
