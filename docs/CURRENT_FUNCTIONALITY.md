@@ -42,7 +42,7 @@ gRPC was evaluated and removed in favor of HTTP/JSON to keep the agent binary un
 | BoltDB persistence | Done | Desired state cache, offline queue, metadata |
 | MQTT client (Paho v3) | Done | Telemetry publish, command subscribe, auto-reconnect |
 | MQTT integration (controller) | Done | TelemetryListener, LogIngestionListener, CommandPublisher |
-| Cross-platform build tags | Done | `_linux.go`, `_windows.go`, `_darwin.go`, `_fallback.go` |
+| Cross-platform build tags | Done | `_linux.go`, `_windows.go`, `_darwin.go`, `_android.go`, `_fallback.go` |
 | 112 agent tests | Done | 80 unit + 32 integration (MQTT, /proc, systemd, filemanager) |
 | 17+ controller tests | Done | AgentApiController, DeviceRegistry (Testcontainers PostgreSQL) |
 
@@ -98,7 +98,7 @@ gRPC was evaluated and removed in favor of HTTP/JSON to keep the agent binary un
 |-------------|--------|-------|
 | GPIO plugin | Not started | Empty scaffold at `agent/plugins/gpio/` |
 | CI/CD pipeline | Not started | |
-| Android agent support | Planned | See "Android Support" section below |
+| Android agent support | Done | `_android.go` build tags, logcat, process-based service mgmt |
 | Thesis writing | Not started | |
 
 ---
@@ -148,7 +148,7 @@ cd deployments && docker compose up -d
    - **Reconciler** — applies desired state at configurable interval (default 30 s)
    - **Heartbeat** — POST to controller every 30 s, receives manifest updates
    - **MQTT telemetry** — publishes device status every 30 s
-   - **Log forwarding** — streams logs to MQTT (journalctl on Linux, file tailer elsewhere)
+   - **Log forwarding** — streams logs to MQTT (journalctl on Linux, logcat on Android, file tailer elsewhere)
    - **Signal handler** — waits for shutdown signal, cancels context
 
 ### Configuration (`agent.yaml`)
@@ -176,17 +176,18 @@ health:
 
 ### Cross-Platform Support
 
-Full build-tag separation (`_linux.go`, `_windows.go`, `_darwin.go`, `_fallback.go`). No cgo required.
+Full build-tag separation (`_linux.go`, `_windows.go`, `_darwin.go`, `_android.go`, `_fallback.go`). No cgo required.
 
-| Capability | Linux | Windows | macOS | Android (planned) | Other |
-|------------|-------|---------|-------|--------------------|-------|
-| CPU usage | `/proc/stat` delta | `GetSystemTimes` Win32 | `ps -A -o %cpu` | `/proc/stat` (shared w/ Linux) | stub (0%) |
-| Memory | `/proc/meminfo` | `GlobalMemoryStatusEx` | `sysctl hw.memsize` | `/proc/meminfo` (shared w/ Linux) | Go runtime only |
-| Disk usage | `statfs` | `GetDiskFreeSpaceExW` | `unix.Statfs` | `statfs` (shared w/ Linux) | stub |
-| Temperature | `/sys/class/thermal` | no-op | no-op | `/sys/class/thermal` (shared w/ Linux) | stub |
-| Uptime | `/proc/uptime` | `GetTickCount64` | `sysctl kern.boottime` | `/proc/uptime` (shared w/ Linux) | stub |
-| Service mgmt | `systemctl` | Windows SCM API | `launchctl` | Termux/init.d (planned) | unsupported |
-| File ownership | `syscall.Stat_t` | no-op | `syscall.Stat_t` | `syscall.Stat_t` (shared w/ Linux) | no-op |
+| Capability | Linux | Windows | macOS | Android | Other |
+|------------|-------|---------|-------|---------|-------|
+| CPU usage | `/proc/stat` delta | `GetSystemTimes` Win32 | `ps -A -o %cpu` | `/proc/stat` | stub (0%) |
+| Memory | `/proc/meminfo` | `GlobalMemoryStatusEx` | `sysctl hw.memsize` | `/proc/meminfo` | Go runtime only |
+| Disk usage | `statfs` on `/` | `GetDiskFreeSpaceExW` | `unix.Statfs` | `statfs` on `/data` | stub |
+| Temperature | `/sys/class/thermal` | no-op | no-op | `/sys/class/thermal` | stub |
+| Uptime | `/proc/uptime` | `GetTickCount64` | `sysctl kern.boottime` | `/proc/uptime` | stub |
+| Service mgmt | `systemctl` | Windows SCM API | `launchctl` | `pidof` + direct exec | unsupported |
+| Log forwarding | `journalctl` | file tailer | file tailer | `logcat` | file tailer |
+| File ownership | `syscall.Stat_t` | no-op | `syscall.Stat_t` | `syscall.Stat_t` | no-op |
 
 ### Reconciliation Engine
 
@@ -208,6 +209,7 @@ Periodic loop (default 30 s) that converges actual device state toward the desir
 - Linux: `systemctl start/stop/enable/disable`
 - macOS: `launchctl` (modern API, auto-detects system/gui domain)
 - Windows: SCM API via `golang.org/x/sys/windows/svc/mgr`
+- Android: process-based (`pidof` for status, direct exec for start, `SIGTERM` for stop)
 
 ### OTA Pipeline (Phase 3)
 
@@ -223,6 +225,7 @@ Routes MQTT commands by type: `ota_update`, `restart`, `exec`, `vpn_configure`
 
 - Ring buffer forwarder: collects log entries, flushes batches via MQTT
 - Linux: `journalctl --follow` subprocess streaming
+- Android: `logcat -v threadtime` subprocess streaming with level parsing
 - Other: file tailer (polls for new lines)
 
 ### Offline-First Persistence (BoltDB)
@@ -410,53 +413,50 @@ Keycloak OIDC via NextAuth v5 with PKCE. JWT stored in cookie with access token 
 | ESP32 (via Termux/Linux) | Experimental | Limited — ESP-IDF native agent not planned |
 | Windows | Supported | SCM service management, Win32 health APIs |
 | macOS | Supported | launchctl, sysctl health APIs |
-| **Android** | **Planned** | See "Android Support" section below |
+| **Android** | **Supported** | `GOOS=android GOARCH=arm64`, Termux or rooted, process-based service mgmt, logcat |
 
 ---
 
-## Android Support (Planned)
+## Android Support
 
 ### Overview
 
-Android devices run the Linux kernel, so the Go agent can cross-compile to `linux/arm64` or `linux/arm` and run on Android. The primary deployment targets are:
+Android is fully supported via `GOOS=android GOARCH=arm64` with dedicated `_android.go` build-tagged files. Deployment targets:
 
-- **Rooted Android devices** — agent runs as a system service
-- **Termux** — agent runs in userland without root
-- **Android Things / dedicated IoT boards** — full Linux-like environment
+- **Termux** — agent runs in userland without root (recommended)
+- **Rooted Android devices** — agent runs via ADB push to `/data/local/tmp/`
 
-### Implementation Plan
+### Build
 
-| Component | Approach | Complexity |
-|-----------|----------|------------|
-| **Agent binary** | Cross-compile `GOOS=linux GOARCH=arm64` — already works | None (already supported) |
-| **Health metrics** | `/proc/stat`, `/proc/meminfo` — shared with Linux build tags | None (already works) |
-| **Disk usage** | `statfs` on `/data` or `/sdcard` instead of `/` | Low — config change |
-| **Temperature** | `/sys/class/thermal` — same as Linux | None (already works) |
-| **Service management** | New `_android.go` build tag: `am start/stop` for apps, `init.d` scripts for Termux | Medium |
-| **File management** | Works as-is (atomic writes, mode management) | None |
-| **OTA updates** | APK sideload for Android apps, binary swap for Termux | Medium |
-| **Log forwarding** | `logcat` reader (replaces `journalctl`) | Low — new log source |
-| **Data directory** | `/data/local/tmp/edgeguardian` (rooted) or `$HOME/.edgeguardian` (Termux) | Low — config default |
-| **Connectivity** | HTTP + MQTT work over Android's network stack | None |
+```bash
+./scripts/build-agent.sh android arm64
+```
 
-### What's Needed
+### Platform Files
 
-1. **`_android.go` build tags** for service management and log reading
-2. **`logcat` log source** as alternative to `journalctl`
-3. **Android-specific default paths** in config
-4. **Build script addition**: `GOOS=linux GOARCH=arm64` target for Android
-5. **Dashboard**: add "android" as a recognized OS in device display
+| File | Purpose |
+|------|---------|
+| `internal/health/collector_android.go` | CPU, memory, disk, temperature, uptime via `/proc` and `sysfs` |
+| `internal/config/defaults_android.go` | Default paths under `/data/local/tmp/edgeguardian/` |
+| `cmd/watchdog/defaults_android.go` | Watchdog paths under `/data/local/tmp/edgeguardian/` |
+| `plugins/service/executor_android.go` | Process-based service mgmt (`pidof`, direct exec, `SIGTERM`) |
+| `plugins/filemanager/owner_android.go` | File ownership via `syscall.Stat_t` |
+| `internal/logfwd/logcat_android.go` | `logcat -v threadtime` subprocess with level parsing |
 
-### What Already Works (Zero Changes)
+### Installation (Termux, no root)
 
-- Agent binary compiles and runs on Android (Termux confirmed for `GOOS=linux GOARCH=arm64`)
-- Health metrics via `/proc` (Android exposes same Linux procfs)
-- Temperature via `/sys/class/thermal`
-- HTTP + MQTT communication
-- BoltDB persistence
-- File manager plugin
-- OTA download + verification
-- Reconciliation loop
+```bash
+# Inside Termux on Android device
+chmod +x edgeguardian-agent-android-arm64
+./edgeguardian-agent-android-arm64
+```
+
+### Limitations (without root)
+
+- Temperature and disk stats may be restricted depending on Android version
+- `pidof` may not see processes outside Termux's sandbox
+- `user.Lookup` won't resolve Android UIDs to names
+- Enable/disable service operations are no-ops (no systemd equivalent)
 
 ---
 

@@ -13,7 +13,7 @@
 | **Phase 3** — Security + OTA | 9-12 | **COMPLETE** (partial) | ~80% — Keycloak, RBAC, OTA, Loki done. Embedded CA + mTLS deferred. |
 | **Phase 4** — VPN + Monitoring | 13-16 | **NOT STARTED** | 0% — Empty scaffolds only |
 | **Phase 5** — Dashboard | 17-20 | **COMPLETE** | ~85% — 11-page SaaS UI done. Fleet sim, E2E tests, benchmarks incomplete. |
-| **Phase 6** — Buffer / Polish | 21-24 | **NOT STARTED** | 0% |
+| **Phase 6** — Buffer / Polish | 21-24 | **IN PROGRESS** | ~25% — Android agent support complete |
 
 ---
 
@@ -54,7 +54,7 @@
 - `internal/comms/mqtt_client.go` — Paho v3: telemetry publish, command subscribe, offline queue
 - `plugins/filemanager/` — Atomic file writes, mode/ownership, parent dirs
 - `plugins/service/` — systemctl (Linux), launchctl (macOS), Windows SCM
-- Cross-platform build tags: `_linux.go`, `_windows.go`, `_darwin.go`, `_fallback.go`
+- Cross-platform build tags: `_linux.go`, `_windows.go`, `_darwin.go`, `_android.go`, `_fallback.go`
 
 ### Controller Additions
 - `config/MqttConfig.java` — Eclipse Paho MQTT v5 client bean
@@ -174,36 +174,35 @@ WireGuard VPN tunnels. Full health monitoring with auto-restart. Watchdog crash 
 
 ---
 
-## Phase 6: Buffer / Polish (Weeks 21-24) — NOT STARTED
+## Phase 6: Buffer / Polish (Weeks 21-24) — IN PROGRESS
 
-### Planned
+### Completed
+
+| Deliverable | Status | Notes |
+|-------------|--------|-------|
+| Android agent support | Done | `GOOS=android GOARCH=arm64`, 6 new `_android.go` files, dashboard icon |
+
+### Android Agent Support — COMPLETE
+
+Implemented via `GOOS=android` build tags (separate from `linux`). 6 new files:
+
+| File | Purpose |
+|------|---------|
+| `health/collector_android.go` | CPU, memory, disk (`/data`), temperature, uptime via `/proc` and `sysfs` |
+| `config/defaults_android.go` | Paths under `/data/local/tmp/edgeguardian/` |
+| `watchdog/defaults_android.go` | Watchdog paths under `/data/local/tmp/edgeguardian/` |
+| `service/executor_android.go` | Process-based: `pidof` status, direct exec start, `SIGTERM` stop |
+| `filemanager/owner_android.go` | File ownership via `syscall.Stat_t` |
+| `logfwd/logcat_android.go` | `logcat -v threadtime` streaming with log level parsing |
+
+Also updated: 5 fallback + 6 Linux files with `!android` build tag exclusion, build script, dashboard landing page (Android icon in platform marquee).
+
+### Remaining
 
 - Bug fixes and stability hardening
 - GPIO plugin (`agent/plugins/gpio/` — empty scaffold)
-- Android agent support (see below)
 - CI/CD pipeline
 - Thesis writing and demo preparation
-
-### Android Agent Support
-
-Android runs the Linux kernel, so the Go agent already cross-compiles to `linux/arm64` and runs on Android (confirmed via Termux). Specific work needed:
-
-| Task | Effort | Description |
-|------|--------|-------------|
-| `_android.go` build tags | Medium | Service management via `am start/stop`, init.d for Termux |
-| `logcat` log source | Low | Replace `journalctl` reader with `logcat -v threadtime` |
-| Android default paths | Low | `/data/local/tmp/edgeguardian` (rooted), `$HOME/.edgeguardian` (Termux) |
-| Build script update | Low | Add `GOOS=linux GOARCH=arm64` Android target |
-| Dashboard OS recognition | Low | Display "Android" with logo in device list and detail pages |
-| OTA for Android | Medium | APK sideload (rooted) or binary swap (Termux) |
-
-**Zero-change features** (already work on Android):
-- Health metrics (`/proc/stat`, `/proc/meminfo`, `/sys/class/thermal`)
-- HTTP + MQTT communication
-- BoltDB persistence
-- File manager plugin
-- OTA download + signature verification
-- Reconciliation loop
 
 ---
 
