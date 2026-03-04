@@ -4,6 +4,9 @@ package health
 
 import (
 	"os"
+	"os/exec"
+	"strconv"
+	"strings"
 	"syscall"
 	"unsafe"
 
@@ -117,9 +120,29 @@ func (c *Collector) collectDisk(status *model.DeviceStatus) {
 	status.DiskUsedBytes = int64(totalBytes - totalFreeBytes)
 }
 
-// collectTemperature is a no-op on Windows.
-// Temperature sensors require vendor-specific WMI queries or third-party tools.
-func (c *Collector) collectTemperature(status *model.DeviceStatus) {}
+// collectTemperature queries WMI for thermal zone temperature.
+// MSAcpi_ThermalZoneTemperature requires admin privileges and is not available
+// on all hardware. Returns 0 gracefully when unavailable.
+func (c *Collector) collectTemperature(status *model.DeviceStatus) {
+	out, err := exec.Command("powershell", "-NoProfile", "-NonInteractive", "-Command",
+		`Get-CimInstance MSAcpi_ThermalZoneTemperature -Namespace root/wmi -ErrorAction Stop | Select-Object -First 1 -ExpandProperty CurrentTemperature`,
+	).Output()
+	if err != nil {
+		return
+	}
+
+	raw := strings.TrimSpace(string(out))
+	val, err := strconv.ParseFloat(raw, 64)
+	if err != nil || val <= 0 {
+		return
+	}
+
+	// WMI returns temperature in tenths of Kelvin
+	celsius := (val / 10.0) - 273.15
+	if celsius > 0 && celsius < 150 {
+		status.TemperatureCelsius = celsius
+	}
+}
 
 // collectUptime uses GetTickCount64 to get system uptime in milliseconds.
 // Note: on 32-bit Windows (GOARCH=386), the uintptr return value truncates
