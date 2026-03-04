@@ -3,15 +3,20 @@ package com.edgeguardian.controller.service;
 import com.edgeguardian.controller.model.Device;
 import com.edgeguardian.controller.model.DeviceManifestEntity;
 import com.edgeguardian.controller.model.DeviceStatus;
+import com.edgeguardian.controller.model.DeviceTelemetry;
 import com.edgeguardian.controller.repository.DeviceManifestRepository;
 import com.edgeguardian.controller.repository.DeviceRepository;
+import com.edgeguardian.controller.repository.DeviceTelemetryRepository;
+import java.time.Instant;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-
-import java.time.Instant;
-import java.util.*;
 
 /**
  * Database-backed device registry (Phase 2).
@@ -19,18 +24,14 @@ import java.util.*;
  * with JPA repositories backed by PostgreSQL.
  */
 @Service
+@RequiredArgsConstructor
 public class DeviceRegistry {
 
     private static final Logger log = LoggerFactory.getLogger(DeviceRegistry.class);
 
     private final DeviceRepository deviceRepository;
     private final DeviceManifestRepository manifestRepository;
-
-    public DeviceRegistry(DeviceRepository deviceRepository,
-                          DeviceManifestRepository manifestRepository) {
-        this.deviceRepository = deviceRepository;
-        this.manifestRepository = manifestRepository;
-    }
+    private final DeviceTelemetryRepository telemetryRepository;
 
     /**
      * Register a new device or update an existing one.
@@ -74,7 +75,7 @@ public class DeviceRegistry {
     }
 
     /**
-     * Update heartbeat timestamp and status for a device.
+     * Update heartbeat timestamp and insert telemetry for a device.
      */
     @Transactional
     public Optional<Device> heartbeat(String deviceId, DeviceStatus status) {
@@ -86,11 +87,35 @@ public class DeviceRegistry {
         Device device = opt.get();
         device.setLastHeartbeat(Instant.now());
         device.setState(Device.DeviceState.ONLINE);
+        deviceRepository.save(device);
+
         if (status != null) {
-            device.updateStatus(status);
+            DeviceTelemetry telemetry = DeviceTelemetry.from(deviceId, device.getOrganizationId(), status);
+            telemetryRepository.save(telemetry);
         }
 
-        return Optional.of(deviceRepository.save(device));
+        return Optional.of(device);
+    }
+
+    /**
+     * Get latest telemetry status for a single device.
+     */
+    @Transactional(readOnly = true)
+    public Optional<DeviceStatus> getLatestStatus(String deviceId) {
+        return telemetryRepository.findLatestByDeviceId(deviceId)
+            .map(DeviceTelemetry::toDeviceStatus);
+    }
+
+    /**
+     * Get latest telemetry status for all devices, keyed by deviceId.
+     */
+    @Transactional(readOnly = true)
+    public Map<String, DeviceStatus> getLatestStatusForAllDevices() {
+        Map<String, DeviceStatus> result = new HashMap<>();
+        for (DeviceTelemetry t : telemetryRepository.findLatestForAllDevices()) {
+            result.put(t.getDeviceId(), t.toDeviceStatus());
+        }
+        return result;
     }
 
     /**

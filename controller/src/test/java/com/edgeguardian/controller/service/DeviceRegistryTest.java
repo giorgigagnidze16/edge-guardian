@@ -1,19 +1,20 @@
 package com.edgeguardian.controller.service;
 
+import static org.assertj.core.api.Assertions.assertThat;
+
 import com.edgeguardian.controller.AbstractIntegrationTest;
 import com.edgeguardian.controller.model.Device;
 import com.edgeguardian.controller.model.DeviceManifestEntity;
 import com.edgeguardian.controller.model.DeviceStatus;
+import com.edgeguardian.controller.model.DeviceTelemetry;
+import com.edgeguardian.controller.repository.DeviceTelemetryRepository;
+import java.util.Map;
+import java.util.Optional;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.jdbc.AutoConfigureTestDatabase;
 import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
 import org.springframework.context.annotation.Import;
-
-import java.util.Map;
-import java.util.Optional;
-
-import static org.assertj.core.api.Assertions.assertThat;
 
 @DataJpaTest
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
@@ -22,6 +23,9 @@ class DeviceRegistryTest extends AbstractIntegrationTest {
 
     @Autowired
     private DeviceRegistry registry;
+
+    @Autowired
+    private DeviceTelemetryRepository telemetryRepository;
 
     @Test
     void registerNewDevice() {
@@ -55,7 +59,7 @@ class DeviceRegistryTest extends AbstractIntegrationTest {
     }
 
     @Test
-    void heartbeatUpdatesTimestampAndStatus() {
+    void heartbeatUpdatesTimestampAndInsertsTelemetry() {
         registry.register("rpi-001", "host", "arm64", "linux", "0.2.0");
 
         DeviceStatus status = new DeviceStatus();
@@ -66,15 +70,38 @@ class DeviceRegistryTest extends AbstractIntegrationTest {
         Optional<Device> result = registry.heartbeat("rpi-001", status);
 
         assertThat(result).isPresent();
-        assertThat(result.get().getCpuUsagePercent()).isEqualTo(42.5);
-        assertThat(result.get().getMemoryUsedBytes()).isEqualTo(512_000_000L);
         assertThat(result.get().getLastHeartbeat()).isNotNull();
+        assertThat(result.get().getState()).isEqualTo(Device.DeviceState.ONLINE);
+
+        // Verify telemetry was inserted
+        Optional<DeviceTelemetry> telemetry = telemetryRepository.findLatestByDeviceId("rpi-001");
+        assertThat(telemetry).isPresent();
+        assertThat(telemetry.get().getCpuUsagePercent()).isEqualTo(42.5);
+        assertThat(telemetry.get().getMemoryUsedBytes()).isEqualTo(512_000_000L);
+        assertThat(telemetry.get().getReconcileStatus()).isEqualTo("converged");
     }
 
     @Test
     void heartbeatForUnknownDeviceReturnsEmpty() {
         Optional<Device> result = registry.heartbeat("nonexistent", null);
         assertThat(result).isEmpty();
+    }
+
+    @Test
+    void getLatestStatusReturnsTelemetry() {
+        registry.register("rpi-001", "host", "arm64", "linux", "0.2.0");
+
+        DeviceStatus status = DeviceStatus.builder()
+            .cpuUsagePercent(55.0)
+            .memoryUsedBytes(1_000_000L)
+            .memoryTotalBytes(2_000_000L)
+            .build();
+        registry.heartbeat("rpi-001", status);
+
+        Optional<DeviceStatus> latest = registry.getLatestStatus("rpi-001");
+        assertThat(latest).isPresent();
+        assertThat(latest.get().getCpuUsagePercent()).isEqualTo(55.0);
+        assertThat(latest.get().getMemoryUsedBytes()).isEqualTo(1_000_000L);
     }
 
     @Test
@@ -107,7 +134,7 @@ class DeviceRegistryTest extends AbstractIntegrationTest {
 
         Map<String, Object> metadata = Map.of("name", "rpi-001");
         Map<String, Object> spec = Map.of("files", java.util.List.of(
-                Map.of("path", "/etc/test.conf", "content", "hello")
+            Map.of("path", "/etc/test.conf", "content", "hello")
         ));
 
         DeviceManifestEntity entity = registry.saveManifest("rpi-001", metadata, spec);

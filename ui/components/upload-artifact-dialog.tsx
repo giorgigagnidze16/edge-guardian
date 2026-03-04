@@ -1,10 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useSession } from "next-auth/react";
 import { useOrganization } from "@/lib/hooks/use-organization";
-import { createArtifact } from "@/lib/api/ota";
+import { uploadArtifact } from "@/lib/api/ota";
 import {
   Dialog,
   DialogContent,
@@ -34,41 +34,70 @@ export function UploadArtifactDialog({ open, onOpenChange }: UploadArtifactDialo
   const { data: session } = useSession();
   const { orgId } = useOrganization();
   const queryClient = useQueryClient();
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [name, setName] = useState("");
   const [version, setVersion] = useState("");
   const [architecture, setArchitecture] = useState("");
+  const [file, setFile] = useState<File | null>(null);
+
+  const resetForm = () => {
+    setName("");
+    setVersion("");
+    setArchitecture("");
+    setFile(null);
+    if (fileInputRef.current) fileInputRef.current.value = "";
+  };
 
   const mutation = useMutation({
     mutationFn: () =>
-      createArtifact(session?.accessToken ?? "", orgId!, {
+      uploadArtifact(session?.accessToken ?? "", orgId!, {
         name,
         version,
         architecture,
+        file: file!,
       }),
     onSuccess: () => {
-      toast.success("Artifact created");
+      toast.success("Artifact uploaded");
       queryClient.invalidateQueries({ queryKey: ["ota-artifacts"] });
       onOpenChange(false);
-      setName("");
-      setVersion("");
-      setArchitecture("");
+      resetForm();
     },
     onError: (err: Error) => toast.error(err.message),
   });
 
-  const isValid = name.trim() && version.trim() && architecture;
+  const isValid = name.trim() && version.trim() && architecture && file;
+
+  const formatFileSize = (bytes: number) => {
+    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  };
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={(v) => { onOpenChange(v); if (!v) resetForm(); }}>
       <DialogContent>
         <DialogHeader>
           <DialogTitle>Upload Artifact</DialogTitle>
           <DialogDescription>
-            Register a new OTA artifact for deployment.
+            Upload a binary artifact for OTA deployment.
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-4">
+          <div className="space-y-2">
+            <Label htmlFor="artifact-file">Binary File</Label>
+            <Input
+              id="artifact-file"
+              ref={fileInputRef}
+              type="file"
+              onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+            />
+            {file && (
+              <p className="text-sm text-muted-foreground">
+                {file.name} ({formatFileSize(file.size)})
+              </p>
+            )}
+          </div>
           <div className="space-y-2">
             <Label htmlFor="name">Name</Label>
             <Input
@@ -110,7 +139,7 @@ export function UploadArtifactDialog({ open, onOpenChange }: UploadArtifactDialo
             onClick={() => mutation.mutate()}
             disabled={!isValid || mutation.isPending}
           >
-            {mutation.isPending ? "Creating..." : "Create Artifact"}
+            {mutation.isPending ? "Uploading..." : "Upload Artifact"}
           </Button>
         </DialogFooter>
       </DialogContent>

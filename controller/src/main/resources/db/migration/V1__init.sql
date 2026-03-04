@@ -13,17 +13,6 @@ CREATE TABLE IF NOT EXISTS devices (
     registered_at   TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
     last_heartbeat  TIMESTAMP WITH TIME ZONE,
 
-    -- Runtime status (updated on heartbeat)
-    cpu_usage_percent       DOUBLE PRECISION DEFAULT 0,
-    memory_used_bytes       BIGINT DEFAULT 0,
-    memory_total_bytes      BIGINT DEFAULT 0,
-    disk_used_bytes         BIGINT DEFAULT 0,
-    disk_total_bytes        BIGINT DEFAULT 0,
-    temperature_celsius     DOUBLE PRECISION DEFAULT 0,
-    uptime_seconds          BIGINT DEFAULT 0,
-    last_reconcile          TIMESTAMP WITH TIME ZONE,
-    reconcile_status        VARCHAR(32) DEFAULT 'converged',
-
     created_at      TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
     updated_at      TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
 );

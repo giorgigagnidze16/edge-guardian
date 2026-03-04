@@ -69,6 +69,9 @@ type HealthConfig struct {
 	// Linux/macOS default: "/", Windows default: "C:\".
 	// Override to monitor a specific partition or drive.
 	DiskPath string `yaml:"disk_path"`
+
+	// Port for the local health HTTP server (used by watchdog).
+	Port int `yaml:"port"`
 }
 
 // DefaultConfig returns a config with sensible defaults.
@@ -88,6 +91,7 @@ func DefaultConfig() *Config {
 		},
 		Health: HealthConfig{
 			DiskPath: DefaultDiskPath,
+			Port:     8484,
 		},
 	}
 }

@@ -13,5 +13,5 @@ public abstract class AbstractIntegrationTest {
     @Container
     @ServiceConnection
     static PostgreSQLContainer<?> postgres =
-            new PostgreSQLContainer<>("postgres:16-alpine");
+            new PostgreSQLContainer<>("timescale/timescaledb:latest-pg16");
 }

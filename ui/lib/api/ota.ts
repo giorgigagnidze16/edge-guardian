@@ -1,5 +1,8 @@
 import { apiFetch } from "../api-client";
 
+const API_BASE_URL =
+  process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8443";
+
 export interface OtaArtifact {
   id: number;
   name: string;
@@ -50,15 +53,32 @@ export async function listDeployments(
   );
 }
 
-export async function createArtifact(
+export async function uploadArtifact(
   token: string,
   orgId: number,
-  data: { name: string; version: string; architecture: string },
+  data: { name: string; version: string; architecture: string; file: File },
 ): Promise<OtaArtifact> {
-  return apiFetch<OtaArtifact>(
-    `/api/v1/organizations/${orgId}/ota/artifacts`,
-    { method: "POST", token, body: JSON.stringify(data) },
+  const formData = new FormData();
+  formData.append("file", data.file);
+  formData.append("name", data.name);
+  formData.append("version", data.version);
+  formData.append("architecture", data.architecture);
+
+  const response = await fetch(
+    `${API_BASE_URL}/api/v1/organizations/${orgId}/ota/artifacts`,
+    {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}` },
+      body: formData,
+    },
   );
+
+  if (!response.ok) {
+    const body = await response.text();
+    throw new Error(body || response.statusText);
+  }
+
+  return response.json();
 }
 
 export async function createDeployment(

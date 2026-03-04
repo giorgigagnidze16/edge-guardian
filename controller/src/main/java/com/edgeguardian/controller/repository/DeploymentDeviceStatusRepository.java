@@ -13,4 +13,6 @@ public interface DeploymentDeviceStatusRepository extends JpaRepository<Deployme
     List<DeploymentDeviceStatus> findByDeploymentId(Long deploymentId);
 
     Optional<DeploymentDeviceStatus> findByDeploymentIdAndDeviceId(Long deploymentId, String deviceId);
+
+    List<DeploymentDeviceStatus> findByDeviceIdAndState(String deviceId, String state);
 }

@@ -2,8 +2,11 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"flag"
 	"fmt"
+	"net"
+	"net/http"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -24,20 +27,18 @@ import (
 	"go.uber.org/zap/zapcore"
 )
 
-const agentVersion = "0.2.0"
+const agentVersion = "0.3.0"
 
 func main() {
 	configPath := flag.String("config", config.DefaultConfigPath, "path to agent config file")
 	flag.Parse()
 
-	// Load configuration.
 	cfg, err := config.Load(*configPath)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "failed to load config: %v\n", err)
 		os.Exit(1)
 	}
 
-	// Initialize logger.
 	logger := initLogger(cfg.LogLevel)
 	defer logger.Sync()
 
@@ -49,7 +50,6 @@ func main() {
 		zap.String("data_dir", cfg.DataDir),
 	)
 
-	// Ensure data directory exists.
 	if err := os.MkdirAll(cfg.DataDir, 0750); err != nil {
 		logger.Fatal("failed to create data directory", zap.Error(err))
 	}
@@ -68,17 +68,14 @@ func main() {
 	}()
 	logger.Info("BoltDB opened", zap.String("path", dbPath))
 
-	// Set up context with graceful shutdown.
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
 	sigCh := make(chan os.Signal, 1)
 	signal.Notify(sigCh, platformSignals()...)
 
-	// Initialize reconciler.
+	// Initialize reconciler with plugins.
 	rec := reconciler.New(cfg.ReconcileInterval, logger)
-
-	// Register plugins.
 	rec.RegisterPlugin(filemanager.New(logger))
 	rec.RegisterPlugin(service.New(logger))
 
@@ -89,8 +86,7 @@ func main() {
 		logger.Warn("failed to load cached desired state", zap.Error(err))
 	} else if found {
 		logger.Info("loaded cached desired state from BoltDB",
-			zap.Int64("version", cachedManifest.Version),
-		)
+			zap.Int64("version", cachedManifest.Version))
 		rec.SetDesiredState(&cachedManifest)
 	}
 
@@ -105,12 +101,18 @@ func main() {
 	// Register with controller.
 	registerWithController(ctx, cfg, httpClient, rec, store, logger)
 
+	// Create OTA updater and command dispatcher.
+	updater := ota.NewUpdater(cfg.DataDir, cfg.OTA.SignKey, logger)
+	dispatcher := commands.NewDispatcher(updater, httpClient, cfg.DeviceID, agentVersion, logger)
+
+	// Check for post-update or rollback markers.
+	checkPostUpdateStatus(ctx, updater, httpClient, cfg.DeviceID, logger)
+
+	// Start local health server for watchdog probing.
+	go startHealthServer(cfg.Health.Port, logger)
+
 	// Create health collector.
 	healthCollector := health.New(cfg.Health.DiskPath)
-
-	// Create OTA updater and command dispatcher.
-	updater := ota.NewUpdater(cfg.DataDir, logger)
-	dispatcher := commands.NewDispatcher(updater, logger)
 
 	// Create and connect MQTT client.
 	mqttClient := comms.NewMQTTClient(comms.MQTTConfig{
@@ -122,7 +124,6 @@ func main() {
 		Store:     store,
 	}, logger)
 
-	// Set MQTT command handler — dispatch to OTA, restart, exec handlers.
 	mqttClient.SetCommandHandler(func(cmd model.Command) {
 		if err := dispatcher.Dispatch(cmd); err != nil {
 			logger.Error("command dispatch failed",
@@ -137,13 +138,8 @@ func main() {
 	}
 	defer mqttClient.Close()
 
-	// Start reconciler loop.
 	go rec.Run(ctx)
-
-	// Start heartbeat loop.
 	go heartbeatLoop(ctx, httpClient, cfg.DeviceID, rec, store, healthCollector, dispatcher, logger)
-
-	// Start MQTT telemetry loop.
 	go mqttClient.RunTelemetryLoop(ctx, 30*time.Second, func() *model.DeviceStatus {
 		status := healthCollector.Collect()
 		status.ReconcileStatus = rec.Status()
@@ -156,18 +152,87 @@ func main() {
 
 	logger.Info("agent running, waiting for shutdown signal")
 
-	// Wait for shutdown signal.
 	sig := <-sigCh
 	logger.Info("received signal, shutting down", zap.String("signal", sig.String()))
 	cancel()
-
-	// Give goroutines time to clean up.
 	time.Sleep(500 * time.Millisecond)
 	logger.Info("agent stopped")
 }
 
-// registerWithController performs the initial registration with the controller.
-// On failure, the agent continues with cached state (offline-first).
+// checkPostUpdateStatus detects post-update or rollback markers and reports
+// the final OTA status back to the controller.
+func checkPostUpdateStatus(ctx context.Context, updater *ota.Updater,
+	httpClient *comms.ControllerClient, deviceID string, logger *zap.Logger) {
+
+	// Check rollback marker first (takes priority).
+	rollbackExists, _ := updater.ReadRollbackMarker()
+	if rollbackExists {
+		logger.Warn("rollback marker detected — previous OTA update was rolled back")
+
+		// Read the update marker to get deploymentID for reporting.
+		if marker, err := updater.ReadUpdateMarker(); err == nil {
+			reportCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
+			defer cancel()
+			_ = httpClient.ReportOTAStatus(reportCtx, &model.OTAStatusReport{
+				DeploymentID: marker.DeploymentID,
+				DeviceID:     deviceID,
+				State:        "rolled_back",
+				Progress:     0,
+				ErrorMessage: "agent crashed after update, rolled back to " + marker.PreviousVersion,
+			})
+			_ = updater.ClearUpdateMarker()
+		}
+		_ = updater.ClearRollbackMarker()
+		return
+	}
+
+	// Check update marker (successful update).
+	marker, err := updater.ReadUpdateMarker()
+	if err != nil {
+		return // No marker = not a post-update restart
+	}
+
+	logger.Info("update marker detected — OTA update completed successfully",
+		zap.Int64("deployment_id", marker.DeploymentID),
+		zap.String("previous_version", marker.PreviousVersion))
+
+	reportCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+	_ = httpClient.ReportOTAStatus(reportCtx, &model.OTAStatusReport{
+		DeploymentID: marker.DeploymentID,
+		DeviceID:     deviceID,
+		State:        "completed",
+		Progress:     100,
+	})
+	_ = updater.ClearUpdateMarker()
+}
+
+// startHealthServer runs a lightweight HTTP health endpoint on localhost only.
+func startHealthServer(port int, logger *zap.Logger) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]string{
+			"status":  "ok",
+			"version": agentVersion,
+		})
+	})
+
+	addr := fmt.Sprintf("127.0.0.1:%d", port)
+	logger.Info("health server starting", zap.String("addr", addr))
+
+	listener, err := net.Listen("tcp", addr)
+	if err != nil {
+		logger.Warn("health server failed to start", zap.Error(err))
+		return
+	}
+
+	server := &http.Server{Handler: mux}
+	if err := server.Serve(listener); err != nil && err != http.ErrServerClosed {
+		logger.Warn("health server error", zap.Error(err))
+	}
+}
+
 func registerWithController(
 	ctx context.Context,
 	cfg *config.Config,
@@ -201,11 +266,9 @@ func registerWithController(
 
 	logger.Info("registered with controller", zap.String("message", resp.Message))
 
-	// If registration returned an initial manifest, save it and apply.
 	if resp.InitialManifest != nil {
 		logger.Info("received initial manifest from controller",
-			zap.Int64("version", resp.InitialManifest.Version),
-		)
+			zap.Int64("version", resp.InitialManifest.Version))
 		rec.SetDesiredState(resp.InitialManifest)
 		if err := store.SaveDesiredState("current", resp.InitialManifest); err != nil {
 			logger.Error("failed to save initial manifest to BoltDB", zap.Error(err))
@@ -213,9 +276,6 @@ func registerWithController(
 	}
 }
 
-// heartbeatLoop sends periodic heartbeats to the controller. When the
-// controller responds with an updated manifest, it is applied to the
-// reconciler and persisted in BoltDB.
 func heartbeatLoop(
 	ctx context.Context,
 	client *comms.ControllerClient,
@@ -234,7 +294,6 @@ func heartbeatLoop(
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			// Collect health status for the heartbeat.
 			status := healthCollector.Collect()
 			status.ReconcileStatus = rec.Status()
 			lastRec := rec.LastReconcile()
@@ -256,18 +315,15 @@ func heartbeatLoop(
 				continue
 			}
 
-			// Apply manifest update if the controller signals one.
 			if resp.ManifestUpdated && resp.Manifest != nil {
 				logger.Info("received updated manifest via heartbeat",
-					zap.Int64("version", resp.Manifest.Version),
-				)
+					zap.Int64("version", resp.Manifest.Version))
 				rec.SetDesiredState(resp.Manifest)
 				if err := store.SaveDesiredState("current", resp.Manifest); err != nil {
 					logger.Error("failed to save manifest to BoltDB", zap.Error(err))
 				}
 			}
 
-			// Dispatch any pending commands from the heartbeat response.
 			for _, cmd := range resp.PendingCommands {
 				if err := dispatcher.Dispatch(cmd); err != nil {
 					logger.Error("heartbeat command dispatch failed",

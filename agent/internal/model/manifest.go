@@ -166,3 +166,12 @@ type OTAStatus struct {
 	State        string `json:"state,omitempty"`    // downloading, verifying, applying, completed, failed
 	Progress     int    `json:"progress,omitempty"` // 0-100
 }
+
+// OTAStatusReport is sent to the controller to report OTA update progress.
+type OTAStatusReport struct {
+	DeploymentID int64  `json:"deploymentId"`
+	DeviceID     string `json:"deviceId"`
+	State        string `json:"state"`
+	Progress     int    `json:"progress"`
+	ErrorMessage string `json:"errorMessage,omitempty"`
+}

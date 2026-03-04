@@ -1,13 +1,29 @@
 package com.edgeguardian.controller.model;
 
-import jakarta.persistence.*;
-import lombok.*;
-import org.hibernate.annotations.JdbcTypeCode;
-import org.hibernate.type.SqlTypes;
-
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.GenerationType;
+import jakarta.persistence.Id;
+import jakarta.persistence.PrePersist;
+import jakarta.persistence.PreUpdate;
+import jakarta.persistence.Table;
 import java.time.Instant;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Objects;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.RequiredArgsConstructor;
+import lombok.Setter;
+import lombok.ToString;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.proxy.HibernateProxy;
+import org.hibernate.type.SqlTypes;
 
 /**
  * JPA entity representing a registered edge device.
@@ -15,7 +31,10 @@ import java.util.Map;
  */
 @Entity
 @Table(name = "devices")
-@Data
+@Getter
+@Setter
+@ToString
+@RequiredArgsConstructor
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
@@ -59,35 +78,6 @@ public class Device {
     @Column(name = "organization_id")
     private Long organizationId;
 
-    // Runtime status fields (updated on heartbeat)
-    @Column(name = "cpu_usage_percent")
-    private double cpuUsagePercent;
-
-    @Column(name = "memory_used_bytes")
-    private long memoryUsedBytes;
-
-    @Column(name = "memory_total_bytes")
-    private long memoryTotalBytes;
-
-    @Column(name = "disk_used_bytes")
-    private long diskUsedBytes;
-
-    @Column(name = "disk_total_bytes")
-    private long diskTotalBytes;
-
-    @Column(name = "temperature_celsius")
-    private double temperatureCelsius;
-
-    @Column(name = "uptime_seconds")
-    private long uptimeSeconds;
-
-    @Column(name = "last_reconcile")
-    private Instant lastReconcile;
-
-    @Column(name = "reconcile_status")
-    @Builder.Default
-    private String reconcileStatus = "converged";
-
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 
@@ -102,7 +92,6 @@ public class Device {
         this.agentVersion = agentVersion;
         this.labels = new HashMap<>();
         this.state = DeviceState.ONLINE;
-        this.reconcileStatus = "converged";
     }
 
     @PrePersist
@@ -120,51 +109,34 @@ public class Device {
         this.updatedAt = Instant.now();
     }
 
-    /**
-     * Updates runtime status fields from a DeviceStatus DTO.
-     */
-    public void updateStatus(DeviceStatus status) {
-        if (status == null) return;
-        this.cpuUsagePercent = status.getCpuUsagePercent();
-        this.memoryUsedBytes = status.getMemoryUsedBytes();
-        this.memoryTotalBytes = status.getMemoryTotalBytes();
-        this.diskUsedBytes = status.getDiskUsedBytes();
-        this.diskTotalBytes = status.getDiskTotalBytes();
-        this.temperatureCelsius = status.getTemperatureCelsius();
-        this.uptimeSeconds = status.getUptimeSeconds();
-        if (status.getLastReconcile() != null) {
-            this.lastReconcile = status.getLastReconcile();
-        }
-        if (status.getReconcileStatus() != null) {
-            this.reconcileStatus = status.getReconcileStatus();
-        }
-    }
-
-    /**
-     * Returns the device's current runtime status as a DTO.
-     */
-    public DeviceStatus getStatus() {
-        return toDeviceStatus();
-    }
-
-    /**
-     * Converts current status fields to a DeviceStatus DTO.
-     */
-    public DeviceStatus toDeviceStatus() {
-        DeviceStatus s = new DeviceStatus();
-        s.setCpuUsagePercent(this.cpuUsagePercent);
-        s.setMemoryUsedBytes(this.memoryUsedBytes);
-        s.setMemoryTotalBytes(this.memoryTotalBytes);
-        s.setDiskUsedBytes(this.diskUsedBytes);
-        s.setDiskTotalBytes(this.diskTotalBytes);
-        s.setTemperatureCelsius(this.temperatureCelsius);
-        s.setUptimeSeconds(this.uptimeSeconds);
-        s.setLastReconcile(this.lastReconcile);
-        s.setReconcileStatus(this.reconcileStatus);
-        return s;
-    }
-
     public enum DeviceState {
         ONLINE, DEGRADED, OFFLINE
+    }
+
+    @Override
+    public final boolean equals(Object o) {
+        if (this == o) {
+            return true;
+        }
+        if (o == null) {
+            return false;
+        }
+        Class<?> oEffectiveClass = o instanceof HibernateProxy ?
+            ((HibernateProxy) o).getHibernateLazyInitializer().getPersistentClass() : o.getClass();
+        Class<?> thisEffectiveClass = this instanceof HibernateProxy ?
+            ((HibernateProxy) this).getHibernateLazyInitializer().getPersistentClass() :
+            this.getClass();
+        if (thisEffectiveClass != oEffectiveClass) {
+            return false;
+        }
+        Device device = (Device) o;
+        return getId() != null && Objects.equals(getId(), device.getId());
+    }
+
+    @Override
+    public final int hashCode() {
+        return this instanceof HibernateProxy ?
+            ((HibernateProxy) this).getHibernateLazyInitializer().getPersistentClass().hashCode() :
+            getClass().hashCode();
     }
 }

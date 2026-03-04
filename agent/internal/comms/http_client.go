@@ -95,6 +95,16 @@ func (c *ControllerClient) Enroll(ctx context.Context, req *model.EnrollRequest)
 	return &resp, nil
 }
 
+// BaseURL returns the controller's base URL (e.g. "http://localhost:8443").
+func (c *ControllerClient) BaseURL() string {
+	return c.baseURL
+}
+
+// ReportOTAStatus reports OTA update progress to the controller.
+func (c *ControllerClient) ReportOTAStatus(ctx context.Context, report *model.OTAStatusReport) error {
+	return c.doWithRetry(ctx, http.MethodPost, "/api/v1/agent/ota/status", report, nil)
+}
+
 // Close is a no-op for HTTP clients (kept for interface compatibility).
 func (c *ControllerClient) Close() error {
 	c.httpClient.CloseIdleConnections()

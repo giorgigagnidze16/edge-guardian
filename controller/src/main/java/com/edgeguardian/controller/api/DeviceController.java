@@ -1,16 +1,24 @@
 package com.edgeguardian.controller.api;
 
 import com.edgeguardian.controller.dto.DeviceDto;
+import com.edgeguardian.controller.model.Device;
+import com.edgeguardian.controller.model.DeviceStatus;
 import com.edgeguardian.controller.service.DeviceRegistry;
 import com.edgeguardian.controller.service.LogService;
 import com.fasterxml.jackson.databind.JsonNode;
-import org.springframework.http.HttpStatus;
-import org.springframework.web.bind.annotation.*;
-import org.springframework.web.server.ResponseStatusException;
-
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
+import java.util.Map;
+import org.springframework.http.HttpStatus;
+import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.ResponseStatus;
+import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.server.ResponseStatusException;
 
 /**
  * REST API for device management.
@@ -30,17 +38,20 @@ public class DeviceController {
 
     @GetMapping
     public List<DeviceDto> listDevices() {
-        return registry.findAll().stream()
-                .map(DeviceDto::from)
-                .toList();
+        List<Device> devices = registry.findAll();
+        Map<String, DeviceStatus> statusMap = registry.getLatestStatusForAllDevices();
+        return devices.stream()
+            .map(d -> DeviceDto.from(d, statusMap.get(d.getDeviceId())))
+            .toList();
     }
 
     @GetMapping("/{deviceId}")
     public DeviceDto getDevice(@PathVariable String deviceId) {
-        return registry.findById(deviceId)
-                .map(DeviceDto::from)
-                .orElseThrow(() -> new ResponseStatusException(
-                        HttpStatus.NOT_FOUND, "Device not found: " + deviceId));
+        Device device = registry.findById(deviceId)
+            .orElseThrow(() -> new ResponseStatusException(
+                HttpStatus.NOT_FOUND, "Device not found: " + deviceId));
+        DeviceStatus status = registry.getLatestStatus(deviceId).orElse(null);
+        return DeviceDto.from(device, status);
     }
 
     @DeleteMapping("/{deviceId}")
@@ -58,12 +69,12 @@ public class DeviceController {
 
     @GetMapping("/{deviceId}/logs")
     public JsonNode getDeviceLogs(
-            @PathVariable String deviceId,
-            @RequestParam(defaultValue = "") String start,
-            @RequestParam(defaultValue = "") String end,
-            @RequestParam(defaultValue = "100") int limit,
-            @RequestParam(required = false) String level,
-            @RequestParam(required = false) String search) {
+        @PathVariable String deviceId,
+        @RequestParam(defaultValue = "") String start,
+        @RequestParam(defaultValue = "") String end,
+        @RequestParam(defaultValue = "100") int limit,
+        @RequestParam(required = false) String level,
+        @RequestParam(required = false) String search) {
         if (start.isEmpty()) {
             start = Instant.now().minus(1, ChronoUnit.HOURS).toString();
         }

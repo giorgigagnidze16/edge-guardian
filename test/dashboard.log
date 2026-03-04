@@ -1,0 +1,63 @@
+   ▲ Next.js 15.5.12 (Turbopack)
+   - Local:        http://localhost:3001
+   - Network:      http://100.109.4.64:3001
+   - Environments: .env.local
+   - Experiments (use with caution):
+     · optimizePackageImports
+
+ ✓ Starting...
+ ○ Compiling middleware ...
+ ✓ Compiled middleware in 759ms
+ ✓ Ready in 5.5s
+ ○ Compiling / ...
+ ✓ Compiled / in 7.1s
+ GET / 200 in 8174ms
+ ○ Compiling /icon ...
+ ✓ Compiled /icon in 2.4s
+ GET /icon?ec0d9949f1cee744 200 in 3019ms
+ GET /api/auth/session 200 in 4301ms
+ GET /api/auth/session 200 in 454ms
+ GET /api/auth/session 200 in 464ms
+ GET /api/auth/session 200 in 680ms
+ GET /api/auth/csrf 200 in 474ms
+ POST /api/auth/signout 200 in 425ms
+ ○ Compiling /auth/login ...
+ ✓ Compiled /auth/login in 720ms
+ GET /auth/login 200 in 1286ms
+ GET /api/auth/session 200 in 446ms
+ GET /api/auth/session 200 in 427ms
+ GET /api/auth/providers 200 in 395ms
+ GET /api/auth/csrf 200 in 389ms
+ POST /api/auth/signin/keycloak? 200 in 459ms
+ GET /auth/login 200 in 394ms
+ GET /api/auth/session 200 in 437ms
+ GET /api/auth/session 200 in 462ms
+ GET /auth/login?callbackUrl=http%3A%2F%2Flocalhost%3A3001%2F 200 in 464ms
+ GET /api/auth/session 200 in 506ms
+ GET /api/auth/session 200 in 424ms
+ GET /api/auth/providers 200 in 434ms
+ GET /api/auth/csrf 200 in 416ms
+ POST /api/auth/signin/keycloak? 200 in 468ms
+ GET /api/auth/callback/keycloak?session_state=d8d2881b-c991-4b14-a948-a4ef459102ff&iss=http%3A%2F%2Flocalhost%3A9090%2Frealms%2Fedgeguardian&code=c6395231-26f2-4a40-8d6b-2ffb3c8dbd26.d8d2881b-c991-4b14-a948-a4ef459102ff.8628fa38-2e54-4f14-9842-fa761d1bc305 302 in 487ms
+ GET / 200 in 432ms
+ GET /api/auth/session 200 in 781ms
+ GET /api/auth/session 200 in 486ms
+ ○ Compiling /settings ...
+ ✓ Compiled /settings in 1262ms
+ GET /settings 200 in 1467ms
+ GET / 200 in 274ms
+ GET / 200 in 538ms
+ GET / 200 in 241ms
+ GET / 200 in 224ms
+ ○ Compiling /devices ...
+ ✓ Compiled /devices in 915ms
+ GET /devices 200 in 1090ms
+ ○ Compiling /devices/[id] ...
+ ✓ Compiled /devices/[id] in 1326ms
+ GET /devices/test-win 200 in 2506ms
+ GET / 200 in 225ms
+ GET /devices 200 in 194ms
+ GET /devices/test-win 200 in 797ms
+ GET /api/auth/session 200 in 518ms
+ GET /api/auth/session 200 in 1083ms
+ GET / 200 in 270ms
