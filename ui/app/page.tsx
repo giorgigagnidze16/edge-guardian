@@ -256,14 +256,8 @@ export default function LoginPage() {
             : "bg-transparent border-b border-transparent"
         }`}
       >
-        <div className="mx-auto flex max-w-7xl items-center justify-between px-6 py-3.5 sm:px-12 lg:px-16">
-          <div className="flex items-center gap-3">
-            <LogoIcon size={36} />
-            <span className="text-xl font-bold tracking-tight">
-              Edge<span className="text-primary">Guardian</span>
-            </span>
-          </div>
-
+        <div className="mx-auto grid max-w-7xl grid-cols-3 items-center px-6 py-3.5 sm:px-12 lg:px-16">
+          {/* Left — nav links */}
           <div className="hidden md:flex items-center gap-8 text-sm font-medium text-muted-foreground">
             {[
               { label: "Features", id: "features" },
@@ -279,8 +273,26 @@ export default function LoginPage() {
               </a>
             ))}
           </div>
+          {/* Spacer on mobile when nav links are hidden */}
+          <div className="md:hidden" />
 
-          <div className="flex items-center gap-3">
+          {/* Center — logo (clickable, scrolls to top) */}
+          <a
+            href="#"
+            onClick={(e) => {
+              e.preventDefault();
+              window.scrollTo({ top: 0, behavior: "smooth" });
+            }}
+            className="flex items-center justify-center gap-3 cursor-pointer"
+          >
+            <LogoIcon size={36} />
+            <span className="text-xl font-bold tracking-tight">
+              Edge<span className="text-primary">Guardian</span>
+            </span>
+          </a>
+
+          {/* Right — theme toggle + CTA */}
+          <div className="flex items-center justify-end gap-3">
             {mounted && (
               <button
                 onClick={() => setTheme(resolvedTheme === "dark" ? "light" : "dark")}
