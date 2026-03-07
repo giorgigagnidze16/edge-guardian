@@ -16,7 +16,7 @@ CREATE TABLE device_telemetry (
 );
 
 -- Convert to hypertable with 1-day chunks
-SELECT create_hypertable('device_telemetry', by_range('time'), chunk_time_interval => INTERVAL '1 day');
+SELECT create_hypertable('device_telemetry', by_range('time', INTERVAL '1 day'));
 
 -- Indexes for common query patterns
 CREATE INDEX idx_telemetry_device_time ON device_telemetry (device_id, time DESC);
