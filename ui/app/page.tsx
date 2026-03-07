@@ -13,19 +13,19 @@ import { LogoIcon } from "@/components/logo";
 
 const TERMINAL_LINES: Array<{ type: "cmd" | "out" | "gap"; text: string; cls?: string }> = [
   { type: "cmd", text: "ssh edge@rpi-gateway-01" },
-  { type: "out", text: "Connected to rpi-gateway-01 (192.168.1.42)", cls: "text-emerald-400" },
+  { type: "out", text: "Connected to rpi-gateway-01 (192.168.1.42)", cls: "text-emerald-600 dark:text-emerald-400" },
   { type: "gap", text: "" },
   { type: "cmd", text: "edgeguard status" },
-  { type: "out", text: "● EdgeGuardian Agent v2.4.1", cls: "font-semibold text-cyan-300" },
+  { type: "out", text: "● EdgeGuardian Agent v2.4.1", cls: "font-semibold text-cyan-700 dark:text-cyan-300" },
   { type: "out", text: "  Status:     active (running)" },
   { type: "out", text: "  Uptime:     14d 6h 32m" },
   { type: "out", text: "  Fleet:      connected (1,847 devices)" },
   { type: "out", text: "  Last sync:  2s ago" },
   { type: "gap", text: "" },
   { type: "cmd", text: "edgeguard deploy --rolling firmware-v2.5.0" },
-  { type: "out", text: "✓ Artifact signature verified (sha256:a3f8…c291)", cls: "text-emerald-400" },
-  { type: "out", text: "▸ Rolling deployment to 847 devices…", cls: "text-cyan-400" },
-  { type: "out", text: "  ████████████████░░░░  78% complete", cls: "text-cyan-300/80" },
+  { type: "out", text: "✓ Artifact signature verified (sha256:a3f8…c291)", cls: "text-emerald-600 dark:text-emerald-400" },
+  { type: "out", text: "▸ Rolling deployment to 847 devices…", cls: "text-cyan-700 dark:text-cyan-400" },
+  { type: "out", text: "  ████████████████░░░░  78% complete", cls: "text-cyan-600 dark:text-cyan-300/80" },
   { type: "out", text: "  661 updated · 183 pending · 3 queued" },
 ];
 
@@ -408,16 +408,16 @@ export default function LoginPage() {
        * ══════════════════════════════════════════════ */}
       <section id="terminal" className="relative z-10 mt-32 lg:mt-40">
         {/* Dark background bleed */}
-        <div className="absolute inset-0 bg-[#06060c] dark:bg-transparent" />
+        <div className="absolute inset-0 bg-slate-100 dark:bg-transparent" />
         <div className="absolute inset-0 dark:bg-card/50" />
 
         <div className="relative mx-auto max-w-7xl px-6 py-24 sm:px-12 lg:px-16 lg:py-32">
           <div className="reveal reveal-up text-center mb-16">
             <SectionLabel>Live Demo</SectionLabel>
-            <h2 className="text-3xl sm:text-4xl lg:text-5xl font-bold tracking-tight text-white dark:text-foreground">
+            <h2 className="text-3xl sm:text-4xl lg:text-5xl font-bold tracking-tight">
               See it in action
             </h2>
-            <p className="mt-4 text-lg text-zinc-400 dark:text-muted-foreground max-w-2xl mx-auto">
+            <p className="mt-4 text-lg text-muted-foreground max-w-2xl mx-auto">
               Connect to any device via web terminal or SSH. Deploy firmware updates.
               Monitor fleet health — all from a single interface.
             </p>
@@ -455,16 +455,16 @@ export default function LoginPage() {
               metrics, connection status — filter and drill into any device instantly.
             </p>
             {/* Device list visual */}
-            <div className="rounded-xl bg-[#0a0a14] dark:bg-background border border-white/[0.06] dark:border-border p-4">
+            <div className="rounded-xl bg-slate-100 dark:bg-[#0a0a14] border border-border dark:border-white/[0.06] p-4">
               <div className="grid grid-cols-3 gap-2 mb-3">
                 {[
-                  { v: "1,847", l: "total", c: "text-white dark:text-foreground" },
-                  { v: "1,823", l: "online", c: "text-emerald-400" },
-                  { v: "24", l: "attention", c: "text-amber-400" },
+                  { v: "1,847", l: "total", c: "text-foreground" },
+                  { v: "1,823", l: "online", c: "text-emerald-600 dark:text-emerald-400" },
+                  { v: "24", l: "attention", c: "text-amber-600 dark:text-amber-400" },
                 ].map((m) => (
-                  <div key={m.l} className="rounded-lg bg-white/[0.04] dark:bg-muted/30 px-3 py-2 text-center">
+                  <div key={m.l} className="rounded-lg bg-white/80 dark:bg-white/[0.04] px-3 py-2 text-center">
                     <div className={`text-sm font-bold ${m.c}`}>{m.v}</div>
-                    <div className="text-[11px] text-zinc-500 dark:text-muted-foreground">{m.l}</div>
+                    <div className="text-[11px] text-muted-foreground">{m.l}</div>
                   </div>
                 ))}
               </div>
@@ -472,13 +472,13 @@ export default function LoginPage() {
                 {MOCK_DEVICES.map((d) => (
                   <div
                     key={d.name}
-                    className="flex items-center gap-3 rounded-lg bg-white/[0.02] dark:bg-muted/20 px-3 py-2"
+                    className="flex items-center gap-3 rounded-lg bg-white/60 dark:bg-white/[0.02] px-3 py-2"
                   >
                     <div className={`h-2 w-2 rounded-full shrink-0 ${ST_DOT[d.status]}`} />
-                    <span className="text-sm text-zinc-300 dark:text-muted-foreground font-mono truncate">
+                    <span className="text-sm text-slate-600 dark:text-zinc-300 font-mono truncate">
                       {d.name}
                     </span>
-                    <span className="ml-auto text-xs text-zinc-500 dark:text-muted-foreground/60 shrink-0 font-mono">
+                    <span className="ml-auto text-xs text-slate-400 dark:text-zinc-500 shrink-0 font-mono">
                       {d.cpu}
                     </span>
                   </div>
@@ -497,19 +497,19 @@ export default function LoginPage() {
               with integrity verification. Automatic rollback on failure.
             </p>
             {/* Deployment visual */}
-            <div className="rounded-xl bg-[#0a0a14] dark:bg-background border border-white/[0.06] dark:border-border p-5">
+            <div className="rounded-xl bg-slate-100 dark:bg-[#0a0a14] border border-border dark:border-white/[0.06] p-5">
               <div className="flex items-center justify-between mb-3">
-                <span className="text-sm text-zinc-200 dark:text-foreground font-medium font-mono">
+                <span className="text-sm text-foreground font-medium font-mono">
                   firmware-v2.5.0
                 </span>
                 <span className="text-xs text-primary font-semibold px-2.5 py-1 rounded-full bg-primary/10">
                   Rolling
                 </span>
               </div>
-              <div className="h-2.5 bg-white/[0.06] dark:bg-muted rounded-full overflow-hidden mb-3">
+              <div className="h-2.5 bg-slate-200 dark:bg-white/[0.06] rounded-full overflow-hidden mb-3">
                 <div className="h-full rounded-full bg-gradient-to-r from-primary/80 to-primary w-[78%] landing-progress" />
               </div>
-              <div className="flex justify-between text-sm text-zinc-400 dark:text-muted-foreground mb-4">
+              <div className="flex justify-between text-sm text-muted-foreground mb-4">
                 <span>78% complete</span>
                 <span>3 remaining</span>
               </div>
@@ -522,7 +522,7 @@ export default function LoginPage() {
                         ? "bg-emerald-500/60"
                         : i < 13
                           ? "bg-primary/60 landing-pulse"
-                          : "bg-white/[0.06] dark:bg-muted"
+                          : "bg-slate-200 dark:bg-white/[0.06]"
                     }`}
                   />
                 ))}
@@ -590,54 +590,54 @@ export default function LoginPage() {
                 reconciles automatically — services, files, network config.
               </p>
               {/* YAML mockup */}
-              <div className="rounded-xl bg-[#0a0a14] dark:bg-background border border-white/[0.06] dark:border-border p-5 font-mono text-sm leading-relaxed overflow-hidden">
+              <div className="rounded-xl bg-slate-100 dark:bg-[#0a0a14] border border-border dark:border-white/[0.06] p-5 font-mono text-sm leading-relaxed overflow-hidden">
                 <div>
-                  <span className="text-violet-400">kind</span>
-                  <span className="text-zinc-600">:</span>{" "}
-                  <span className="text-emerald-400">DeviceManifest</span>
+                  <span className="text-violet-600 dark:text-violet-400">kind</span>
+                  <span className="text-slate-400 dark:text-zinc-600">:</span>{" "}
+                  <span className="text-emerald-600 dark:text-emerald-400">DeviceManifest</span>
                 </div>
                 <div>
-                  <span className="text-violet-400">spec</span>
-                  <span className="text-zinc-600">:</span>
+                  <span className="text-violet-600 dark:text-violet-400">spec</span>
+                  <span className="text-slate-400 dark:text-zinc-600">:</span>
                 </div>
                 <div className="pl-4">
-                  <span className="text-violet-400">services</span>
-                  <span className="text-zinc-600">:</span>
+                  <span className="text-violet-600 dark:text-violet-400">services</span>
+                  <span className="text-slate-400 dark:text-zinc-600">:</span>
                 </div>
                 <div className="pl-6">
-                  <span className="text-zinc-600">- </span>
-                  <span className="text-zinc-400">name:</span>{" "}
-                  <span className="text-cyan-300">sensor-agent</span>
+                  <span className="text-slate-400 dark:text-zinc-600">- </span>
+                  <span className="text-slate-500 dark:text-zinc-400">name:</span>{" "}
+                  <span className="text-cyan-700 dark:text-cyan-300">sensor-agent</span>
                 </div>
                 <div className="pl-8">
-                  <span className="text-zinc-400">state:</span>{" "}
-                  <span className="text-emerald-400">running</span>
+                  <span className="text-slate-500 dark:text-zinc-400">state:</span>{" "}
+                  <span className="text-emerald-600 dark:text-emerald-400">running</span>
                 </div>
                 <div className="pl-8">
-                  <span className="text-zinc-400">restart:</span>{" "}
-                  <span className="text-amber-300">on-failure</span>
+                  <span className="text-slate-500 dark:text-zinc-400">restart:</span>{" "}
+                  <span className="text-amber-600 dark:text-amber-300">on-failure</span>
                 </div>
                 <div className="pl-6">
-                  <span className="text-zinc-600">- </span>
-                  <span className="text-zinc-400">name:</span>{" "}
-                  <span className="text-cyan-300">data-relay</span>
+                  <span className="text-slate-400 dark:text-zinc-600">- </span>
+                  <span className="text-slate-500 dark:text-zinc-400">name:</span>{" "}
+                  <span className="text-cyan-700 dark:text-cyan-300">data-relay</span>
                 </div>
                 <div className="pl-8">
-                  <span className="text-zinc-400">state:</span>{" "}
-                  <span className="text-emerald-400">running</span>
+                  <span className="text-slate-500 dark:text-zinc-400">state:</span>{" "}
+                  <span className="text-emerald-600 dark:text-emerald-400">running</span>
                 </div>
                 <div className="pl-4">
-                  <span className="text-violet-400">files</span>
-                  <span className="text-zinc-600">:</span>
+                  <span className="text-violet-600 dark:text-violet-400">files</span>
+                  <span className="text-slate-400 dark:text-zinc-600">:</span>
                 </div>
                 <div className="pl-6">
-                  <span className="text-zinc-600">- </span>
-                  <span className="text-zinc-400">path:</span>{" "}
-                  <span className="text-cyan-300">/etc/edge/config.yaml</span>
+                  <span className="text-slate-400 dark:text-zinc-600">- </span>
+                  <span className="text-slate-500 dark:text-zinc-400">path:</span>{" "}
+                  <span className="text-cyan-700 dark:text-cyan-300">/etc/edge/config.yaml</span>
                 </div>
                 <div className="pl-8">
-                  <span className="text-zinc-400">mode:</span>{" "}
-                  <span className="text-amber-300">0644</span>
+                  <span className="text-slate-500 dark:text-zinc-400">mode:</span>{" "}
+                  <span className="text-amber-600 dark:text-amber-300">0644</span>
                 </div>
               </div>
             </div>
@@ -655,7 +655,7 @@ export default function LoginPage() {
                 alerting. Everything you need to understand your fleet.
               </p>
               {/* Log stream mockup */}
-              <div className="rounded-xl bg-[#0a0a14] dark:bg-background border border-white/[0.06] dark:border-border p-5 font-mono overflow-hidden">
+              <div className="rounded-xl bg-slate-100 dark:bg-[#0a0a14] border border-border dark:border-white/[0.06] p-5 font-mono overflow-hidden">
                 <div className="flex items-center gap-2 mb-4">
                   <div className="h-2 w-2 rounded-full bg-emerald-400 landing-pulse" />
                   <span className="text-xs text-zinc-500 dark:text-muted-foreground uppercase tracking-wider font-semibold">
@@ -671,8 +671,8 @@ export default function LoginPage() {
                       <span
                         className={`shrink-0 uppercase font-semibold tracking-wide text-xs mt-0.5 ${
                           e.level === "warn"
-                            ? "text-amber-400"
-                            : "text-emerald-400/70"
+                            ? "text-amber-600 dark:text-amber-400"
+                            : "text-emerald-600 dark:text-emerald-400/70"
                         }`}
                       >
                         {e.level}
@@ -818,13 +818,13 @@ function TerminalVisual({ active }: { active: boolean }) {
   }, [active]);
 
   return (
-    <div className="mx-auto max-w-4xl rounded-2xl bg-[#0a0a14] border border-white/[0.08] shadow-2xl shadow-black/40 overflow-hidden">
+    <div className="mx-auto max-w-4xl rounded-2xl bg-slate-50 dark:bg-[#0a0a14] border border-border dark:border-white/[0.08] shadow-2xl shadow-black/10 dark:shadow-black/40 overflow-hidden">
       {/* Window chrome */}
-      <div className="flex items-center gap-2.5 px-5 py-3.5 border-b border-white/[0.06] bg-white/[0.02]">
+      <div className="flex items-center gap-2.5 px-5 py-3.5 border-b border-border dark:border-white/[0.06] bg-slate-100/80 dark:bg-white/[0.02]">
         <div className="h-3 w-3 rounded-full bg-red-500/80" />
         <div className="h-3 w-3 rounded-full bg-amber-500/80" />
         <div className="h-3 w-3 rounded-full bg-emerald-500/80" />
-        <span className="ml-4 text-xs text-zinc-500 tracking-wide font-mono">
+        <span className="ml-4 text-xs text-muted-foreground dark:text-zinc-500 tracking-wide font-mono">
           edge@rpi-gateway-01 &mdash; edgeguard
         </span>
       </div>
@@ -837,12 +837,12 @@ function TerminalVisual({ active }: { active: boolean }) {
           return (
             <div
               key={i}
-              className={`${line.cls || "text-zinc-400"} ${
+              className={`${line.cls || "text-slate-600 dark:text-zinc-400"} ${
                 i === visibleCount - 1 ? "animate-[fadeIn_0.15s_ease-out]" : ""
               }`}
             >
               {line.type === "cmd" && (
-                <span className="text-emerald-400 select-none">$ </span>
+                <span className="text-emerald-600 dark:text-emerald-400 select-none">$ </span>
               )}
               {line.text}
             </div>
@@ -852,7 +852,7 @@ function TerminalVisual({ active }: { active: boolean }) {
         {/* Blinking cursor */}
         {visibleCount > 0 && (
           <span
-            className="inline-block w-2.5 h-5 bg-emerald-400/90 mt-1 align-middle"
+            className="inline-block w-2.5 h-5 bg-emerald-600 dark:bg-emerald-400/90 mt-1 align-middle"
             style={{ animation: "cursorBlink 1s step-end infinite" }}
           />
         )}
