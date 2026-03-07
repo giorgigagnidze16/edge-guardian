@@ -223,12 +223,12 @@ export default function LoginPage() {
     <div ref={containerRef} className="relative min-h-screen bg-background text-foreground [overflow-x:clip]">
       {/* ── Atmosphere ── */}
       <div className="pointer-events-none fixed inset-0 z-0">
-        <div className="absolute -top-40 right-1/4 h-[700px] w-[700px] rounded-full bg-primary/[0.04] dark:bg-cyan-500/[0.07] blur-[200px]" />
-        <div className="absolute top-2/3 -left-20 h-[600px] w-[600px] rounded-full bg-violet-500/[0.03] dark:bg-violet-500/[0.05] blur-[180px]" />
-        <div className="absolute bottom-0 right-0 h-[500px] w-[500px] rounded-full bg-emerald-500/[0.02] dark:bg-emerald-500/[0.03] blur-[160px]" />
+        <div className="absolute -top-40 right-1/4 h-[700px] w-[700px] rounded-full bg-cyan-400/[0.08] dark:bg-cyan-500/[0.07] blur-[200px]" />
+        <div className="absolute top-2/3 -left-20 h-[600px] w-[600px] rounded-full bg-violet-400/[0.06] dark:bg-violet-500/[0.05] blur-[180px]" />
+        <div className="absolute bottom-0 right-0 h-[500px] w-[500px] rounded-full bg-emerald-400/[0.05] dark:bg-emerald-500/[0.03] blur-[160px]" />
         {/* Grid — light mode */}
         <div
-          className="absolute inset-0 dark:hidden opacity-[0.035]"
+          className="absolute inset-0 dark:hidden opacity-[0.03]"
           style={{
             backgroundImage:
               "linear-gradient(rgba(0,0,0,.06) 1px, transparent 1px), linear-gradient(90deg, rgba(0,0,0,.06) 1px, transparent 1px)",
@@ -361,14 +361,14 @@ export default function LoginPage() {
        *  METRICS STRIP
        * ══════════════════════════════════════════════ */}
       <section className="relative z-10 mx-auto max-w-6xl px-6 sm:px-12 lg:px-16">
-        <div className="reveal reveal-up grid grid-cols-2 lg:grid-cols-4 gap-px rounded-2xl border border-border bg-border overflow-hidden">
+        <div className="reveal reveal-up grid grid-cols-2 lg:grid-cols-4 gap-px rounded-2xl border border-border bg-border overflow-hidden shadow-sm shadow-black/[0.03] dark:shadow-none">
           {[
             { value: "1,847", label: "Devices Managed", suffix: "" },
             { value: "99.9", label: "Uptime SLA", suffix: "%" },
             { value: "< 5", label: "Agent Binary", suffix: " MB" },
             { value: "30", label: "Reconcile Cycle", suffix: "s" },
           ].map((s) => (
-            <div key={s.label} className="bg-background px-6 py-8 sm:px-8 sm:py-10 text-center">
+            <div key={s.label} className="bg-card px-6 py-8 sm:px-8 sm:py-10 text-center">
               <div className="text-3xl sm:text-4xl lg:text-5xl font-black tracking-tight tabular-nums">
                 {s.value}
                 <span className="text-primary">{s.suffix}</span>
@@ -408,8 +408,8 @@ export default function LoginPage() {
        * ══════════════════════════════════════════════ */}
       <section id="terminal" className="relative z-10 mt-32 lg:mt-40">
         {/* Dark background bleed */}
-        <div className="absolute inset-0 bg-slate-100 dark:bg-transparent" />
-        <div className="absolute inset-0 dark:bg-card/50" />
+        <div className="absolute inset-0 bg-slate-50 dark:bg-transparent" />
+        <div className="absolute inset-0 dark:bg-card/60" />
 
         <div className="relative mx-auto max-w-7xl px-6 py-24 sm:px-12 lg:px-16 lg:py-32">
           <div className="reveal reveal-up text-center mb-16">
@@ -446,7 +446,7 @@ export default function LoginPage() {
 
         <div className="grid gap-6 lg:grid-cols-3">
           {/* Fleet Dashboard */}
-          <div className="reveal reveal-up group relative rounded-2xl border border-border bg-card p-8 overflow-hidden transition-all duration-300 hover:border-primary/30 hover:shadow-lg hover:shadow-primary/5 hover:-translate-y-1">
+          <div className="reveal reveal-up group relative rounded-2xl border border-border bg-card shadow-sm shadow-black/[0.03] dark:shadow-none p-8 overflow-hidden transition-all duration-300 hover:border-primary/30 hover:shadow-lg hover:shadow-primary/5 hover:-translate-y-1">
             <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
             <SectionLabel>Fleet Dashboard</SectionLabel>
             <h3 className="text-2xl font-bold mb-3">Every device. One view.</h3>
@@ -455,14 +455,14 @@ export default function LoginPage() {
               metrics, connection status — filter and drill into any device instantly.
             </p>
             {/* Device list visual */}
-            <div className="rounded-xl bg-slate-100 dark:bg-[#0a0a14] border border-border dark:border-white/[0.06] p-4">
+            <div className="rounded-xl bg-slate-50 dark:bg-[#0c0c16] border border-border dark:border-white/10 p-4">
               <div className="grid grid-cols-3 gap-2 mb-3">
                 {[
                   { v: "1,847", l: "total", c: "text-foreground" },
                   { v: "1,823", l: "online", c: "text-emerald-600 dark:text-emerald-400" },
                   { v: "24", l: "attention", c: "text-amber-600 dark:text-amber-400" },
                 ].map((m) => (
-                  <div key={m.l} className="rounded-lg bg-white/80 dark:bg-white/[0.04] px-3 py-2 text-center">
+                  <div key={m.l} className="rounded-lg bg-slate-50 dark:bg-white/[0.07] px-3 py-2 text-center">
                     <div className={`text-sm font-bold ${m.c}`}>{m.v}</div>
                     <div className="text-[11px] text-muted-foreground">{m.l}</div>
                   </div>
@@ -472,7 +472,7 @@ export default function LoginPage() {
                 {MOCK_DEVICES.map((d) => (
                   <div
                     key={d.name}
-                    className="flex items-center gap-3 rounded-lg bg-white/60 dark:bg-white/[0.02] px-3 py-2"
+                    className="flex items-center gap-3 rounded-lg bg-slate-50 dark:bg-white/[0.05] px-3 py-2"
                   >
                     <div className={`h-2 w-2 rounded-full shrink-0 ${ST_DOT[d.status]}`} />
                     <span className="text-sm text-slate-600 dark:text-zinc-300 font-mono truncate">
@@ -488,7 +488,7 @@ export default function LoginPage() {
           </div>
 
           {/* OTA Updates */}
-          <div id="updates" className="reveal reveal-up group relative rounded-2xl border border-border bg-card p-8 overflow-hidden transition-all duration-300 hover:border-primary/30 hover:shadow-lg hover:shadow-primary/5 hover:-translate-y-1" style={{ transitionDelay: "100ms" }}>
+          <div id="updates" className="reveal reveal-up group relative rounded-2xl border border-border bg-card shadow-sm shadow-black/[0.03] dark:shadow-none p-8 overflow-hidden transition-all duration-300 hover:border-primary/30 hover:shadow-lg hover:shadow-primary/5 hover:-translate-y-1" style={{ transitionDelay: "100ms" }}>
             <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
             <SectionLabel>OTA Updates</SectionLabel>
             <h3 className="text-2xl font-bold mb-3">Ship fearlessly.</h3>
@@ -497,7 +497,7 @@ export default function LoginPage() {
               with integrity verification. Automatic rollback on failure.
             </p>
             {/* Deployment visual */}
-            <div className="rounded-xl bg-slate-100 dark:bg-[#0a0a14] border border-border dark:border-white/[0.06] p-5">
+            <div className="rounded-xl bg-slate-50 dark:bg-[#0c0c16] border border-border dark:border-white/10 p-5">
               <div className="flex items-center justify-between mb-3">
                 <span className="text-sm text-foreground font-medium font-mono">
                   firmware-v2.5.0
@@ -506,7 +506,7 @@ export default function LoginPage() {
                   Rolling
                 </span>
               </div>
-              <div className="h-2.5 bg-slate-200 dark:bg-white/[0.06] rounded-full overflow-hidden mb-3">
+              <div className="h-2.5 bg-slate-200 dark:bg-white/10 rounded-full overflow-hidden mb-3">
                 <div className="h-full rounded-full bg-gradient-to-r from-primary/80 to-primary w-[78%] landing-progress" />
               </div>
               <div className="flex justify-between text-sm text-muted-foreground mb-4">
@@ -522,7 +522,7 @@ export default function LoginPage() {
                         ? "bg-emerald-500/60"
                         : i < 13
                           ? "bg-primary/60 landing-pulse"
-                          : "bg-slate-200 dark:bg-white/[0.06]"
+                          : "bg-slate-200 dark:bg-white/10"
                     }`}
                   />
                 ))}
@@ -531,7 +531,7 @@ export default function LoginPage() {
           </div>
 
           {/* Zero-Trust Security */}
-          <div id="security" className="reveal reveal-up group relative rounded-2xl border border-border bg-card p-8 overflow-hidden transition-all duration-300 hover:border-primary/30 hover:shadow-lg hover:shadow-primary/5 hover:-translate-y-1" style={{ transitionDelay: "200ms" }}>
+          <div id="security" className="reveal reveal-up group relative rounded-2xl border border-border bg-card shadow-sm shadow-black/[0.03] dark:shadow-none p-8 overflow-hidden transition-all duration-300 hover:border-primary/30 hover:shadow-lg hover:shadow-primary/5 hover:-translate-y-1" style={{ transitionDelay: "200ms" }}>
             <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
             <SectionLabel>Zero-Trust Security</SectionLabel>
             <h3 className="text-2xl font-bold mb-3">Secured from day one.</h3>
@@ -580,7 +580,7 @@ export default function LoginPage() {
         <div className="grid lg:grid-cols-2 gap-8">
           {/* Declarative Config */}
           <div className="reveal reveal-left">
-            <div className="h-full rounded-2xl border border-border bg-card p-8 lg:p-10">
+            <div className="h-full rounded-2xl border border-border bg-card shadow-sm shadow-black/[0.03] dark:shadow-none p-8 lg:p-10">
               <SectionLabel>Declarative Config</SectionLabel>
               <h3 className="text-2xl font-bold mb-3">
                 Define once. Converge always.
@@ -590,7 +590,7 @@ export default function LoginPage() {
                 reconciles automatically — services, files, network config.
               </p>
               {/* YAML mockup */}
-              <div className="rounded-xl bg-slate-100 dark:bg-[#0a0a14] border border-border dark:border-white/[0.06] p-5 font-mono text-sm leading-relaxed overflow-hidden">
+              <div className="rounded-xl bg-slate-50 dark:bg-[#0c0c16] border border-border dark:border-white/10 p-5 font-mono text-sm leading-relaxed overflow-hidden">
                 <div>
                   <span className="text-violet-600 dark:text-violet-400">kind</span>
                   <span className="text-slate-400 dark:text-zinc-600">:</span>{" "}
@@ -645,7 +645,7 @@ export default function LoginPage() {
 
           {/* Observability */}
           <div className="reveal reveal-right">
-            <div className="h-full rounded-2xl border border-border bg-card p-8 lg:p-10">
+            <div className="h-full rounded-2xl border border-border bg-card shadow-sm shadow-black/[0.03] dark:shadow-none p-8 lg:p-10">
               <SectionLabel>Observability</SectionLabel>
               <h3 className="text-2xl font-bold mb-3">
                 Logs, metrics, insights.
@@ -655,17 +655,17 @@ export default function LoginPage() {
                 alerting. Everything you need to understand your fleet.
               </p>
               {/* Log stream mockup */}
-              <div className="rounded-xl bg-slate-100 dark:bg-[#0a0a14] border border-border dark:border-white/[0.06] p-5 font-mono overflow-hidden">
+              <div className="rounded-xl bg-slate-50 dark:bg-[#0c0c16] border border-border dark:border-white/10 p-5 font-mono overflow-hidden">
                 <div className="flex items-center gap-2 mb-4">
                   <div className="h-2 w-2 rounded-full bg-emerald-400 landing-pulse" />
-                  <span className="text-xs text-zinc-500 dark:text-muted-foreground uppercase tracking-wider font-semibold">
+                  <span className="text-xs text-slate-500 dark:text-muted-foreground uppercase tracking-wider font-semibold">
                     Live Log Stream
                   </span>
                 </div>
                 <div className="space-y-2">
                   {LOG_ENTRIES.map((e, i) => (
                     <div key={i} className="flex items-start gap-3 text-sm leading-relaxed">
-                      <span className="text-zinc-600 dark:text-muted-foreground/40 shrink-0 tabular-nums">
+                      <span className="text-slate-400 dark:text-muted-foreground/40 shrink-0 tabular-nums">
                         {e.time}
                       </span>
                       <span
@@ -677,7 +677,7 @@ export default function LoginPage() {
                       >
                         {e.level}
                       </span>
-                      <span className="text-zinc-400 dark:text-muted-foreground">
+                      <span className="text-slate-600 dark:text-muted-foreground">
                         {e.msg}
                       </span>
                     </div>
@@ -693,8 +693,8 @@ export default function LoginPage() {
        *  CTA
        * ══════════════════════════════════════════════ */}
       <section className="relative z-10 mx-auto max-w-5xl px-6 pb-32 sm:px-12">
-        <div className="reveal reveal-scale relative overflow-hidden rounded-3xl border border-border">
-          <div className="absolute inset-0 bg-gradient-to-br from-primary/[0.08] via-transparent to-violet-500/[0.05]" />
+        <div className="reveal reveal-scale relative overflow-hidden rounded-3xl border border-border bg-card shadow-sm shadow-black/[0.03] dark:shadow-none">
+          <div className="absolute inset-0 bg-gradient-to-br from-primary/[0.06] via-transparent to-violet-500/[0.04] dark:from-primary/[0.08] dark:to-violet-500/[0.05]" />
           <div className="absolute top-0 left-1/2 h-px w-2/3 -translate-x-1/2 bg-gradient-to-r from-transparent via-primary/50 to-transparent" />
           <div className="absolute bottom-0 left-1/2 h-px w-1/3 -translate-x-1/2 bg-gradient-to-r from-transparent via-primary/20 to-transparent" />
 
@@ -818,9 +818,9 @@ function TerminalVisual({ active }: { active: boolean }) {
   }, [active]);
 
   return (
-    <div className="mx-auto max-w-4xl rounded-2xl bg-slate-50 dark:bg-[#0a0a14] border border-border dark:border-white/[0.08] shadow-2xl shadow-black/10 dark:shadow-black/40 overflow-hidden">
+    <div className="mx-auto max-w-4xl rounded-2xl bg-white dark:bg-[#0c0c16] border border-border dark:border-white/10 shadow-xl shadow-black/[0.06] dark:shadow-black/40 overflow-hidden">
       {/* Window chrome */}
-      <div className="flex items-center gap-2.5 px-5 py-3.5 border-b border-border dark:border-white/[0.06] bg-slate-100/80 dark:bg-white/[0.02]">
+      <div className="flex items-center gap-2.5 px-5 py-3.5 border-b border-border dark:border-white/[0.08] bg-slate-50 dark:bg-white/[0.04]">
         <div className="h-3 w-3 rounded-full bg-red-500/80" />
         <div className="h-3 w-3 rounded-full bg-amber-500/80" />
         <div className="h-3 w-3 rounded-full bg-emerald-500/80" />
@@ -921,7 +921,7 @@ function MarqueeRow({
   const renderPill = (item: PlatformItem, i: number) => (
     <div
       key={i}
-      className="flex shrink-0 items-center gap-4 rounded-full border border-border bg-card px-7 py-3.5"
+      className="flex shrink-0 items-center gap-4 rounded-full border border-border bg-card shadow-sm shadow-black/[0.02] dark:shadow-none px-7 py-3.5"
     >
       {ICON_FILE[item.icon] ? (
         /* eslint-disable-next-line @next/next/no-img-element */
@@ -975,11 +975,11 @@ function DashboardMockup() {
       <div className="absolute inset-0 -m-12 rounded-3xl bg-primary/[0.05] dark:bg-cyan-500/[0.07] blur-[100px]" />
       <div className="relative" style={{ perspective: "1200px" }}>
         <div
-          className="rounded-2xl border border-border bg-card dark:bg-[#0a0a14] dark:border-white/[0.08] overflow-hidden shadow-2xl shadow-black/20 dark:shadow-black/50"
+          className="rounded-2xl border border-slate-200 dark:border-white/10 bg-white dark:bg-[#0c0c16] overflow-hidden shadow-2xl shadow-black/10 dark:shadow-black/50"
           style={{ animation: "floatDashboard 6s ease-in-out infinite" }}
         >
           {/* Window chrome */}
-          <div className="flex items-center gap-2 px-5 py-3 border-b border-border dark:border-white/[0.06] bg-muted/30 dark:bg-white/[0.02]">
+          <div className="flex items-center gap-2 px-5 py-3 border-b border-slate-200 dark:border-white/[0.08] bg-slate-50 dark:bg-white/[0.04]">
             <div className="h-3 w-3 rounded-full bg-red-400/80" />
             <div className="h-3 w-3 rounded-full bg-amber-400/80" />
             <div className="h-3 w-3 rounded-full bg-emerald-400/80" />
@@ -990,7 +990,7 @@ function DashboardMockup() {
 
           <div className="flex">
             {/* Sidebar */}
-            <div className="w-12 sm:w-14 shrink-0 border-r border-border dark:border-white/[0.04] py-4 flex flex-col items-center gap-3">
+            <div className="w-12 sm:w-14 shrink-0 border-r border-slate-200 dark:border-white/[0.08] py-4 flex flex-col items-center gap-3">
               <div className="w-6 h-6 rounded-lg bg-primary/20 flex items-center justify-center">
                 <div className="w-3 h-3 rounded bg-primary/50" />
               </div>
@@ -998,7 +998,7 @@ function DashboardMockup() {
                 <div
                   key={i}
                   className={`w-6 h-1 rounded-full ${
-                    i === 2 ? "bg-primary/30" : "bg-muted dark:bg-white/[0.06]"
+                    i === 2 ? "bg-primary/30" : "bg-slate-200 dark:bg-white/10"
                   }`}
                 />
               ))}
@@ -1009,21 +1009,19 @@ function DashboardMockup() {
               {/* Metric cards */}
               <div className="grid grid-cols-3 gap-2.5 mb-4">
                 {[
-                  { label: "Devices", val: "1,847", accent: false },
+                  { label: "Devices", val: "1,847", accent: true },
                   { label: "Online", val: "1,823", accent: true },
                   { label: "Deploying", val: "12", accent: true },
                 ].map((m) => (
                   <div
                     key={m.label}
-                    className="rounded-xl bg-muted/40 dark:bg-white/[0.03] border border-border dark:border-white/[0.05] p-3"
+                    className="rounded-xl bg-slate-50 dark:bg-white/[0.06] border border-slate-200 dark:border-white/[0.08] p-3"
                   >
-                    <div className="text-[10px] text-muted-foreground dark:text-zinc-500 uppercase tracking-wider font-medium">
+                    <div className="text-[10px] text-slate-500 dark:text-zinc-500 uppercase tracking-wider font-medium">
                       {m.label}
                     </div>
                     <div
-                      className={`text-base sm:text-lg font-bold mt-1 ${
-                        m.accent ? "text-primary" : ""
-                      }`}
+                      className="text-base sm:text-lg font-bold mt-1 text-primary"
                     >
                       {m.val}
                     </div>
@@ -1032,8 +1030,8 @@ function DashboardMockup() {
               </div>
 
               {/* Chart */}
-              <div className="rounded-xl bg-muted/40 dark:bg-white/[0.03] border border-border dark:border-white/[0.05] p-3 sm:p-4 mb-4">
-                <div className="text-[10px] text-muted-foreground dark:text-zinc-500 uppercase tracking-wider mb-3 font-medium">
+              <div className="rounded-xl bg-slate-50 dark:bg-white/[0.06] border border-slate-200 dark:border-white/[0.08] p-3 sm:p-4 mb-4">
+                <div className="text-[10px] text-slate-500 dark:text-zinc-500 uppercase tracking-wider mb-3 font-medium">
                   Fleet CPU &mdash; 24h
                 </div>
                 <div className="flex items-end gap-[3px] h-14 sm:h-16">
@@ -1059,13 +1057,13 @@ function DashboardMockup() {
                 {MOCK_DEVICES.slice(0, 4).map((d) => (
                   <div
                     key={d.name}
-                    className="flex items-center gap-2.5 rounded-lg bg-muted/20 dark:bg-white/[0.02] px-3 py-2"
+                    className="flex items-center gap-2.5 rounded-lg bg-slate-50 dark:bg-white/[0.05] px-3 py-2"
                   >
                     <div className={`h-2 w-2 rounded-full shrink-0 ${ST_DOT[d.status]}`} />
-                    <span className="text-xs text-muted-foreground dark:text-zinc-400 font-mono truncate">
+                    <span className="text-xs text-slate-600 dark:text-zinc-400 font-mono truncate">
                       {d.name}
                     </span>
-                    <span className="ml-auto text-[11px] text-muted-foreground/60 dark:text-zinc-600 shrink-0 font-mono">
+                    <span className="ml-auto text-[11px] text-slate-400 dark:text-zinc-600 shrink-0 font-mono">
                       {d.cpu}
                     </span>
                   </div>

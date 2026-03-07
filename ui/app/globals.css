@@ -1,5 +1,8 @@
 @import "tailwindcss";
 
+/* Tell Tailwind v4 to use .dark class instead of prefers-color-scheme */
+@custom-variant dark (&:is(.dark *));
+
 /*
  * ═══════════════════════════════════════════════════════════
  *  EdgeGuardian — "Midnight Luminance" Design System
@@ -9,18 +12,18 @@
 
 @theme {
   /* ─── Light palette ─── */
-  --color-background: #e0e5ed;
-  --color-foreground: #0a0a12;
-  --color-card: #eaeff5;
-  --color-card-foreground: #0a0a12;
-  --color-popover: #eaeff5;
-  --color-popover-foreground: #0a0a12;
+  --color-background: #f8fafc;
+  --color-foreground: #0f172a;
+  --color-card: #ffffff;
+  --color-card-foreground: #0f172a;
+  --color-popover: #ffffff;
+  --color-popover-foreground: #0f172a;
   --color-primary: #0891b2;
   --color-primary-foreground: #ffffff;
-  --color-secondary: #f0f4f8;
-  --color-secondary-foreground: #0a0a12;
-  --color-muted: #f0f4f8;
-  --color-muted-foreground: #64748b;
+  --color-secondary: #f1f5f9;
+  --color-secondary-foreground: #0f172a;
+  --color-muted: #f1f5f9;
+  --color-muted-foreground: #475569;
   --color-accent: #ecfeff;
   --color-accent-foreground: #0e7490;
   --color-destructive: #ef4444;
@@ -31,7 +34,7 @@
   --radius: 0.625rem;
 
   /* Sidebar — light */
-  --color-sidebar-background: #e0e5ed;
+  --color-sidebar-background: #ffffff;
   --color-sidebar-foreground: #475569;
   --color-sidebar-primary: #0891b2;
   --color-sidebar-primary-foreground: #ffffff;
@@ -40,11 +43,11 @@
   --color-sidebar-border: #e2e8f0;
 
   /* Charts */
-  --color-chart-1: #06b6d4;
-  --color-chart-2: #10b981;
-  --color-chart-3: #f59e0b;
-  --color-chart-4: #8b5cf6;
-  --color-chart-5: #ec4899;
+  --color-chart-1: #0891b2;
+  --color-chart-2: #059669;
+  --color-chart-3: #d97706;
+  --color-chart-4: #7c3aed;
+  --color-chart-5: #db2777;
 
   --color-glow: #06b6d4;
 
@@ -152,7 +155,7 @@
     -webkit-backdrop-filter: blur(16px) saturate(180%);
   }
   :root .glass {
-    background: rgba(255, 255, 255, 0.8);
+    background: rgba(255, 255, 255, 0.85);
   }
 
   .glass-strong {
@@ -182,7 +185,7 @@
 
   /* ── Gradient text ── */
   .text-gradient {
-    background: linear-gradient(135deg, #0e7490, #0891b2, #7c3aed);
+    background: linear-gradient(135deg, #0e7490, #0891b2, #6d28d9);
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
     background-clip: text;
