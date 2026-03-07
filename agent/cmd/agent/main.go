@@ -98,8 +98,8 @@ func main() {
 		}
 	}()
 
-	// Register with controller.
-	registerWithController(ctx, cfg, httpClient, rec, store, logger)
+	// Enroll with controller (or load existing device token).
+	enrollWithController(ctx, cfg, httpClient, rec, store, logger)
 
 	// Create OTA updater and command dispatcher.
 	updater := ota.NewUpdater(cfg.DataDir, cfg.OTA.SignKey, logger)
@@ -233,7 +233,15 @@ func startHealthServer(port int, logger *zap.Logger) {
 	}
 }
 
-func registerWithController(
+// tokenFilePath returns the path where the device token is persisted.
+func tokenFilePath(cfg *config.Config) string {
+	if cfg.Auth.TokenFile != "" {
+		return cfg.Auth.TokenFile
+	}
+	return filepath.Join(cfg.DataDir, "device-token")
+}
+
+func enrollWithController(
 	ctx context.Context,
 	cfg *config.Config,
 	client *comms.ControllerClient,
@@ -241,31 +249,57 @@ func registerWithController(
 	store *storage.Store,
 	logger *zap.Logger,
 ) {
+	tokenPath := tokenFilePath(cfg)
+
+	// 1. Check for existing device token on disk.
+	if tokenData, err := os.ReadFile(tokenPath); err == nil && len(tokenData) > 0 {
+		token := string(tokenData)
+		client.SetAuthToken(token)
+		logger.Info("loaded device token from file, skipping enrollment",
+			zap.String("token_file", tokenPath))
+		return
+	}
+
+	// 2. Enroll with enrollment token.
+	if cfg.Auth.EnrollmentToken == "" {
+		logger.Fatal("no device token file and no enrollment_token configured — cannot authenticate with controller")
+	}
+
 	hostname, _ := os.Hostname()
 
-	regCtx, regCancel := context.WithTimeout(ctx, 15*time.Second)
-	defer regCancel()
+	enrollCtx, enrollCancel := context.WithTimeout(ctx, 15*time.Second)
+	defer enrollCancel()
 
-	resp, err := client.Register(regCtx, &model.RegisterRequest{
-		DeviceID:     cfg.DeviceID,
-		Hostname:     hostname,
-		Architecture: runtime.GOARCH,
-		OS:           runtime.GOOS,
-		AgentVersion: agentVersion,
-		Labels:       cfg.Labels,
+	resp, err := client.Enroll(enrollCtx, &model.EnrollRequest{
+		EnrollmentToken: cfg.Auth.EnrollmentToken,
+		DeviceID:        cfg.DeviceID,
+		Hostname:        hostname,
+		Architecture:    runtime.GOARCH,
+		OS:              runtime.GOOS,
+		AgentVersion:    agentVersion,
+		Labels:          cfg.Labels,
 	})
 	if err != nil {
-		logger.Warn("registration failed (controller may be offline, using cached state)", zap.Error(err))
-		return
+		logger.Fatal("enrollment failed", zap.Error(err))
 	}
 
 	if !resp.Accepted {
-		logger.Warn("registration rejected by controller", zap.String("message", resp.Message))
-		return
+		logger.Fatal("enrollment rejected by controller", zap.String("message", resp.Message))
 	}
 
-	logger.Info("registered with controller", zap.String("message", resp.Message))
+	logger.Info("enrolled with controller", zap.String("message", resp.Message))
 
+	// 3. Persist device token.
+	if resp.DeviceToken != "" {
+		if err := os.WriteFile(tokenPath, []byte(resp.DeviceToken), 0600); err != nil {
+			logger.Error("failed to save device token to file", zap.Error(err))
+		} else {
+			logger.Info("device token saved", zap.String("token_file", tokenPath))
+		}
+		client.SetAuthToken(resp.DeviceToken)
+	}
+
+	// 4. Apply initial manifest if provided.
 	if resp.InitialManifest != nil {
 		logger.Info("received initial manifest from controller",
 			zap.Int64("version", resp.InitialManifest.Version))

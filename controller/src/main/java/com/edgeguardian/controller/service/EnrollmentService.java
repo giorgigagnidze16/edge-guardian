@@ -1,9 +1,12 @@
 package com.edgeguardian.controller.service;
 
 import com.edgeguardian.controller.model.Device;
+import com.edgeguardian.controller.model.DeviceToken;
 import com.edgeguardian.controller.model.EnrollmentToken;
 import com.edgeguardian.controller.repository.DeviceRepository;
+import com.edgeguardian.controller.repository.DeviceTokenRepository;
 import com.edgeguardian.controller.repository.EnrollmentTokenRepository;
+import com.edgeguardian.controller.security.ApiKeyAuthenticationFilter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
@@ -26,13 +29,16 @@ public class EnrollmentService {
 
     private final EnrollmentTokenRepository tokenRepository;
     private final DeviceRepository deviceRepository;
+    private final DeviceTokenRepository deviceTokenRepository;
     private final DeviceRegistry deviceRegistry;
 
     public EnrollmentService(EnrollmentTokenRepository tokenRepository,
                              DeviceRepository deviceRepository,
+                             DeviceTokenRepository deviceTokenRepository,
                              DeviceRegistry deviceRegistry) {
         this.tokenRepository = tokenRepository;
         this.deviceRepository = deviceRepository;
+        this.deviceTokenRepository = deviceTokenRepository;
         this.deviceRegistry = deviceRegistry;
     }
 
@@ -65,13 +71,18 @@ public class EnrollmentService {
     }
 
     /**
+     * Result of a successful device enrollment.
+     */
+    public record EnrollmentResult(Device device, String deviceToken) {}
+
+    /**
      * Enroll a device using an enrollment token.
-     * Returns the device record (now bound to the token's org).
+     * Returns the device record (bound to the token's org) and a one-time device token.
      */
     @Transactional
-    public Device enrollDevice(String tokenValue, String deviceId, String hostname,
-                               String architecture, String os, String agentVersion,
-                               Map<String, String> labels) {
+    public EnrollmentResult enrollDevice(String tokenValue, String deviceId, String hostname,
+                                         String architecture, String os, String agentVersion,
+                                         Map<String, String> labels) {
         EnrollmentToken token = tokenRepository.findByToken(tokenValue)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Invalid enrollment token"));
 
@@ -88,9 +99,33 @@ public class EnrollmentService {
         device.setOrganizationId(token.getOrganizationId());
         deviceRepository.save(device);
 
+        // Revoke any existing device token (re-enrollment)
+        deviceTokenRepository.findByDeviceId(deviceId).ifPresent(existing -> {
+            existing.setRevoked(true);
+            deviceTokenRepository.save(existing);
+        });
+
+        // Generate device token
+        String rawToken = generateDeviceToken();
+        String tokenHash = ApiKeyAuthenticationFilter.sha256(rawToken);
+        String prefix = rawToken.substring(0, Math.min(12, rawToken.length()));
+
+        DeviceToken deviceToken = DeviceToken.builder()
+                .deviceId(deviceId)
+                .tokenHash(tokenHash)
+                .tokenPrefix(prefix)
+                .build();
+        deviceTokenRepository.save(deviceToken);
+
         log.info("Device {} enrolled to org {} via token {}",
                 deviceId, token.getOrganizationId(), token.getName());
-        return device;
+        return new EnrollmentResult(device, rawToken);
+    }
+
+    private String generateDeviceToken() {
+        byte[] bytes = new byte[32];
+        SECURE_RANDOM.nextBytes(bytes);
+        return "edt_" + Base64.getUrlEncoder().withoutPadding().encodeToString(bytes);
     }
 
     @Transactional(readOnly = true)

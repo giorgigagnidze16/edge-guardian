@@ -12,7 +12,6 @@ CREATE TABLE IF NOT EXISTS devices (
     labels          JSONB NOT NULL DEFAULT '{}',
     registered_at   TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
     last_heartbeat  TIMESTAMP WITH TIME ZONE,
-
     created_at      TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
     updated_at      TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
 );

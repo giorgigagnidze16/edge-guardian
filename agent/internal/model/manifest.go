@@ -86,21 +86,12 @@ type Command struct {
 	CreatedAt time.Time         `json:"createdAt"`
 }
 
-// RegisterRequest is sent by the agent to register with the controller.
-type RegisterRequest struct {
-	DeviceID     string            `json:"deviceId"`
-	Hostname     string            `json:"hostname"`
-	Architecture string            `json:"architecture"`
-	OS           string            `json:"os"`
-	AgentVersion string            `json:"agentVersion"`
-	Labels       map[string]string `json:"labels,omitempty"`
-}
-
-// RegisterResponse is returned by the controller after registration.
+// RegisterResponse is returned by the controller after enrollment.
 type RegisterResponse struct {
 	Accepted        bool            `json:"accepted"`
 	Message         string          `json:"message"`
 	InitialManifest *DeviceManifest `json:"initialManifest,omitempty"`
+	DeviceToken     string          `json:"deviceToken,omitempty"`
 }
 
 // HeartbeatRequest is sent periodically by the agent.

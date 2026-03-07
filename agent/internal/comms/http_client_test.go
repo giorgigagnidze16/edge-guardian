@@ -28,69 +28,80 @@ func newTestClient(t *testing.T, serverURL string) *ControllerClient {
 	}
 }
 
-func TestRegister_Success(t *testing.T) {
+func TestEnroll_Success(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
 			t.Errorf("expected POST, got %s", r.Method)
 		}
-		if r.URL.Path != "/api/v1/agent/register" {
+		if r.URL.Path != "/api/v1/agent/enroll" {
 			t.Errorf("unexpected path: %s", r.URL.Path)
 		}
 
-		var req model.RegisterRequest
+		var req model.EnrollRequest
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 			t.Errorf("decode request: %v", err)
 		}
 		if req.DeviceID != "sensor-01" {
 			t.Errorf("expected deviceId=sensor-01, got %q", req.DeviceID)
 		}
+		if req.EnrollmentToken != "egt_test-token" {
+			t.Errorf("expected enrollmentToken=egt_test-token, got %q", req.EnrollmentToken)
+		}
 
 		json.NewEncoder(w).Encode(model.RegisterResponse{
-			Accepted: true,
-			Message:  "registered",
+			Accepted:    true,
+			Message:     "enrolled",
+			DeviceToken: "edt_generated-device-token",
 		})
 	}))
 	defer server.Close()
 
 	client := newTestClient(t, server.URL)
-	resp, err := client.Register(context.Background(), &model.RegisterRequest{
-		DeviceID:     "sensor-01",
-		Hostname:     "host1",
-		Architecture: "amd64",
-		OS:           "linux",
-		AgentVersion: "0.1.0",
+	resp, err := client.Enroll(context.Background(), &model.EnrollRequest{
+		EnrollmentToken: "egt_test-token",
+		DeviceID:        "sensor-01",
+		Hostname:        "host1",
+		Architecture:    "amd64",
+		OS:              "linux",
+		AgentVersion:    "0.3.0",
 	})
 	if err != nil {
-		t.Fatalf("Register: %v", err)
+		t.Fatalf("Enroll: %v", err)
 	}
 	if !resp.Accepted {
 		t.Fatal("expected Accepted=true")
 	}
+	if resp.DeviceToken != "edt_generated-device-token" {
+		t.Fatalf("expected device token, got %q", resp.DeviceToken)
+	}
 }
 
-func TestRegister_Conflict(t *testing.T) {
+func TestEnroll_InvalidToken(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusConflict)
-		w.Write([]byte(`{"error":"device already registered"}`))
+		w.WriteHeader(http.StatusUnauthorized)
+		w.Write([]byte(`{"error":"Invalid enrollment token"}`))
 	}))
 	defer server.Close()
 
 	client := newTestClient(t, server.URL)
-	_, err := client.Register(context.Background(), &model.RegisterRequest{DeviceID: "dup"})
+	_, err := client.Enroll(context.Background(), &model.EnrollRequest{
+		EnrollmentToken: "egt_bad-token",
+		DeviceID:        "sensor-01",
+	})
 	if err == nil {
-		t.Fatal("expected error for 409")
+		t.Fatal("expected error for 401")
 	}
 
 	var he *httpError
 	if !errors.As(err, &he) {
 		t.Fatalf("expected httpError, got %T: %v", err, err)
 	}
-	if he.StatusCode != 409 {
-		t.Fatalf("expected status 409, got %d", he.StatusCode)
+	if he.StatusCode != 401 {
+		t.Fatalf("expected status 401, got %d", he.StatusCode)
 	}
 }
 
-func TestRegister_ServerError_Retries(t *testing.T) {
+func TestEnroll_ServerError_Retries(t *testing.T) {
 	attempts := 0
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		attempts++
@@ -99,14 +110,20 @@ func TestRegister_ServerError_Retries(t *testing.T) {
 			w.Write([]byte("internal error"))
 			return
 		}
-		json.NewEncoder(w).Encode(model.RegisterResponse{Accepted: true})
+		json.NewEncoder(w).Encode(model.RegisterResponse{
+			Accepted:    true,
+			DeviceToken: "edt_after-retry",
+		})
 	}))
 	defer server.Close()
 
 	client := newTestClient(t, server.URL)
-	resp, err := client.Register(context.Background(), &model.RegisterRequest{DeviceID: "retry-me"})
+	resp, err := client.Enroll(context.Background(), &model.EnrollRequest{
+		EnrollmentToken: "egt_test",
+		DeviceID:        "retry-me",
+	})
 	if err != nil {
-		t.Fatalf("Register after retries: %v", err)
+		t.Fatalf("Enroll after retries: %v", err)
 	}
 	if !resp.Accepted {
 		t.Fatal("expected Accepted=true after retries")
@@ -116,11 +133,59 @@ func TestRegister_ServerError_Retries(t *testing.T) {
 	}
 }
 
-func TestRegister_InvalidURL(t *testing.T) {
+func TestEnroll_ConnectionRefused(t *testing.T) {
 	client := newTestClient(t, "http://127.0.0.1:1") // nothing listening
-	_, err := client.Register(context.Background(), &model.RegisterRequest{DeviceID: "x"})
+	_, err := client.Enroll(context.Background(), &model.EnrollRequest{
+		EnrollmentToken: "egt_test",
+		DeviceID:        "x",
+	})
 	if err == nil {
 		t.Fatal("expected connection error")
+	}
+}
+
+func TestEnroll_SetsAuthToken(t *testing.T) {
+	var receivedToken string
+	callCount := 0
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		callCount++
+		receivedToken = r.Header.Get("X-Device-Token")
+		if r.URL.Path == "/api/v1/agent/enroll" {
+			json.NewEncoder(w).Encode(model.RegisterResponse{
+				Accepted:    true,
+				DeviceToken: "edt_new-token",
+			})
+		} else {
+			json.NewEncoder(w).Encode(model.HeartbeatResponse{})
+		}
+	}))
+	defer server.Close()
+
+	client := newTestClient(t, server.URL)
+
+	// Enroll — no device token header expected
+	_, err := client.Enroll(context.Background(), &model.EnrollRequest{
+		EnrollmentToken: "egt_test",
+		DeviceID:        "sensor-01",
+	})
+	if err != nil {
+		t.Fatalf("Enroll: %v", err)
+	}
+	if receivedToken != "" {
+		t.Fatalf("expected no device token header on enroll, got %q", receivedToken)
+	}
+
+	// Set auth token and make a heartbeat
+	client.SetAuthToken("edt_new-token")
+	_, err = client.Heartbeat(context.Background(), &model.HeartbeatRequest{
+		DeviceID:  "sensor-01",
+		Timestamp: time.Now(),
+	})
+	if err != nil {
+		t.Fatalf("Heartbeat: %v", err)
+	}
+	if receivedToken != "edt_new-token" {
+		t.Fatalf("expected X-Device-Token=edt_new-token, got %q", receivedToken)
 	}
 }
 
@@ -279,7 +344,10 @@ func TestHTTPClient_ContentTypeHeaders(t *testing.T) {
 	defer server.Close()
 
 	client := newTestClient(t, server.URL)
-	client.Register(context.Background(), &model.RegisterRequest{DeviceID: "h"})
+	client.Enroll(context.Background(), &model.EnrollRequest{
+		EnrollmentToken: "egt_test",
+		DeviceID:        "h",
+	})
 }
 
 func TestHTTPClient_ContextCancellation(t *testing.T) {
@@ -293,7 +361,10 @@ func TestHTTPClient_ContextCancellation(t *testing.T) {
 	defer cancel()
 
 	client := newTestClient(t, server.URL)
-	_, err := client.Register(ctx, &model.RegisterRequest{DeviceID: "timeout"})
+	_, err := client.Enroll(ctx, &model.EnrollRequest{
+		EnrollmentToken: "egt_test",
+		DeviceID:        "timeout",
+	})
 	if err == nil {
 		t.Fatal("expected error from cancelled context")
 	}

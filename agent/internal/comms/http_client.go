@@ -49,15 +49,6 @@ func NewControllerClient(address string, port int, logger *zap.Logger) *Controll
 	}
 }
 
-// Register sends a registration request to the controller.
-func (c *ControllerClient) Register(ctx context.Context, req *model.RegisterRequest) (*model.RegisterResponse, error) {
-	var resp model.RegisterResponse
-	if err := c.doWithRetry(ctx, http.MethodPost, "/api/v1/agent/register", req, &resp); err != nil {
-		return nil, fmt.Errorf("registration failed: %w", err)
-	}
-	return &resp, nil
-}
-
 // Heartbeat sends a heartbeat and receives manifest updates or commands.
 func (c *ControllerClient) Heartbeat(ctx context.Context, req *model.HeartbeatRequest) (*model.HeartbeatResponse, error) {
 	var resp model.HeartbeatResponse
@@ -208,7 +199,7 @@ func (c *ControllerClient) doJSON(ctx context.Context, method, path string, body
 	req.Header.Set("Accept", "application/json")
 
 	if c.authToken != "" {
-		req.Header.Set("Authorization", "Bearer "+c.authToken)
+		req.Header.Set("X-Device-Token", c.authToken)
 	}
 
 	resp, err := c.httpClient.Do(req)

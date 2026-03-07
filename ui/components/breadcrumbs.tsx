@@ -6,6 +6,7 @@ import { ChevronRight } from "lucide-react";
 import { Fragment } from "react";
 
 const labelMap: Record<string, string> = {
+  dashboard: "Dashboard",
   devices: "Devices",
   ota: "OTA Updates",
   audit: "Audit Log",
@@ -19,7 +20,7 @@ export function Breadcrumbs() {
   const pathname = usePathname();
   const segments = pathname.split("/").filter(Boolean);
 
-  if (segments.length === 0) {
+  if (segments.length === 0 || (segments.length === 1 && segments[0] === "dashboard")) {
     return (
       <nav className="flex items-center text-sm text-muted-foreground">
         <span className="font-medium text-foreground">Dashboard</span>
@@ -29,7 +30,7 @@ export function Breadcrumbs() {
 
   return (
     <nav className="flex items-center text-sm text-muted-foreground">
-      <Link href="/" className="hover:text-foreground transition-colors">
+      <Link href="/dashboard" className="hover:text-foreground transition-colors">
         Dashboard
       </Link>
       {segments.map((segment, i) => {

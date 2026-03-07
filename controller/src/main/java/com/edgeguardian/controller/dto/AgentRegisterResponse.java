@@ -9,5 +9,6 @@ import java.util.Map;
 public record AgentRegisterResponse(
         boolean accepted,
         String message,
-        Map<String, Object> initialManifest
+        Map<String, Object> initialManifest,
+        String deviceToken
 ) {}

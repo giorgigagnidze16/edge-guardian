@@ -24,41 +24,17 @@ export default function Icon() {
           fill="none"
           xmlns="http://www.w3.org/2000/svg"
         >
-          {/* Octagonal frame */}
+          {/* Filled shield */}
           <path
-            d="M18 4h12l10 10v12l-10 10H18L8 26V14L18 4Z"
-            stroke="#06b6d4"
-            strokeWidth="3"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            fill="none"
+            d="M24 4 L40 12 V28 L24 44 L8 28 V12 Z"
+            fill="#06b6d4"
           />
-          {/* Open edge gap */}
-          <path
-            d="M30 4l10 10"
-            stroke="#06060a"
-            strokeWidth="5"
-            strokeLinecap="round"
-          />
-          {/* Beacon arcs */}
-          <path
-            d="M18.5 29.5a8 8 0 0 1 0-11.3"
-            stroke="#06b6d4"
-            strokeWidth="2.5"
-            strokeLinecap="round"
-            fill="none"
-            opacity="0.9"
-          />
-          <path
-            d="M14.5 33.5a14 14 0 0 1 0-19.8"
-            stroke="#06b6d4"
-            strokeWidth="2"
-            strokeLinecap="round"
-            fill="none"
-            opacity="0.5"
-          />
-          {/* Central node */}
-          <circle cx="23" cy="24" r="3.5" fill="#06b6d4" />
+          {/* Hub cutout */}
+          <circle cx="24" cy="20" r="4" fill="#06060a" />
+          {/* Node cutouts */}
+          <circle cx="24" cy="10" r="2.5" fill="#06060a" />
+          <circle cx="15" cy="32" r="2.5" fill="#06060a" />
+          <circle cx="33" cy="32" r="2.5" fill="#06060a" />
         </svg>
       </div>
     ),

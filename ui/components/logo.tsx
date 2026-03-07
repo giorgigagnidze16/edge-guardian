@@ -6,12 +6,11 @@ interface LogoIconProps {
 }
 
 /**
- * EdgeGuardian "Sentinel Node" logomark.
+ * EdgeGuardian logomark.
  *
- * An octagonal frame with an open corner (the "edge") and
- * three concentric beacon arcs radiating outward — guarding
- * meets broadcasting. The negative space between arcs implies
- * a shield without drawing one.
+ * A geometric shield enclosing a hub-and-spoke network topology —
+ * the controller (hub) manages edge devices (nodes). Shield = guardian,
+ * network = fleet management.
  */
 export function LogoIcon({ className, size = 32 }: LogoIconProps) {
   return (
@@ -21,71 +20,32 @@ export function LogoIcon({ className, size = 32 }: LogoIconProps) {
       viewBox="0 0 48 48"
       fill="none"
       xmlns="http://www.w3.org/2000/svg"
-      className={cn("shrink-0", className)}
+      className={cn("shrink-0 text-primary", className)}
     >
-      {/* Octagonal frame — open at top-right corner */}
+      {/* Shield */}
       <path
-        d="M18 4h12l10 10v12l-10 10H18L8 26V14L18 4Z"
+        d="M24 4 L40 12 V28 L24 44 L8 28 V12 Z"
         stroke="currentColor"
         strokeWidth="2.5"
-        strokeLinecap="round"
         strokeLinejoin="round"
         fill="none"
-        strokeDasharray="0"
-        className="text-primary"
       />
 
-      {/* The "open edge" — gap in top-right corner with glow hint */}
+      {/* Spokes — hub to device nodes */}
       <path
-        d="M30 4l10 10"
-        stroke="var(--color-background, #06060a)"
-        strokeWidth="4"
-        strokeLinecap="round"
-      />
-
-      {/* Beacon arcs — radiating from bottom-left vertex */}
-      <path
-        d="M18.5 29.5a8 8 0 0 1 0-11.3"
-        stroke="currentColor"
-        strokeWidth="2"
-        strokeLinecap="round"
-        fill="none"
-        className="text-primary opacity-90"
-      />
-      <path
-        d="M14.5 33.5a14 14 0 0 1 0-19.8"
-        stroke="currentColor"
-        strokeWidth="2"
-        strokeLinecap="round"
-        fill="none"
-        className="text-primary opacity-60"
-      />
-      <path
-        d="M10.5 37.5a20 20 0 0 1 0-28.3"
+        d="M24 20 L15 32 M24 20 L33 32 M24 20 V10"
         stroke="currentColor"
         strokeWidth="1.5"
         strokeLinecap="round"
-        fill="none"
-        className="text-primary opacity-30"
       />
 
-      {/* Central node dot */}
-      <circle
-        cx="23"
-        cy="24"
-        r="3"
-        fill="currentColor"
-        className="text-primary"
-      />
+      {/* Hub (controller) */}
+      <circle cx="24" cy="20" r="3.5" fill="currentColor" />
 
-      {/* Small accent dot — the "edge device" */}
-      <circle
-        cx="35"
-        cy="24"
-        r="1.5"
-        fill="currentColor"
-        className="text-primary opacity-50"
-      />
+      {/* Device nodes */}
+      <circle cx="24" cy="10" r="2" fill="currentColor" />
+      <circle cx="15" cy="32" r="2" fill="currentColor" />
+      <circle cx="33" cy="32" r="2" fill="currentColor" />
     </svg>
   );
 }

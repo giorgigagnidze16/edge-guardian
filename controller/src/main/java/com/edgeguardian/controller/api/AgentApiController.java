@@ -4,7 +4,6 @@ import com.edgeguardian.controller.dto.AgentDesiredStateResponse;
 import com.edgeguardian.controller.dto.AgentHeartbeatRequest;
 import com.edgeguardian.controller.dto.AgentHeartbeatResponse;
 import com.edgeguardian.controller.dto.AgentOtaStatusRequest;
-import com.edgeguardian.controller.dto.AgentRegisterRequest;
 import com.edgeguardian.controller.dto.AgentRegisterResponse;
 import com.edgeguardian.controller.dto.AgentReportStateRequest;
 import com.edgeguardian.controller.dto.AgentReportStateResponse;
@@ -53,41 +52,22 @@ public class AgentApiController {
 
         if (request.deviceId() == null || request.deviceId().isBlank()) {
             return ResponseEntity.badRequest().body(
-                new AgentRegisterResponse(false, "deviceId is required", null));
+                new AgentRegisterResponse(false, "deviceId is required", null, null));
         }
         if (request.enrollmentToken() == null || request.enrollmentToken().isBlank()) {
             return ResponseEntity.badRequest().body(
-                new AgentRegisterResponse(false, "enrollmentToken is required", null));
+                new AgentRegisterResponse(false, "enrollmentToken is required", null, null));
         }
 
-        Device device = enrollmentService.enrollDevice(
+        var result = enrollmentService.enrollDevice(
             request.enrollmentToken(), request.deviceId(), request.hostname(),
             request.architecture(), request.os(), request.agentVersion(), request.labels());
 
-        Map<String, Object> manifestMap = registry.getManifest(device.getDeviceId())
+        Map<String, Object> manifestMap = registry.getManifest(result.device().getDeviceId())
             .map(this::toManifestMap).orElse(null);
 
-        return ResponseEntity.ok(new AgentRegisterResponse(true, "Device enrolled successfully", manifestMap));
-    }
-
-    @PostMapping("/register")
-    public ResponseEntity<AgentRegisterResponse> register(@RequestBody AgentRegisterRequest request) {
-        log.info("Agent register: deviceId={}, arch={}, os={}",
-            request.deviceId(), request.architecture(), request.os());
-
-        if (request.deviceId() == null || request.deviceId().isBlank()) {
-            return ResponseEntity.badRequest().body(
-                new AgentRegisterResponse(false, "deviceId is required", null));
-        }
-
-        Device device = registry.register(
-            request.deviceId(), request.hostname(), request.architecture(),
-            request.os(), request.agentVersion(), request.labels());
-
-        Map<String, Object> manifestMap = registry.getManifest(device.getDeviceId())
-            .map(this::toManifestMap).orElse(null);
-
-        return ResponseEntity.ok(new AgentRegisterResponse(true, "Device registered successfully", manifestMap));
+        return ResponseEntity.ok(new AgentRegisterResponse(
+            true, "Device enrolled successfully", manifestMap, result.deviceToken()));
     }
 
     @PostMapping("/heartbeat")
