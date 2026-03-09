@@ -286,7 +286,7 @@ export default function LoginPage() {
             }}
             className="flex items-center justify-center gap-3 cursor-pointer"
           >
-            <LogoIcon size={36} />
+            <LogoIcon size={44} outlined className="-my-2" />
             <span className="text-xl font-bold tracking-tight">
               Edge<span className="text-primary">Guardian</span>
             </span>

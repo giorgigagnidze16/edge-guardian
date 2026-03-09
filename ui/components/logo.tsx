@@ -3,6 +3,7 @@ import { cn } from "@/lib/utils";
 interface LogoIconProps {
   className?: string;
   size?: number;
+  outlined?: boolean;
 }
 
 /**
@@ -12,7 +13,7 @@ interface LogoIconProps {
  * the controller (hub) manages edge devices (nodes). Shield = guardian,
  * network = fleet management.
  */
-export function LogoIcon({ className, size = 32 }: LogoIconProps) {
+export function LogoIcon({ className, size = 32, outlined = false }: LogoIconProps) {
   return (
     <svg
       width={size}
@@ -26,7 +27,7 @@ export function LogoIcon({ className, size = 32 }: LogoIconProps) {
       <path
         d="M24 4 L40 12 V28 L24 44 L8 28 V12 Z"
         stroke="currentColor"
-        strokeWidth="2.5"
+        strokeWidth={outlined ? "2" : "2.5"}
         strokeLinejoin="round"
         fill="none"
       />
@@ -35,17 +36,32 @@ export function LogoIcon({ className, size = 32 }: LogoIconProps) {
       <path
         d="M24 20 L15 32 M24 20 L33 32 M24 20 V10"
         stroke="currentColor"
-        strokeWidth="1.5"
+        strokeWidth={outlined ? "1.8" : "1.5"}
         strokeLinecap="round"
       />
 
       {/* Hub (controller) */}
-      <circle cx="24" cy="20" r="3.5" fill="currentColor" />
+      <circle
+        cx="24" cy="20" r={outlined ? "4" : "3.5"}
+        fill={outlined ? "none" : "currentColor"}
+        stroke={outlined ? "currentColor" : "none"}
+        strokeWidth={outlined ? "2" : undefined}
+      />
 
       {/* Device nodes */}
-      <circle cx="24" cy="10" r="2" fill="currentColor" />
-      <circle cx="15" cy="32" r="2" fill="currentColor" />
-      <circle cx="33" cy="32" r="2" fill="currentColor" />
+      {outlined ? (
+        <>
+          <circle cx="24" cy="10" r="2.5" stroke="currentColor" strokeWidth="1.8" />
+          <circle cx="15" cy="32" r="2.5" stroke="currentColor" strokeWidth="1.8" />
+          <circle cx="33" cy="32" r="2.5" stroke="currentColor" strokeWidth="1.8" />
+        </>
+      ) : (
+        <>
+          <circle cx="24" cy="10" r="2" fill="currentColor" />
+          <circle cx="15" cy="32" r="2" fill="currentColor" />
+          <circle cx="33" cy="32" r="2" fill="currentColor" />
+        </>
+      )}
     </svg>
   );
 }
