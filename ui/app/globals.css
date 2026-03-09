@@ -58,34 +58,34 @@
 
 /* ─── Dark palette (primary mode) ─── */
 .dark {
-  --color-background: #06060a;
+  --color-background: #0b0b14;
   --color-foreground: #e4e9f2;
-  --color-card: #0a0a11;
+  --color-card: #12121e;
   --color-card-foreground: #e4e9f2;
-  --color-popover: #0e0e16;
+  --color-popover: #181824;
   --color-popover-foreground: #e4e9f2;
   --color-primary: #06b6d4;
   --color-primary-foreground: #020617;
-  --color-secondary: #12121c;
+  --color-secondary: #1e1e2c;
   --color-secondary-foreground: #c8d0df;
-  --color-muted: #12121c;
+  --color-muted: #1e1e2c;
   --color-muted-foreground: #6b7a8d;
-  --color-accent: #0b1820;
+  --color-accent: #0f1e28;
   --color-accent-foreground: #22d3ee;
   --color-destructive: #dc2626;
   --color-destructive-foreground: #fef2f2;
-  --color-border: #1a1a2a;
-  --color-input: #1a1a2a;
+  --color-border: #2a2a3e;
+  --color-input: #2a2a3e;
   --color-ring: #06b6d4;
 
   /* Sidebar — dark */
-  --color-sidebar-background: #07070c;
+  --color-sidebar-background: #0e0e18;
   --color-sidebar-foreground: #6b7a8d;
   --color-sidebar-primary: #06b6d4;
   --color-sidebar-primary-foreground: #020617;
-  --color-sidebar-accent: #0b1820;
+  --color-sidebar-accent: #0f1e28;
   --color-sidebar-accent-foreground: #22d3ee;
-  --color-sidebar-border: #1a1a2a;
+  --color-sidebar-border: #2a2a3e;
 
   /* Charts — brighter on dark */
   --color-chart-1: #22d3ee;
@@ -150,7 +150,7 @@
 
   /* ── Glass morphism ── */
   .glass {
-    background: rgba(10, 10, 17, 0.75);
+    background: rgba(18, 18, 30, 0.75);
     backdrop-filter: blur(16px) saturate(180%);
     -webkit-backdrop-filter: blur(16px) saturate(180%);
   }
@@ -159,7 +159,7 @@
   }
 
   .glass-strong {
-    background: rgba(10, 10, 17, 0.88);
+    background: rgba(18, 18, 30, 0.88);
     backdrop-filter: blur(24px) saturate(200%);
     -webkit-backdrop-filter: blur(24px) saturate(200%);
   }
