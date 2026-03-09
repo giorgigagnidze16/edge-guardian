@@ -1,0 +1,6 @@
+edgeguardian:
+  controller:
+    mqtt:
+      broker-url: tcp://localhost:1883
+      client-id: edgeguardian-controller
+      topic-root: edgeguardian

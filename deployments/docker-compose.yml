@@ -68,6 +68,24 @@ services:
       timeout: 5s
       retries: 5
 
+  minio:
+    image: minio/minio:latest
+    container_name: edgeguardian-minio
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: edgeguardian
+      MINIO_ROOT_PASSWORD: edgeguardian-dev
+    ports:
+      - "9000:9000"    # S3 API
+      - "9001:9001"    # MinIO Console
+    volumes:
+      - minio_data:/data
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
   loki:
     image: grafana/loki:3.3.0
     container_name: edgeguardian-loki
@@ -110,5 +128,6 @@ services:
 volumes:
   pg_data:
   emqx_data:
+  minio_data:
   loki_data:
   grafana_data:

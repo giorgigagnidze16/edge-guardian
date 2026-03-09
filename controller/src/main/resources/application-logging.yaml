@@ -1,0 +1,13 @@
+logging:
+  level:
+    root: INFO
+    com.edgeguardian: DEBUG
+    org.flywaydb: INFO
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n"
+
+edgeguardian:
+  controller:
+    loki:
+      push-url: http://localhost:3100/loki/api/v1/push
+      query-url: http://localhost:3100/loki/api/v1/query_range
