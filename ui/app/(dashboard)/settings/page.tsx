@@ -14,6 +14,7 @@ import {
   listApiKeys,
   createApiKey,
   deleteApiKey,
+  type Organization,
   type OrgMember,
   type EnrollmentToken,
   type ApiKeyEntry,
@@ -72,8 +73,8 @@ export default function SettingsPage() {
     enabled: !!token && !!orgId,
   });
 
-  const [orgName, setOrgName] = useState("");
-  const [orgDesc, setOrgDesc] = useState("");
+  const [orgName, setOrgName] = useState<string | null>(null);
+  const [orgDesc, setOrgDesc] = useState<string | null>(null);
   const [orgDirty, setOrgDirty] = useState(false);
 
   const initOrgForm = () => {
@@ -85,14 +86,28 @@ export default function SettingsPage() {
   };
 
   const updateOrgMutation = useMutation({
-    mutationFn: () => updateOrganization(token, orgId!, { name: orgName, description: orgDesc }),
+    mutationFn: () => updateOrganization(token, orgId!, { name: orgName ?? org?.name ?? "", description: orgDesc ?? org?.description ?? "" }),
+    onMutate: async () => {
+      await queryClient.cancelQueries({ queryKey: ["organization", orgId] });
+      const previous = queryClient.getQueryData<Organization>(["organization", orgId]);
+      queryClient.setQueryData<Organization>(["organization", orgId], (old) =>
+        old ? { ...old, name: orgName ?? old.name, description: orgDesc ?? old.description } : old,
+      );
+      return { previous };
+    },
     onSuccess: () => {
       toast.success("Organization updated");
-      queryClient.invalidateQueries({ queryKey: ["organization", orgId] });
-      queryClient.invalidateQueries({ queryKey: ["me"] });
+      setOrgName(null);
+      setOrgDesc(null);
       setOrgDirty(false);
+      queryClient.invalidateQueries({ queryKey: ["me"] });
     },
-    onError: (err: Error) => toast.error(err.message),
+    onError: (err: Error, _vars, context) => {
+      if (context?.previous) {
+        queryClient.setQueryData(["organization", orgId], context.previous);
+      }
+      toast.error(err.message);
+    },
   });
 
   // Members
@@ -217,7 +232,7 @@ export default function SettingsPage() {
                 <Label htmlFor="org-name">Name</Label>
                 <Input
                   id="org-name"
-                  value={orgName || org?.name || ""}
+                  value={orgName ?? org?.name ?? ""}
                   onChange={(e) => { setOrgName(e.target.value); setOrgDirty(true); }}
                 />
               </div>
@@ -225,7 +240,7 @@ export default function SettingsPage() {
                 <Label htmlFor="org-desc">Description</Label>
                 <Textarea
                   id="org-desc"
-                  value={orgDesc || org?.description || ""}
+                  value={orgDesc ?? org?.description ?? ""}
                   onChange={(e) => { setOrgDesc(e.target.value); setOrgDirty(true); }}
                   rows={3}
                 />
@@ -294,7 +309,8 @@ export default function SettingsPage() {
                       </TableRow>
                     ) : (
                       members.map((m) => {
-                        const initials = m.displayName.split(" ").map((n) => n[0]).join("").slice(0, 2).toUpperCase();
+                        const name = m.displayName ?? m.email?.split("@")[0] ?? "?";
+                        const initials = name.split(" ").map((n) => n[0]).join("").slice(0, 2).toUpperCase();
                         return (
                           <TableRow key={m.userId}>
                             <TableCell>
@@ -303,7 +319,7 @@ export default function SettingsPage() {
                                   <AvatarFallback className="text-xs">{initials}</AvatarFallback>
                                 </Avatar>
                                 <div>
-                                  <p className="text-sm font-medium">{m.displayName}</p>
+                                  <p className="text-sm font-medium">{m.displayName ?? m.email?.split("@")[0] ?? "Unknown"}</p>
                                   <p className="text-xs text-muted-foreground">{m.email}</p>
                                 </div>
                               </div>
@@ -576,7 +592,7 @@ export default function SettingsPage() {
         open={!!removeMemberTarget}
         onOpenChange={(v) => { if (!v) setRemoveMemberTarget(null); }}
         title="Remove Member"
-        description={`Remove ${removeMemberTarget?.displayName} from the organization?`}
+        description={`Remove ${removeMemberTarget?.displayName ?? removeMemberTarget?.email?.split("@")[0] ?? "this member"} from the organization?`}
         confirmLabel="Remove"
         variant="destructive"
         onConfirm={() => { if (removeMemberTarget) removeMemberMutation.mutate(removeMemberTarget.userId); }}

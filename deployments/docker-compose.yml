@@ -97,9 +97,9 @@ services:
       GF_AUTH_GENERIC_OAUTH_AUTH_URL: http://localhost:9090/realms/edgeguardian/protocol/openid-connect/auth
       GF_AUTH_GENERIC_OAUTH_TOKEN_URL: http://keycloak:9090/realms/edgeguardian/protocol/openid-connect/token
       GF_AUTH_GENERIC_OAUTH_API_URL: http://keycloak:9090/realms/edgeguardian/protocol/openid-connect/userinfo
-      GF_SERVER_ROOT_URL: http://localhost:3000
+      GF_SERVER_ROOT_URL: http://localhost:3002
     ports:
-      - "3000:3000"
+      - "3002:3000"
     volumes:
       - grafana_data:/var/lib/grafana
       - ./grafana/provisioning:/etc/grafana/provisioning:ro

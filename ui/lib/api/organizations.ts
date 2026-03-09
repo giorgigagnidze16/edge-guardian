@@ -47,9 +47,11 @@ export async function getOrganization(
 }
 
 export interface OrgMember {
+  id: number;
   userId: number;
-  email: string;
-  displayName: string;
+  email: string | null;
+  displayName: string | null;
+  avatarUrl: string | null;
   role: string;
   joinedAt: string;
 }
@@ -144,7 +146,7 @@ export async function updateOrganization(
   data: { name?: string; description?: string },
 ): Promise<Organization> {
   return apiFetch<Organization>(`/api/v1/organizations/${orgId}`, {
-    method: "PATCH",
+    method: "PUT",
     token,
     body: JSON.stringify(data),
   });

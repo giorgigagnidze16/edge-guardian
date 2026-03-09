@@ -19,7 +19,9 @@
       "clientId": "edgeguardian-ui",
       "name": "EdgeGuardian Dashboard",
       "enabled": true,
-      "publicClient": true,
+      "publicClient": false,
+      "clientAuthenticatorType": "client-secret",
+      "secret": "edgeguardian-ui-secret",
       "standardFlowEnabled": true,
       "directAccessGrantsEnabled": false,
       "redirectUris": [

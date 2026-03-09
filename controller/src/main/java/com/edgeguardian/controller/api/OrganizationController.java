@@ -1,25 +1,39 @@
 package com.edgeguardian.controller.api;
 
 import com.edgeguardian.controller.dto.*;
+import com.edgeguardian.controller.model.AuditLog;
 import com.edgeguardian.controller.model.OrgRole;
 import com.edgeguardian.controller.model.Organization;
 import com.edgeguardian.controller.model.OrganizationMember;
+import com.edgeguardian.controller.model.User;
+import com.edgeguardian.controller.repository.UserRepository;
 import com.edgeguardian.controller.security.TenantContext;
+import com.edgeguardian.controller.service.AuditService;
 import com.edgeguardian.controller.service.OrganizationService;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.util.List;
+import java.util.Map;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
 @RestController
 @RequestMapping("/api/v1/organizations")
 public class OrganizationController {
 
     private final OrganizationService organizationService;
+    private final UserRepository userRepository;
+    private final AuditService auditService;
 
-    public OrganizationController(OrganizationService organizationService) {
+    public OrganizationController(OrganizationService organizationService,
+                                  UserRepository userRepository,
+                                  AuditService auditService) {
         this.organizationService = organizationService;
+        this.userRepository = userRepository;
+        this.auditService = auditService;
     }
 
     @PostMapping
@@ -65,8 +79,12 @@ public class OrganizationController {
         Long userId = requireUserId();
         organizationService.requireRole(orgId, userId,
                 OrgRole.owner, OrgRole.admin, OrgRole.operator, OrgRole.viewer);
-        return organizationService.getMembers(orgId).stream()
-                .map(MemberDto::from)
+        List<OrganizationMember> members = organizationService.getMembers(orgId);
+        List<Long> userIds = members.stream().map(OrganizationMember::getUserId).toList();
+        Map<Long, User> usersById = userRepository.findAllById(userIds).stream()
+                .collect(Collectors.toMap(User::getId, Function.identity()));
+        return members.stream()
+                .map(m -> MemberDto.from(m, usersById.get(m.getUserId())))
                 .toList();
     }
 
@@ -78,7 +96,9 @@ public class OrganizationController {
         organizationService.requireRole(orgId, userId, OrgRole.owner, OrgRole.admin);
         OrganizationMember member = organizationService.addMember(
                 orgId, request.userId(), OrgRole.valueOf(request.role()));
-        return MemberDto.from(member);
+        User user = userRepository.findById(member.getUserId())
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "User not found"));
+        return MemberDto.from(member, user);
     }
 
     @DeleteMapping("/{orgId}/members/{memberId}")
@@ -87,6 +107,36 @@ public class OrganizationController {
         Long userId = requireUserId();
         organizationService.requireRole(orgId, userId, OrgRole.owner, OrgRole.admin);
         organizationService.removeMember(orgId, memberId);
+    }
+
+    // --- Audit Log ---
+
+    public record AuditLogDto(Long id, Long userId, String userEmail, String action,
+                               String resourceType, String resourceId,
+                               Map<String, Object> details, java.time.Instant createdAt) {
+        static AuditLogDto from(AuditLog entry, String email) {
+            return new AuditLogDto(entry.getId(), entry.getUserId(), email,
+                    entry.getAction(), entry.getResourceType(), entry.getResourceId(),
+                    entry.getDetails(), entry.getCreatedAt());
+        }
+    }
+
+    @GetMapping("/{orgId}/audit-log")
+    public List<AuditLogDto> listAuditLog(
+            @PathVariable Long orgId,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "50") int size) {
+        Long userId = requireUserId();
+        organizationService.requireRole(orgId, userId,
+                OrgRole.owner, OrgRole.admin, OrgRole.operator, OrgRole.viewer);
+        List<AuditLog> entries = auditService.findByOrganization(orgId, PageRequest.of(page, size)).getContent();
+        List<Long> userIds = entries.stream().map(AuditLog::getUserId).filter(id -> id != null).distinct().toList();
+        Map<Long, User> usersById = userRepository.findAllById(userIds).stream()
+                .collect(Collectors.toMap(User::getId, Function.identity()));
+        return entries.stream()
+                .map(e -> AuditLogDto.from(e, e.getUserId() != null && usersById.containsKey(e.getUserId())
+                        ? usersById.get(e.getUserId()).getEmail() : null))
+                .toList();
     }
 
     private Long requireUserId() {
