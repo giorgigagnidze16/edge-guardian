@@ -68,30 +68,57 @@ export function Sidebar() {
   return (
     <div
       className={cn(
-        "flex h-full flex-col border-r border-sidebar-border bg-sidebar-background/50 backdrop-blur-xl transition-all duration-300 ease-out",
+        "group/sidebar relative z-10 flex h-full flex-col border-r border-sidebar-border bg-sidebar-background/50 backdrop-blur-xl transition-all duration-300 ease-out overflow-visible",
         collapsed ? "w-16" : "w-64",
       )}
     >
+      {/* Expand handle — appears on hover of collapsed rail (Linear pattern) */}
+      {collapsed && (
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <button
+              onClick={toggleCollapsed}
+              className="cursor-pointer absolute -right-4 top-8 z-50 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full border border-sidebar-border bg-sidebar-background text-muted-foreground shadow-md opacity-0 transition-opacity duration-200 hover:bg-accent hover:text-foreground group-hover/sidebar:opacity-100"
+            >
+              <PanelLeftOpen className="h-4 w-4" />
+            </button>
+          </TooltipTrigger>
+          <TooltipContent side="right">Expand sidebar</TooltipContent>
+        </Tooltip>
+      )}
+
       {/* Logo */}
-      <div className="flex h-14 items-center border-b border-sidebar-border px-3">
-        <LogoIcon size={collapsed ? 28 : 32} />
-        {!collapsed && (
-          <span className="ml-2 text-lg font-bold tracking-tight text-foreground">
-            Edge<span className="text-primary">Guardian</span>
-          </span>
+      <div className={cn(
+        "flex h-16 items-center border-b border-sidebar-border",
+        collapsed ? "justify-center" : "px-4",
+      )}>
+        {collapsed ? (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Link href="/dashboard" className="hover:opacity-80 transition-opacity">
+                <LogoIcon size={28} />
+              </Link>
+            </TooltipTrigger>
+            <TooltipContent side="right">Dashboard</TooltipContent>
+          </Tooltip>
+        ) : (
+          <>
+            <Link href="/dashboard" className="flex items-center gap-3 hover:opacity-80 transition-opacity">
+              <LogoIcon size={34} />
+              <span className="text-lg font-bold tracking-tight text-foreground">
+                Edge<span className="text-primary">Guardian</span>
+              </span>
+            </Link>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="ml-auto h-7 w-7 text-muted-foreground hover:text-foreground"
+              onClick={toggleCollapsed}
+            >
+              <PanelLeftClose className="h-4 w-4" />
+            </Button>
+          </>
         )}
-        <Button
-          variant="ghost"
-          size="icon"
-          className={cn("ml-auto h-7 w-7 text-muted-foreground hover:text-foreground", collapsed && "ml-0")}
-          onClick={toggleCollapsed}
-        >
-          {collapsed ? (
-            <PanelLeftOpen className="h-4 w-4" />
-          ) : (
-            <PanelLeftClose className="h-4 w-4" />
-          )}
-        </Button>
       </div>
 
       {/* Org switcher */}
@@ -181,6 +208,20 @@ export function Sidebar() {
               </p>
             </div>
           </div>
+        )}
+
+        {collapsed && mounted && (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button
+                onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
+                className="flex w-full items-center justify-center rounded-lg py-2 text-muted-foreground hover:bg-accent hover:text-foreground transition-colors mb-2"
+              >
+                {theme === "dark" ? <Moon className="h-4 w-4" /> : <Sun className="h-4 w-4" />}
+              </button>
+            </TooltipTrigger>
+            <TooltipContent side="right">Toggle theme</TooltipContent>
+          </Tooltip>
         )}
 
         {collapsed && session?.user && (
