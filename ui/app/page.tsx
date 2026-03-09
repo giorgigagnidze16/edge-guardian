@@ -262,8 +262,8 @@ export default function LoginPage() {
           <div className="hidden md:flex items-center gap-8 text-sm font-medium text-muted-foreground">
             {[
               { label: "Features", id: "features" },
-              { label: "Security", id: "security" },
-              { label: "Updates", id: "updates" },
+              { label: "Discovery", id: "discovery" },
+              { label: "Demo", id: "terminal" },
             ].map((link) => (
               <a
                 key={link.id}
@@ -401,52 +401,6 @@ export default function LoginPage() {
           <MarqueeRow items={OS_ITEMS} direction="left" baseSpeed={45} />
           {/* Row 2 — Architectures (scroll right) */}
           <MarqueeRow items={ARCH_ITEMS} direction="right" baseSpeed={40} />
-        </div>
-      </section>
-
-      {/* ══════════════════════════════════════════════
-       *  DEVICE AUTO-DISCOVERY
-       * ══════════════════════════════════════════════ */}
-      <section id="discovery" className="relative z-10 mx-auto max-w-7xl px-6 pt-28 lg:pt-36 pb-8 sm:px-12 lg:px-16">
-        <div className="reveal reveal-up text-center mb-16">
-          <SectionLabel>Auto-Discovery</SectionLabel>
-          <h2 className="text-3xl sm:text-4xl lg:text-5xl font-bold tracking-tight">
-            Devices find <span className="text-gradient">their way home</span>
-          </h2>
-          <p className="mt-4 text-lg text-muted-foreground max-w-2xl mx-auto">
-            Zero-touch provisioning. Devices automatically discover, register, and sync
-            with your controller — no manual configuration required.
-          </p>
-        </div>
-
-        <div ref={discovery.ref} className="reveal reveal-scale">
-          <DeviceDiscoveryMap active={discovery.inView} />
-        </div>
-      </section>
-
-      {/* ══════════════════════════════════════════════
-       *  INTERACTIVE TERMINAL
-       * ══════════════════════════════════════════════ */}
-      <section id="terminal" className="relative z-10 mt-32 lg:mt-40">
-        {/* Dark background bleed */}
-        <div className="absolute inset-0 bg-slate-50 dark:bg-transparent" />
-        <div className="absolute inset-0 dark:bg-card/60" />
-
-        <div className="relative mx-auto max-w-7xl px-6 py-24 sm:px-12 lg:px-16 lg:py-32">
-          <div className="reveal reveal-up text-center mb-16">
-            <SectionLabel>Live Demo</SectionLabel>
-            <h2 className="text-3xl sm:text-4xl lg:text-5xl font-bold tracking-tight">
-              See it in action
-            </h2>
-            <p className="mt-4 text-lg text-muted-foreground max-w-2xl mx-auto">
-              Connect to any device via web terminal or SSH. Deploy firmware updates.
-              Monitor fleet health — all from a single interface.
-            </p>
-          </div>
-
-          <div ref={terminal.ref} className="reveal reveal-scale">
-            <TerminalVisual active={terminal.inView} />
-          </div>
         </div>
       </section>
 
@@ -595,9 +549,66 @@ export default function LoginPage() {
       </section>
 
       {/* ══════════════════════════════════════════════
+       *  DEVICE AUTO-DISCOVERY
+       * ══════════════════════════════════════════════ */}
+      <section id="discovery" className="relative z-10 mx-auto max-w-7xl px-6 pt-28 lg:pt-36 pb-8 sm:px-12 lg:px-16">
+        <div className="reveal reveal-up text-center mb-16">
+          <SectionLabel>Auto-Discovery</SectionLabel>
+          <h2 className="text-3xl sm:text-4xl lg:text-5xl font-bold tracking-tight">
+            Devices find <span className="text-gradient">their way home</span>
+          </h2>
+          <p className="mt-4 text-lg text-muted-foreground max-w-2xl mx-auto">
+            Zero-touch provisioning. Devices automatically discover, register, and sync
+            with your controller — no manual configuration required.
+          </p>
+        </div>
+
+        <div ref={discovery.ref} className="reveal reveal-scale">
+          <DeviceDiscoveryMap active={discovery.inView} />
+        </div>
+      </section>
+
+      {/* ══════════════════════════════════════════════
+       *  INTERACTIVE TERMINAL
+       * ══════════════════════════════════════════════ */}
+      <section id="terminal" className="relative z-10 mt-32 lg:mt-40">
+        {/* Dark background bleed */}
+        <div className="absolute inset-0 bg-slate-50 dark:bg-transparent" />
+        <div className="absolute inset-0 dark:bg-card/60" />
+
+        <div className="relative mx-auto max-w-7xl px-6 py-24 sm:px-12 lg:px-16 lg:py-32">
+          <div className="reveal reveal-up text-center mb-16">
+            <SectionLabel>Live Demo</SectionLabel>
+            <h2 className="text-3xl sm:text-4xl lg:text-5xl font-bold tracking-tight">
+              See it in action
+            </h2>
+            <p className="mt-4 text-lg text-muted-foreground max-w-2xl mx-auto">
+              Connect to any device via web terminal or SSH. Deploy firmware updates.
+              Monitor fleet health — all from a single interface.
+            </p>
+          </div>
+
+          <div ref={terminal.ref} className="reveal reveal-scale">
+            <TerminalVisual active={terminal.inView} />
+          </div>
+        </div>
+      </section>
+
+      {/* ══════════════════════════════════════════════
        *  DECLARATIVE CONFIG + OBSERVABILITY
        * ══════════════════════════════════════════════ */}
-      <section className="relative z-10 mx-auto max-w-7xl px-6 pb-32 lg:pb-40 sm:px-12 lg:px-16">
+      <section id="deep-dive" className="relative z-10 mx-auto max-w-7xl px-6 py-32 lg:py-40 sm:px-12 lg:px-16">
+        <div className="reveal reveal-up text-center mb-20">
+          <SectionLabel>Under the Hood</SectionLabel>
+          <h2 className="text-3xl sm:text-4xl lg:text-5xl font-bold tracking-tight">
+            Declarative control.
+            <span className="text-gradient"> Total visibility.</span>
+          </h2>
+          <p className="mt-4 text-lg text-muted-foreground max-w-2xl mx-auto">
+            Define desired state in YAML. Monitor everything with centralized logs and real-time metrics.
+          </p>
+        </div>
+
         <div className="grid lg:grid-cols-2 gap-8">
           {/* Declarative Config */}
           <div className="reveal reveal-left">
@@ -746,16 +757,34 @@ export default function LoginPage() {
        *  FOOTER
        * ══════════════════════════════════════════════ */}
       <footer className="relative z-10 border-t border-border py-10 px-6 sm:px-12">
-        <div className="reveal reveal-up mx-auto max-w-7xl flex flex-col items-center justify-between gap-4 sm:flex-row">
-          <div className="flex items-center gap-3">
-            <LogoIcon size={24} />
-            <span className="text-base font-semibold text-muted-foreground">
-              EdgeGuardian
-            </span>
+        <div className="reveal reveal-up mx-auto max-w-7xl">
+          <div className="flex flex-col items-center justify-between gap-6 sm:flex-row">
+            <div className="flex items-center gap-3">
+              <LogoIcon size={24} />
+              <span className="text-base font-semibold text-muted-foreground">
+                EdgeGuardian
+              </span>
+            </div>
+            <div className="flex items-center gap-6 text-sm text-muted-foreground">
+              <a href="/terms" className="hover:text-foreground transition-colors">
+                Terms &amp; Legal
+              </a>
+              <a href="#features" className="hover:text-foreground transition-colors">
+                Features
+              </a>
+              <a href="#terminal" className="hover:text-foreground transition-colors">
+                Demo
+              </a>
+            </div>
           </div>
-          <p className="text-sm text-muted-foreground">
-            &copy; {new Date().getFullYear()} EdgeGuardian &mdash; IoT Fleet Management
-          </p>
+          <div className="mt-6 pt-6 border-t border-border/50 flex flex-col items-center gap-3 sm:flex-row sm:justify-between">
+            <p className="text-xs text-muted-foreground">
+              &copy; {new Date().getFullYear()} EdgeGuardian. All rights reserved.
+            </p>
+            <p className="text-xs text-muted-foreground/60 text-center sm:text-right leading-relaxed">
+              Currently in beta. Use at your own risk. No warranties expressed or implied. <a href="/terms" className="underline underline-offset-2 hover:text-muted-foreground transition-colors">Full terms</a>.
+            </p>
+          </div>
         </div>
       </footer>
 
