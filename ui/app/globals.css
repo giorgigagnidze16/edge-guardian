@@ -378,17 +378,33 @@
   100% { transform: scale(1); }
 }
 
-/* ═══════════════════════════════════════════════════════════
- *  Component overrides
- * ═══════════════════════════════════════════════════════════ */
+@keyframes barGrow {
+  from { transform: scaleY(0); }
+  to   { transform: scaleY(1); }
+}
+@keyframes progFill {
+  from { width: 0%; }
+  to   { width: 78%; }
+}
+@keyframes lPulse {
+  0%, 100% { opacity: 0.5; }
+  50%      { opacity: 1; }
+}
+@keyframes lRing {
+  0%   { opacity: 0.15; transform: scale(1); }
+  70%  { opacity: 0; transform: scale(1.5); }
+  100% { opacity: 0; transform: scale(1.5); }
+}
+@keyframes discoveryRing {
+  0%   { transform: scale(1); opacity: 0.2; }
+  100% { transform: scale(2); opacity: 0; }
+}
 
-/* Toast glass treatment */
 .toaster [data-sonner-toast] {
   backdrop-filter: blur(16px) saturate(180%);
   -webkit-backdrop-filter: blur(16px) saturate(180%);
 }
 
-/* Recharts — theme-aware tooltip */
 .recharts-default-tooltip {
   background: var(--color-card) !important;
   border-color: var(--color-border) !important;
@@ -403,7 +419,29 @@
   color: var(--color-muted-foreground) !important;
 }
 
-/* Monaco editor — match dark theme */
+.landing-bar {
+  transform: scaleY(0);
+  transform-origin: bottom;
+}
+.revealed .landing-bar {
+  animation: barGrow 0.7s ease-out both;
+}
+.landing-progress {
+  width: 0%;
+}
+.revealed .landing-progress {
+  animation: progFill 2s ease-out 0.3s both;
+}
+.landing-pulse {
+  animation: lPulse 2s ease-in-out infinite;
+}
+.landing-ring {
+  animation: lRing 3s ease-out infinite;
+}
+.discovery-ring {
+  animation: discoveryRing 3s ease-out infinite;
+}
+
 .monaco-editor,
 .monaco-editor .margin,
 .monaco-editor-background {
