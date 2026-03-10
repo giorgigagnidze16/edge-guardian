@@ -76,20 +76,21 @@ export function TerminalSection() {
           </span>
         </div>
 
-        <div className="p-6 sm:p-8 font-mono text-sm sm:text-base leading-relaxed min-h-[380px]">
-          {TERMINAL_LINES.slice(0, visibleCount).map((line, i) => {
+        <div className="p-6 sm:p-8 font-mono text-sm sm:text-base leading-relaxed">
+          {TERMINAL_LINES.map((line, i) => {
+            const visible = i < visibleCount;
             if (line.type === "gap") return <div key={i} className="h-3" />;
             return (
               <div
                 key={i}
-                className={`${line.cls || "text-slate-600 dark:text-zinc-400"} ${
-                  i === visibleCount - 1
+                className={`${visible ? (line.cls || "text-slate-600 dark:text-zinc-400") : "invisible"} ${
+                  visible && i === visibleCount - 1
                     ? "animate-[fadeIn_0.15s_ease-out]"
                     : ""
                 }`}
               >
                 {line.type === "cmd" && (
-                  <span className="text-emerald-600 dark:text-emerald-400 select-none">
+                  <span className={visible ? "text-emerald-600 dark:text-emerald-400 select-none" : "select-none"}>
                     ${" "}
                   </span>
                 )}
