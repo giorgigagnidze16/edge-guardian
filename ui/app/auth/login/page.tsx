@@ -56,12 +56,8 @@ export default function LoginPage() {
             className="mt-8 w-full cursor-pointer"
           >
             <LogIn className="mr-2 h-4 w-4" />
-            Sign in with SSO
+            Sign in
           </Button>
-
-          <p className="mt-6 text-xs text-muted-foreground/60">
-            Authenticated via Keycloak
-          </p>
         </div>
       </div>
     </div>
