@@ -3,6 +3,7 @@ package com.edgeguardian.controller.config;
 import com.edgeguardian.controller.security.ApiKeyAuthenticationFilter;
 import com.edgeguardian.controller.security.DeviceTokenAuthFilter;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
@@ -27,6 +28,9 @@ public class SecurityConfig {
     private final ApiKeyAuthenticationFilter apiKeyAuthenticationFilter;
     private final DeviceTokenAuthFilter deviceTokenAuthFilter;
 
+    @Value("${edgeguardian.controller.cors.allowed-origins}")
+    private List<String> allowedOrigins;
+
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
         http
@@ -36,8 +40,6 @@ public class SecurityConfig {
                 .addFilterBefore(deviceTokenAuthFilter, UsernamePasswordAuthenticationFilter.class)
                 .addFilterBefore(apiKeyAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)
                 .authorizeHttpRequests(auth -> auth
-                        .requestMatchers("/api/v1/agent/enroll").permitAll()
-                        .requestMatchers("/api/v1/agent/**").authenticated()
                         .requestMatchers("/actuator/health", "/actuator/info").permitAll()
                         .requestMatchers("/api/v1/**").authenticated()
                         .anyRequest().permitAll()
@@ -50,7 +52,7 @@ public class SecurityConfig {
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         var config = new CorsConfiguration();
-        config.setAllowedOrigins(List.of("http://localhost:3000", "http://localhost:3001"));
+        config.setAllowedOrigins(allowedOrigins);
         config.setAllowedMethods(List.of("*"));
         config.setAllowedHeaders(List.of("*"));
         config.setAllowCredentials(true);

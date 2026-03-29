@@ -1,6 +1,7 @@
 package com.edgeguardian.controller.repository;
 
 import com.edgeguardian.controller.model.DeploymentDeviceStatus;
+import com.edgeguardian.controller.model.OtaDeviceState;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 
@@ -14,5 +15,5 @@ public interface DeploymentDeviceStatusRepository extends JpaRepository<Deployme
 
     Optional<DeploymentDeviceStatus> findByDeploymentIdAndDeviceId(Long deploymentId, String deviceId);
 
-    List<DeploymentDeviceStatus> findByDeviceIdAndState(String deviceId, String state);
+    List<DeploymentDeviceStatus> findByDeviceIdAndState(String deviceId, OtaDeviceState state);
 }

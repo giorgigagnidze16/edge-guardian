@@ -2,13 +2,12 @@ package com.edgeguardian.controller.service;
 
 import com.edgeguardian.controller.config.MinioProperties;
 import io.minio.GetObjectArgs;
+import io.minio.GetPresignedObjectUrlArgs;
+import io.minio.Http;
 import io.minio.MinioClient;
 import io.minio.PutObjectArgs;
 import io.minio.RemoveObjectArgs;
 import io.minio.StatObjectArgs;
-import lombok.extern.slf4j.Slf4j;
-import org.springframework.stereotype.Service;
-
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
@@ -17,7 +16,10 @@ import java.io.InputStream;
 import java.security.DigestOutputStream;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
+import java.time.Duration;
 import java.util.HexFormat;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.stereotype.Service;
 
 /**
  * Stores and retrieves OTA artifacts in a MinIO (S3-compatible) object store.
@@ -35,7 +37,8 @@ public class ArtifactStorageService {
         this.bucket = props.bucket();
     }
 
-    public record StorageResult(String storagePath, long size, String sha256) {}
+    public record StorageResult(String storagePath, long size, String sha256) {
+    }
 
     /**
      * Stores an artifact binary, computing its SHA-256 checksum along the way.
@@ -51,18 +54,18 @@ public class ArtifactStorageService {
             MessageDigest digest = sha256Digest();
             long size;
             try (DigestOutputStream out = new DigestOutputStream(
-                    new FileOutputStream(tempFile), digest)) {
+                new FileOutputStream(tempFile), digest)) {
                 size = data.transferTo(out);
             }
             String sha256 = HexFormat.of().formatHex(digest.digest());
 
             try (FileInputStream fileStream = new FileInputStream(tempFile)) {
                 minioClient.putObject(PutObjectArgs.builder()
-                        .bucket(bucket)
-                        .object(objectKey)
-                        .stream(fileStream, size, -1)
-                        .contentType("application/octet-stream")
-                        .build());
+                    .bucket(bucket)
+                    .object(objectKey)
+                    .stream(fileStream, size, (long) -1)
+                    .contentType("application/octet-stream")
+                    .build());
             }
 
             log.info("Artifact stored in MinIO: key={}, size={}, sha256={}", objectKey, size, sha256);
@@ -83,9 +86,9 @@ public class ArtifactStorageService {
     public InputStream load(String storagePath) throws IOException {
         try {
             return minioClient.getObject(GetObjectArgs.builder()
-                    .bucket(bucket)
-                    .object(storagePath)
-                    .build());
+                .bucket(bucket)
+                .object(storagePath)
+                .build());
         } catch (Exception e) {
             throw new IOException("Failed to load artifact from MinIO: " + storagePath, e);
         }
@@ -97,11 +100,29 @@ public class ArtifactStorageService {
     public long fileSize(String storagePath) throws IOException {
         try {
             return minioClient.statObject(StatObjectArgs.builder()
-                    .bucket(bucket)
-                    .object(storagePath)
-                    .build()).size();
+                .bucket(bucket)
+                .object(storagePath)
+                .build()).size();
         } catch (Exception e) {
             throw new IOException("Failed to stat artifact in MinIO: " + storagePath, e);
+        }
+    }
+
+    /**
+     * Generates a presigned URL for downloading an artifact directly from MinIO.
+     * The URL is valid for the given duration.
+     */
+    public String generatePresignedUrl(String storagePath, Duration expiry) {
+        try {
+            return minioClient.getPresignedObjectUrl(
+                GetPresignedObjectUrlArgs.builder()
+                    .method(Http.Method.GET)
+                    .bucket(bucket)
+                    .object(storagePath)
+                    .expiry((int) expiry.toSeconds())
+                    .build());
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to generate presigned URL for: " + storagePath, e);
         }
     }
 
@@ -111,9 +132,9 @@ public class ArtifactStorageService {
     public void delete(String storagePath) throws IOException {
         try {
             minioClient.removeObject(RemoveObjectArgs.builder()
-                    .bucket(bucket)
-                    .object(storagePath)
-                    .build());
+                .bucket(bucket)
+                .object(storagePath)
+                .build());
         } catch (Exception e) {
             throw new IOException("Failed to delete artifact from MinIO: " + storagePath, e);
         }

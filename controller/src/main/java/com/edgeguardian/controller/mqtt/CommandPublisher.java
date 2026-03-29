@@ -2,38 +2,26 @@ package com.edgeguardian.controller.mqtt;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.eclipse.paho.mqttv5.client.MqttClient;
 import org.eclipse.paho.mqttv5.common.MqttException;
 import org.eclipse.paho.mqttv5.common.MqttMessage;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 import java.time.Instant;
-import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.UUID;
 
 /**
- * Publishes commands to devices via MQTT.
- *
+ * Publishes commands and messages to devices via MQTT.
  * Topic: {topicRoot}/device/{deviceId}/command
- *
- * Payload matches the agent's model.CommandMessage JSON:
- * {
- *   "command": {
- *     "id": "...",
- *     "type": "...",
- *     "params": { ... },
- *     "createdAt": "..."
- *   }
- * }
  */
+@Slf4j
 @Component
+@RequiredArgsConstructor
 public class CommandPublisher {
-
-    private static final Logger log = LoggerFactory.getLogger(CommandPublisher.class);
 
     private final MqttClient mqttClient;
     private final ObjectMapper objectMapper;
@@ -41,49 +29,50 @@ public class CommandPublisher {
     @Value("${edgeguardian.controller.mqtt.topic-root:edgeguardian}")
     private String topicRoot;
 
-    public CommandPublisher(MqttClient mqttClient, ObjectMapper objectMapper) {
-        this.mqttClient = mqttClient;
-        this.objectMapper = objectMapper;
-    }
-
     /**
      * Publish a command to a specific device.
-     *
-     * @param deviceId  the target device
-     * @param type      command type (e.g. "ota_update", "restart", "exec")
-     * @param params    command parameters
-     * @throws MqttException if publishing fails
      */
     public void publishCommand(String deviceId, String type, Map<String, String> params)
             throws MqttException {
+        var command = new CommandPayload(
+                UUID.randomUUID().toString(),
+                type,
+                params != null ? params : Map.of(),
+                Instant.now()
+        );
+
+        publishToDevice(deviceId, "command", new CommandEnvelope(command), false);
+        log.info("Command published to device {}: type={}, id={}", deviceId, type, command.id());
+    }
+
+    /**
+     * Publish a JSON payload to a device-specific topic.
+     */
+    private void publishToDevice(String deviceId, String topicSuffix, Object payload, boolean retained)
+            throws MqttException {
         if (!mqttClient.isConnected()) {
-            log.warn("MQTT client not connected, cannot publish command to device {}", deviceId);
+            log.warn("MQTT client not connected, cannot publish to device {} topic {}", deviceId, topicSuffix);
             return;
         }
 
-        String topic = topicRoot + "/device/" + deviceId + "/command";
-
-        Map<String, Object> command = new LinkedHashMap<>();
-        command.put("id", UUID.randomUUID().toString());
-        command.put("type", type);
-        command.put("params", params != null ? params : Map.of());
-        command.put("createdAt", Instant.now().toString());
-
-        Map<String, Object> envelope = Map.of("command", command);
-
+        String topic = topicRoot + "/device/" + deviceId + "/" + topicSuffix;
         try {
-            byte[] payload = objectMapper.writeValueAsBytes(envelope);
-
-            MqttMessage message = new MqttMessage(payload);
+            byte[] bytes = objectMapper.writeValueAsBytes(payload);
+            var message = new MqttMessage(bytes);
             message.setQos(1);
-            message.setRetained(false);
-
+            message.setRetained(retained);
             mqttClient.publish(topic, message);
-            log.info("Command published to device {}: type={}, id={}",
-                    deviceId, type, command.get("id"));
-
         } catch (JsonProcessingException e) {
-            log.error("Failed to serialize command for device {}: {}", deviceId, e.getMessage());
+            log.error("Failed to serialize payload for device {} topic {}: {}", deviceId, topicSuffix, e.getMessage());
         }
     }
+
+    record CommandEnvelope(CommandPayload command) {}
+
+    record CommandPayload(
+            String id,
+            String type,
+            Map<String, String> params,
+            Instant createdAt
+    ) {}
 }

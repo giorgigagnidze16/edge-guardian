@@ -39,8 +39,8 @@ public class DeviceRegistry {
      * @return the registered (or re-registered) device
      */
     @Transactional
-    public Device register(String deviceId, String hostname, String architecture,
-                           String os, String agentVersion) {
+    public Device register(Long organizationId, String deviceId, String hostname,
+                           String architecture, String os, String agentVersion) {
         Optional<Device> existing = deviceRepository.findByDeviceId(deviceId);
         if (existing.isPresent()) {
             Device device = existing.get();
@@ -55,18 +55,17 @@ public class DeviceRegistry {
         }
 
         Device device = new Device(deviceId, hostname, architecture, os, agentVersion);
+        device.setOrganizationId(organizationId);
         device = deviceRepository.save(device);
         log.info("New device registered: {} ({}@{})", deviceId, architecture, os);
         return device;
     }
 
-    /**
-     * Register a device with labels. Used by the agent registration endpoint.
-     */
     @Transactional
-    public Device register(String deviceId, String hostname, String architecture,
-                           String os, String agentVersion, Map<String, String> labels) {
-        Device device = register(deviceId, hostname, architecture, os, agentVersion);
+    public Device register(Long organizationId, String deviceId, String hostname,
+                           String architecture, String os, String agentVersion,
+                           Map<String, String> labels) {
+        Device device = register(organizationId, deviceId, hostname, architecture, os, agentVersion);
         if (labels != null && !labels.isEmpty()) {
             device.getLabels().putAll(labels);
             device = deviceRepository.save(device);
@@ -185,8 +184,10 @@ public class DeviceRegistry {
         }
 
         DeviceManifestEntity entity = new DeviceManifestEntity(deviceId, metadata, spec);
-        entity = manifestRepository.save(entity);
-        log.info("Manifest created for device {}, version {}", deviceId, entity.getVersion());
-        return entity;
+        deviceRepository.findByDeviceId(deviceId)
+                .ifPresent(d -> entity.setOrganizationId(d.getOrganizationId()));
+        DeviceManifestEntity saved = manifestRepository.save(entity);
+        log.info("Manifest created for device {}, version {}", deviceId, saved.getVersion());
+        return saved;
     }
 }

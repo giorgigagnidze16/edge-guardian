@@ -61,6 +61,16 @@ func (r *Reconciler) GetDesiredState() *model.DeviceManifest {
 	return r.desiredState
 }
 
+// ManifestVersion returns the version of the current desired state manifest, or 0 if none.
+func (r *Reconciler) ManifestVersion() int64 {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	if r.desiredState == nil {
+		return 0
+	}
+	return r.desiredState.Version
+}
+
 // Status returns the current reconciliation status.
 func (r *Reconciler) Status() string {
 	r.mu.RLock()

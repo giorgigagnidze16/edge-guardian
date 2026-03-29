@@ -15,6 +15,7 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ResponseStatusException;
+import lombok.RequiredArgsConstructor;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -24,19 +25,12 @@ import java.util.stream.Collectors;
 
 @RestController
 @RequestMapping("/api/v1/me")
+@RequiredArgsConstructor
 public class MeController {
 
     private final UserService userService;
     private final OrganizationService organizationService;
     private final OrganizationMemberRepository memberRepository;
-
-    public MeController(UserService userService,
-                        OrganizationService organizationService,
-                        OrganizationMemberRepository memberRepository) {
-        this.userService = userService;
-        this.organizationService = organizationService;
-        this.memberRepository = memberRepository;
-    }
 
     @GetMapping
     public MeResponse me(@AuthenticationPrincipal Jwt jwt) {

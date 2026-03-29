@@ -6,6 +6,7 @@ import com.edgeguardian.controller.security.TenantContext;
 import com.edgeguardian.controller.service.ApiKeyService;
 import com.edgeguardian.controller.service.OrganizationService;
 import org.springframework.http.HttpStatus;
+import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.server.ResponseStatusException;
 
@@ -13,16 +14,11 @@ import java.util.List;
 
 @RestController
 @RequestMapping("/api/v1/organizations/{orgId}/api-keys")
+@RequiredArgsConstructor
 public class ApiKeyController {
 
     private final ApiKeyService apiKeyService;
     private final OrganizationService organizationService;
-
-    public ApiKeyController(ApiKeyService apiKeyService,
-                            OrganizationService organizationService) {
-        this.apiKeyService = apiKeyService;
-        this.organizationService = organizationService;
-    }
 
     @GetMapping
     public List<ApiKeyDto> list(@PathVariable Long orgId) {

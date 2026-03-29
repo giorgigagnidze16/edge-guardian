@@ -6,12 +6,6 @@ import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
-import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
-import org.springframework.security.core.authority.SimpleGrantedAuthority;
-import org.springframework.security.core.context.SecurityContextHolder;
-import org.springframework.stereotype.Component;
-import org.springframework.web.filter.OncePerRequestFilter;
-
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
@@ -19,28 +13,31 @@ import java.security.NoSuchAlgorithmException;
 import java.util.HexFormat;
 import java.util.List;
 import java.util.Optional;
+import lombok.RequiredArgsConstructor;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.stereotype.Component;
+import org.springframework.web.filter.OncePerRequestFilter;
 
 /**
  * Authenticates requests via the X-API-Key header.
  * Looks up the key by SHA-256 hash in the database.
  */
 @Component
+@RequiredArgsConstructor
 public class ApiKeyAuthenticationFilter extends OncePerRequestFilter {
 
     private static final String API_KEY_HEADER = "X-API-Key";
 
     private final ApiKeyRepository apiKeyRepository;
 
-    public ApiKeyAuthenticationFilter(ApiKeyRepository apiKeyRepository) {
-        this.apiKeyRepository = apiKeyRepository;
-    }
-
     @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response,
                                     FilterChain filterChain) throws ServletException, IOException {
         String apiKeyValue = request.getHeader(API_KEY_HEADER);
         if (apiKeyValue != null && !apiKeyValue.isBlank()
-                && SecurityContextHolder.getContext().getAuthentication() == null) {
+            && SecurityContextHolder.getContext().getAuthentication() == null) {
             String hash = sha256(apiKeyValue);
             Optional<ApiKey> apiKey = apiKeyRepository.findByKeyHash(hash);
             if (apiKey.isPresent() && apiKey.get().isValid()) {
@@ -48,9 +45,9 @@ public class ApiKeyAuthenticationFilter extends OncePerRequestFilter {
                 TenantContext.setOrganizationId(key.getOrganizationId());
 
                 var auth = new UsernamePasswordAuthenticationToken(
-                        "apikey:" + key.getKeyPrefix(),
-                        null,
-                        List.of(new SimpleGrantedAuthority("ROLE_API_KEY"))
+                    "apikey:" + key.getKeyPrefix(),
+                    null,
+                    List.of(new SimpleGrantedAuthority("ROLE_API_KEY"))
                 );
                 SecurityContextHolder.getContext().setAuthentication(auth);
 

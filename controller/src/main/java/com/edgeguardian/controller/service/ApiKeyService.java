@@ -4,6 +4,7 @@ import com.edgeguardian.controller.model.ApiKey;
 import com.edgeguardian.controller.repository.ApiKeyRepository;
 import com.edgeguardian.controller.security.ApiKeyAuthenticationFilter;
 import org.springframework.http.HttpStatus;
+import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
@@ -14,15 +15,12 @@ import java.util.Base64;
 import java.util.List;
 
 @Service
+@RequiredArgsConstructor
 public class ApiKeyService {
 
     private static final SecureRandom SECURE_RANDOM = new SecureRandom();
 
     private final ApiKeyRepository apiKeyRepository;
-
-    public ApiKeyService(ApiKeyRepository apiKeyRepository) {
-        this.apiKeyRepository = apiKeyRepository;
-    }
 
     /**
      * Create a new API key. Returns the raw key value (only shown once).

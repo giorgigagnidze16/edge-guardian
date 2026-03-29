@@ -2,6 +2,7 @@ package com.edgeguardian.controller.service;
 
 import com.edgeguardian.controller.dto.TelemetryDataPoint;
 import com.edgeguardian.controller.repository.DeviceTelemetryRepository;
+import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -9,13 +10,10 @@ import java.time.Instant;
 import java.util.List;
 
 @Service
+@RequiredArgsConstructor
 public class TelemetryService {
 
     private final DeviceTelemetryRepository telemetryRepository;
-
-    public TelemetryService(DeviceTelemetryRepository telemetryRepository) {
-        this.telemetryRepository = telemetryRepository;
-    }
 
     @Transactional(readOnly = true)
     public List<TelemetryDataPoint> getRawTelemetry(String deviceId, Instant start, Instant end) {

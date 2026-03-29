@@ -47,7 +47,7 @@ public class DeviceManifestEntity {
     @Builder.Default
     private long version = 1;
 
-    @Column(name = "organization_id")
+    @Column(name = "organization_id", nullable = false)
     private Long organizationId;
 
     @Column(name = "created_at", nullable = false, updatable = false)

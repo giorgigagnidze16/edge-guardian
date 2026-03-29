@@ -7,6 +7,7 @@ import com.edgeguardian.controller.security.TenantContext;
 import com.edgeguardian.controller.service.EnrollmentService;
 import com.edgeguardian.controller.service.OrganizationService;
 import org.springframework.http.HttpStatus;
+import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.server.ResponseStatusException;
 
@@ -14,16 +15,11 @@ import java.util.List;
 
 @RestController
 @RequestMapping("/api/v1/organizations/{orgId}/enrollment-tokens")
+@RequiredArgsConstructor
 public class EnrollmentTokenController {
 
     private final EnrollmentService enrollmentService;
     private final OrganizationService organizationService;
-
-    public EnrollmentTokenController(EnrollmentService enrollmentService,
-                                     OrganizationService organizationService) {
-        this.enrollmentService = enrollmentService;
-        this.organizationService = organizationService;
-    }
 
     @GetMapping
     public List<EnrollmentTokenDto> list(@PathVariable Long orgId) {

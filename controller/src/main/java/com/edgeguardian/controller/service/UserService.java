@@ -7,8 +7,8 @@ import com.edgeguardian.controller.model.User;
 import com.edgeguardian.controller.repository.OrganizationMemberRepository;
 import com.edgeguardian.controller.repository.OrganizationRepository;
 import com.edgeguardian.controller.repository.UserRepository;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -18,22 +18,14 @@ import java.util.Optional;
 /**
  * Syncs user from Keycloak JWT on first login, auto-creates personal org.
  */
+@Slf4j
 @Service
+@RequiredArgsConstructor
 public class UserService {
-
-    private static final Logger log = LoggerFactory.getLogger(UserService.class);
 
     private final UserRepository userRepository;
     private final OrganizationRepository organizationRepository;
     private final OrganizationMemberRepository memberRepository;
-
-    public UserService(UserRepository userRepository,
-                       OrganizationRepository organizationRepository,
-                       OrganizationMemberRepository memberRepository) {
-        this.userRepository = userRepository;
-        this.organizationRepository = organizationRepository;
-        this.memberRepository = memberRepository;
-    }
 
     /**
      * Sync user from Keycloak JWT. Creates user + personal org on first login.

@@ -7,29 +7,53 @@ import com.edgeguardian.controller.model.Device;
 import com.edgeguardian.controller.model.DeviceManifestEntity;
 import com.edgeguardian.controller.model.DeviceStatus;
 import com.edgeguardian.controller.model.DeviceTelemetry;
+import com.edgeguardian.controller.model.Organization;
+import com.edgeguardian.controller.repository.DeviceManifestRepository;
+import com.edgeguardian.controller.repository.DeviceRepository;
 import com.edgeguardian.controller.repository.DeviceTelemetryRepository;
+import com.edgeguardian.controller.repository.OrganizationRepository;
 import java.util.Map;
 import java.util.Optional;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.autoconfigure.jdbc.AutoConfigureTestDatabase;
-import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
 import org.springframework.context.annotation.Import;
 
-@DataJpaTest
-@AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
 @Import(DeviceRegistry.class)
 class DeviceRegistryTest extends AbstractIntegrationTest {
 
     @Autowired
     private DeviceRegistry registry;
-
     @Autowired
     private DeviceTelemetryRepository telemetryRepository;
+    @Autowired
+    private DeviceRepository deviceRepository;
+    @Autowired
+    private DeviceManifestRepository manifestRepository;
+    @Autowired
+    private OrganizationRepository organizationRepository;
+
+    private Long orgId;
+
+    @BeforeEach
+    void setUp() {
+        Organization org = organizationRepository.save(Organization.builder()
+            .name("Test Org").slug("test-org").build());
+        orgId = org.getId();
+    }
+
+    @AfterEach
+    void tearDown() {
+        telemetryRepository.deleteAll();
+        manifestRepository.deleteAll();
+        deviceRepository.deleteAll();
+        organizationRepository.deleteAll();
+    }
 
     @Test
     void registerNewDevice() {
-        Device device = registry.register("rpi-001", "raspberrypi", "arm64", "linux", "0.2.0");
+        Device device = registry.register(orgId, "rpi-001", "raspberrypi", "arm64", "linux", "0.2.0");
 
         assertThat(device.getDeviceId()).isEqualTo("rpi-001");
         assertThat(device.getHostname()).isEqualTo("raspberrypi");
@@ -41,8 +65,8 @@ class DeviceRegistryTest extends AbstractIntegrationTest {
 
     @Test
     void registerExistingDeviceUpdatesFields() {
-        registry.register("rpi-001", "old-host", "arm64", "linux", "0.1.0");
-        Device updated = registry.register("rpi-001", "new-host", "arm64", "linux", "0.2.0");
+        registry.register(orgId, "rpi-001", "old-host", "arm64", "linux", "0.1.0");
+        Device updated = registry.register(orgId, "rpi-001", "new-host", "arm64", "linux", "0.2.0");
 
         assertThat(updated.getHostname()).isEqualTo("new-host");
         assertThat(updated.getAgentVersion()).isEqualTo("0.2.0");
@@ -52,7 +76,7 @@ class DeviceRegistryTest extends AbstractIntegrationTest {
     @Test
     void registerWithLabels() {
         Map<String, String> labels = Map.of("env", "production", "site", "factory-1");
-        Device device = registry.register("rpi-001", "host", "arm64", "linux", "0.2.0", labels);
+        Device device = registry.register(orgId, "rpi-001", "host", "arm64", "linux", "0.2.0", labels);
 
         assertThat(device.getLabels()).containsEntry("env", "production");
         assertThat(device.getLabels()).containsEntry("site", "factory-1");
@@ -60,7 +84,7 @@ class DeviceRegistryTest extends AbstractIntegrationTest {
 
     @Test
     void heartbeatUpdatesTimestampAndInsertsTelemetry() {
-        registry.register("rpi-001", "host", "arm64", "linux", "0.2.0");
+        registry.register(orgId, "rpi-001", "host", "arm64", "linux", "0.2.0");
 
         DeviceStatus status = new DeviceStatus();
         status.setCpuUsagePercent(42.5);
@@ -89,7 +113,7 @@ class DeviceRegistryTest extends AbstractIntegrationTest {
 
     @Test
     void getLatestStatusReturnsTelemetry() {
-        registry.register("rpi-001", "host", "arm64", "linux", "0.2.0");
+        registry.register(orgId, "rpi-001", "host", "arm64", "linux", "0.2.0");
 
         DeviceStatus status = DeviceStatus.builder()
             .cpuUsagePercent(55.0)
@@ -106,7 +130,7 @@ class DeviceRegistryTest extends AbstractIntegrationTest {
 
     @Test
     void findByIdReturnsDevice() {
-        registry.register("rpi-001", "host", "arm64", "linux", "0.2.0");
+        registry.register(orgId, "rpi-001", "host", "arm64", "linux", "0.2.0");
 
         assertThat(registry.findById("rpi-001")).isPresent();
         assertThat(registry.findById("nonexistent")).isEmpty();
@@ -114,7 +138,7 @@ class DeviceRegistryTest extends AbstractIntegrationTest {
 
     @Test
     void removeDeviceDeletesDeviceAndManifest() {
-        registry.register("rpi-001", "host", "arm64", "linux", "0.2.0");
+        registry.register(orgId, "rpi-001", "host", "arm64", "linux", "0.2.0");
         registry.saveManifest("rpi-001", Map.of("name", "rpi-001"), Map.of());
 
         assertThat(registry.remove("rpi-001")).isTrue();
@@ -130,7 +154,7 @@ class DeviceRegistryTest extends AbstractIntegrationTest {
 
     @Test
     void saveAndGetManifest() {
-        registry.register("rpi-001", "host", "arm64", "linux", "0.2.0");
+        registry.register(orgId, "rpi-001", "host", "arm64", "linux", "0.2.0");
 
         Map<String, Object> metadata = Map.of("name", "rpi-001");
         Map<String, Object> spec = Map.of("files", java.util.List.of(
@@ -147,7 +171,7 @@ class DeviceRegistryTest extends AbstractIntegrationTest {
 
     @Test
     void saveManifestIncrementsVersion() {
-        registry.register("rpi-001", "host", "arm64", "linux", "0.2.0");
+        registry.register(orgId, "rpi-001", "host", "arm64", "linux", "0.2.0");
 
         registry.saveManifest("rpi-001", Map.of(), Map.of("v", 1));
         DeviceManifestEntity updated = registry.saveManifest("rpi-001", Map.of(), Map.of("v", 2));
@@ -157,9 +181,9 @@ class DeviceRegistryTest extends AbstractIntegrationTest {
 
     @Test
     void findAllReturnsAllDevices() {
-        registry.register("rpi-001", "host1", "arm64", "linux", "0.2.0");
-        registry.register("rpi-002", "host2", "arm", "linux", "0.2.0");
-        registry.register("rpi-003", "host3", "amd64", "linux", "0.2.0");
+        registry.register(orgId, "rpi-001", "host1", "arm64", "linux", "0.2.0");
+        registry.register(orgId, "rpi-002", "host2", "arm", "linux", "0.2.0");
+        registry.register(orgId, "rpi-003", "host3", "amd64", "linux", "0.2.0");
 
         assertThat(registry.findAll()).hasSize(3);
         assertThat(registry.count()).isEqualTo(3);

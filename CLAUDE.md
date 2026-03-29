@@ -36,9 +36,6 @@ docker run --privileged eg-agent-test
 # All tests (unit + integration via Testcontainers — requires Docker running)
 ./gradlew test
 
-# Single test class
-./gradlew test --tests "com.edgeguardian.controller.api.AgentApiControllerTest"
-
 # Run the application
 ./gradlew bootRun
 ```

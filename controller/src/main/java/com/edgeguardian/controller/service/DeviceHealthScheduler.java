@@ -2,8 +2,8 @@ package com.edgeguardian.controller.service;
 
 import com.edgeguardian.controller.model.Device;
 import com.edgeguardian.controller.repository.DeviceRepository;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
@@ -13,24 +13,26 @@ import java.time.temporal.ChronoUnit;
 import java.util.List;
 
 /**
- * Marks devices as OFFLINE after 5 minutes without heartbeat.
+ * Marks devices as OFFLINE after a configurable period without heartbeat.
  */
+@Slf4j
 @Component
 public class DeviceHealthScheduler {
 
-    private static final Logger log = LoggerFactory.getLogger(DeviceHealthScheduler.class);
-    private static final long OFFLINE_THRESHOLD_MINUTES = 5;
-
     private final DeviceRepository deviceRepository;
+    private final long offlineThresholdMinutes;
 
-    public DeviceHealthScheduler(DeviceRepository deviceRepository) {
+    public DeviceHealthScheduler(
+            DeviceRepository deviceRepository,
+            @Value("${edgeguardian.controller.device.offline-threshold-minutes:5}") long offlineThresholdMinutes) {
         this.deviceRepository = deviceRepository;
+        this.offlineThresholdMinutes = offlineThresholdMinutes;
     }
 
-    @Scheduled(fixedRate = 60_000) // Run every minute
+    @Scheduled(fixedRate = 60_000)
     @Transactional
     public void markOfflineDevices() {
-        Instant threshold = Instant.now().minus(OFFLINE_THRESHOLD_MINUTES, ChronoUnit.MINUTES);
+        Instant threshold = Instant.now().minus(offlineThresholdMinutes, ChronoUnit.MINUTES);
         List<Device> onlineDevices = deviceRepository.findByState(Device.DeviceState.ONLINE);
 
         int count = 0;
@@ -43,7 +45,7 @@ public class DeviceHealthScheduler {
         }
 
         if (count > 0) {
-            log.info("Marked {} device(s) as OFFLINE (no heartbeat for {} min)", count, OFFLINE_THRESHOLD_MINUTES);
+            log.info("Marked {} device(s) as OFFLINE (no heartbeat for {} min)", count, offlineThresholdMinutes);
         }
     }
 }

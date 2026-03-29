@@ -25,7 +25,7 @@ public class DeploymentDeviceStatus {
 
     @Column(nullable = false)
     @Builder.Default
-    private String state = "pending";
+    private OtaDeviceState state = OtaDeviceState.PENDING;
 
     @Column(nullable = false)
     @Builder.Default

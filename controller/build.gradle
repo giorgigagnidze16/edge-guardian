@@ -1,7 +1,7 @@
 plugins {
     id 'java'
-    id 'org.springframework.boot' version '3.4.3'
-    id 'io.spring.dependency-management' version '1.1.7'
+    id "org.springframework.boot" version "${springBoot_version}"
+    id "io.spring.dependency-management" version "${springBoot_dep_mgmt_version}"
 }
 
 group = 'com.edgeguardian'
@@ -12,8 +12,6 @@ java {
         languageVersion = JavaLanguageVersion.of(21)
     }
 }
-
-ext['testcontainers.version'] = '2.0.3'
 
 repositories {
     mavenCentral()
@@ -29,12 +27,13 @@ dependencies {
     implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
     runtimeOnly 'org.postgresql:postgresql'
 
+    implementation 'org.springframework.boot:spring-boot-flyway'
     implementation 'org.flywaydb:flyway-core'
     implementation 'org.flywaydb:flyway-database-postgresql'
 
-    implementation 'org.eclipse.paho:org.eclipse.paho.mqttv5.client:1.2.5'
+    implementation "org.eclipse.paho:org.eclipse.paho.mqttv5.client:${mqtt_client_version}"
 
-    implementation 'io.minio:minio:8.5.17'
+    implementation "io.minio:minio:${minio_version}"
 
     implementation 'com.fasterxml.jackson.core:jackson-databind'
     implementation 'com.fasterxml.jackson.datatype:jackson-datatype-jsr310'
@@ -47,20 +46,16 @@ dependencies {
     annotationProcessor 'org.projectlombok:lombok'
 
     testImplementation 'org.springframework.boot:spring-boot-starter-test'
-    testImplementation 'org.springframework.boot:spring-boot-starter-security'
     testImplementation 'org.springframework.security:spring-security-test'
+    testImplementation 'org.springframework.boot:spring-boot-starter-data-jpa-test'
+    testImplementation 'org.springframework.boot:spring-boot-starter-security'
+    testImplementation 'org.springframework.boot:spring-boot-starter-webmvc-test'
+
     testImplementation 'org.springframework.boot:spring-boot-testcontainers'
-    testImplementation 'org.testcontainers:testcontainers-postgresql:2.0.3'
-    testImplementation 'org.testcontainers:testcontainers-junit-jupiter:2.0.3'
+    testImplementation "org.testcontainers:testcontainers-postgresql:${testContainers_version}"
+    testImplementation "org.testcontainers:testcontainers-junit-jupiter:${testContainers_version}"
 }
 
-tasks.named('test') {
+test {
     useJUnitPlatform()
-
-    def cleanPath = System.getenv('PATH')
-            .split(File.pathSeparator)
-            .collect { it.trim() }
-            .findAll { !it.isEmpty() }
-            .join(File.pathSeparator)
-    environment 'PATH', cleanPath
 }

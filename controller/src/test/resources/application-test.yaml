@@ -2,20 +2,8 @@ spring:
   jpa:
     hibernate:
       ddl-auto: validate
-    show-sql: false
-
   flyway:
     enabled: true
-
-  security:
-    oauth2:
-      resourceserver:
-        jwt:
-          issuer-uri: http://localhost:9090/realms/edgeguardian
-
-edgeguardian:
-  controller:
-    mqtt:
-      broker-url: tcp://localhost:1883
-      client-id: test-controller
-      topic-root: edgeguardian
+    locations: classpath:db/migration
+    baseline-on-migrate: true
+    baseline-version: 0

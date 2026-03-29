@@ -7,6 +7,7 @@ import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.oauth2.jwt.Jwt;
+import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 import org.springframework.web.servlet.HandlerInterceptor;
 
@@ -16,13 +17,10 @@ import java.util.Optional;
  * Extracts tenant info from the JWT and populates TenantContext.
  */
 @Component
+@RequiredArgsConstructor
 public class TenantInterceptor implements HandlerInterceptor {
 
     private final UserRepository userRepository;
-
-    public TenantInterceptor(UserRepository userRepository) {
-        this.userRepository = userRepository;
-    }
 
     @Override
     public boolean preHandle(HttpServletRequest request, HttpServletResponse response, Object handler) {

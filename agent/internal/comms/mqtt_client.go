@@ -16,16 +16,21 @@ import (
 // CommandHandler is called when a command is received via MQTT.
 type CommandHandler func(cmd model.Command)
 
-// MQTTClient manages the MQTT connection for telemetry publishing
-// and command subscription. It uses BoltDB for offline buffering.
+// DesiredStateHandler is called when a new desired state manifest is pushed.
+type DesiredStateHandler func(manifest *model.DeviceManifest)
+
+// MQTTClient manages the MQTT connection for all agent-controller communication.
+// It uses BoltDB for offline buffering of outgoing messages.
 type MQTTClient struct {
-	client     mqtt.Client
-	deviceID   string
-	topicRoot  string
-	store      *storage.Store
-	logger     *zap.Logger
-	cmdHandler CommandHandler
-	mu         sync.RWMutex
+	client              mqtt.Client
+	deviceID            string
+	topicRoot           string
+	store               *storage.Store
+	logger              *zap.Logger
+	cmdHandler          CommandHandler
+	desiredStateHandler DesiredStateHandler
+	enrollResponseCh    chan *model.RegisterResponse
+	mu                  sync.RWMutex
 }
 
 // MQTTConfig holds MQTT connection parameters.
@@ -41,10 +46,11 @@ type MQTTConfig struct {
 // NewMQTTClient creates an MQTT client. Call Connect() to establish the connection.
 func NewMQTTClient(cfg MQTTConfig, logger *zap.Logger) *MQTTClient {
 	mc := &MQTTClient{
-		deviceID:  cfg.DeviceID,
-		topicRoot: cfg.TopicRoot,
-		store:     cfg.Store,
-		logger:    logger,
+		deviceID:         cfg.DeviceID,
+		topicRoot:        cfg.TopicRoot,
+		store:            cfg.Store,
+		logger:           logger,
+		enrollResponseCh: make(chan *model.RegisterResponse, 1),
 	}
 
 	opts := mqtt.NewClientOptions().
@@ -73,6 +79,13 @@ func (mc *MQTTClient) SetCommandHandler(handler CommandHandler) {
 	mc.cmdHandler = handler
 }
 
+// SetDesiredStateHandler sets the callback for desired state pushes.
+func (mc *MQTTClient) SetDesiredStateHandler(handler DesiredStateHandler) {
+	mc.mu.Lock()
+	defer mc.mu.Unlock()
+	mc.desiredStateHandler = handler
+}
+
 // Connect establishes the MQTT connection. Non-blocking: returns error only
 // if the initial connection attempt fails within the timeout.
 func (mc *MQTTClient) Connect(timeout time.Duration) error {
@@ -87,6 +100,104 @@ func (mc *MQTTClient) Connect(timeout time.Duration) error {
 	return nil
 }
 
+// --- Enrollment ---
+
+// PublishEnrollRequest sends an enrollment request and waits for the controller response.
+// This is a synchronous request-response over MQTT using paired topics.
+func (mc *MQTTClient) PublishEnrollRequest(req *model.EnrollRequest) (*model.RegisterResponse, error) {
+	// Drain any stale responses.
+	select {
+	case <-mc.enrollResponseCh:
+	default:
+	}
+
+	// Subscribe to response topic.
+	responseTopic := mc.topic("enroll/response")
+	token := mc.client.Subscribe(responseTopic, 1, mc.handleEnrollResponse)
+	if !token.WaitTimeout(5*time.Second) || token.Error() != nil {
+		return nil, fmt.Errorf("subscribe enroll/response: %w", token.Error())
+	}
+
+	payload, err := json.Marshal(req)
+	if err != nil {
+		return nil, fmt.Errorf("marshal enroll request: %w", err)
+	}
+
+	requestTopic := mc.topic("enroll/request")
+	pubToken := mc.client.Publish(requestTopic, 1, false, payload)
+	if !pubToken.WaitTimeout(5*time.Second) || pubToken.Error() != nil {
+		return nil, fmt.Errorf("publish enroll request: %w", pubToken.Error())
+	}
+
+	mc.logger.Info("enrollment request published, waiting for response",
+		zap.String("device_id", mc.deviceID))
+
+	select {
+	case resp := <-mc.enrollResponseCh:
+		// Unsubscribe from response topic after enrollment.
+		mc.client.Unsubscribe(responseTopic)
+		return resp, nil
+	case <-time.After(15 * time.Second):
+		mc.client.Unsubscribe(responseTopic)
+		return nil, fmt.Errorf("enrollment response timeout after 15s")
+	}
+}
+
+func (mc *MQTTClient) handleEnrollResponse(_ mqtt.Client, msg mqtt.Message) {
+	var resp model.RegisterResponse
+	if err := json.Unmarshal(msg.Payload(), &resp); err != nil {
+		mc.logger.Error("unmarshal enroll response", zap.Error(err))
+		return
+	}
+
+	select {
+	case mc.enrollResponseCh <- &resp:
+	default:
+		mc.logger.Warn("enroll response channel full, dropping response")
+	}
+}
+
+// --- Heartbeat ---
+
+// PublishHeartbeat sends a heartbeat message. Falls back to offline queue if disconnected.
+func (mc *MQTTClient) PublishHeartbeat(msg *model.HeartbeatMessage) error {
+	return mc.publishWithQueue(mc.topic("heartbeat"), msg)
+}
+
+// RunHeartbeatLoop publishes heartbeats at the given interval until ctx is cancelled.
+func (mc *MQTTClient) RunHeartbeatLoop(ctx context.Context, interval time.Duration, msgFn func() *model.HeartbeatMessage) {
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			msg := msgFn()
+			if err := mc.PublishHeartbeat(msg); err != nil {
+				mc.logger.Warn("heartbeat publish failed", zap.Error(err))
+			}
+		}
+	}
+}
+
+// --- OTA Status ---
+
+// PublishOTAStatus reports OTA progress to the controller.
+func (mc *MQTTClient) PublishOTAStatus(report *model.OTAStatusReport) error {
+	return mc.publishWithQueue(mc.topic("ota/status"), report)
+}
+
+// --- Command Results ---
+
+// PublishCommandResult sends the outcome of a command execution.
+func (mc *MQTTClient) PublishCommandResult(result *model.CommandResult) error {
+	return mc.publishWithQueue(mc.topic("command/result"), result)
+}
+
+// --- Telemetry ---
+
 // PublishTelemetry sends a telemetry message. If the broker is unreachable,
 // the message is queued in BoltDB for later delivery.
 func (mc *MQTTClient) PublishTelemetry(status *model.DeviceStatus) error {
@@ -95,69 +206,7 @@ func (mc *MQTTClient) PublishTelemetry(status *model.DeviceStatus) error {
 		Timestamp: time.Now(),
 		Status:    status,
 	}
-
-	payload, err := json.Marshal(msg)
-	if err != nil {
-		return fmt.Errorf("marshal telemetry: %w", err)
-	}
-
-	topic := mc.telemetryTopic()
-
-	if !mc.client.IsConnected() {
-		return mc.queueMessage(topic, payload)
-	}
-
-	token := mc.client.Publish(topic, 1, false, payload)
-	if !token.WaitTimeout(5 * time.Second) {
-		return mc.queueMessage(topic, payload)
-	}
-	if token.Error() != nil {
-		return mc.queueMessage(topic, payload)
-	}
-
-	mc.logger.Debug("telemetry published", zap.String("topic", topic))
-	return nil
-}
-
-// DrainOfflineQueue attempts to publish all queued messages. Called after reconnection.
-func (mc *MQTTClient) DrainOfflineQueue() {
-	if mc.store == nil {
-		return
-	}
-
-	for {
-		msgs, err := mc.store.DequeueMessages(10)
-		if err != nil {
-			mc.logger.Error("drain offline queue: dequeue", zap.Error(err))
-			return
-		}
-		if len(msgs) == 0 {
-			return
-		}
-
-		for _, msg := range msgs {
-			if !mc.client.IsConnected() {
-				// Re-queue if we lost connection during drain.
-				if err := mc.store.EnqueueMessage(msg); err != nil {
-					mc.logger.Error("re-queue message", zap.Error(err))
-				}
-				return
-			}
-
-			token := mc.client.Publish(msg.Topic, 1, false, msg.Payload)
-			if !token.WaitTimeout(5 * time.Second) || token.Error() != nil {
-				// Re-queue on failure.
-				if err := mc.store.EnqueueMessage(msg); err != nil {
-					mc.logger.Error("re-queue message", zap.Error(err))
-				}
-				return
-			}
-			mc.logger.Debug("drained queued message",
-				zap.String("topic", msg.Topic),
-				zap.Time("queued_at", msg.QueuedAt),
-			)
-		}
-	}
+	return mc.publishWithQueue(mc.topic("telemetry"), msg)
 }
 
 // RunTelemetryLoop publishes telemetry at the given interval until ctx is cancelled.
@@ -178,20 +227,81 @@ func (mc *MQTTClient) RunTelemetryLoop(ctx context.Context, interval time.Durati
 	}
 }
 
+// --- Offline Queue ---
+
+// DrainOfflineQueue attempts to publish all queued messages. Called after reconnection.
+func (mc *MQTTClient) DrainOfflineQueue() {
+	if mc.store == nil {
+		return
+	}
+
+	for {
+		msgs, err := mc.store.DequeueMessages(10)
+		if err != nil {
+			mc.logger.Error("drain offline queue: dequeue", zap.Error(err))
+			return
+		}
+		if len(msgs) == 0 {
+			return
+		}
+
+		for _, msg := range msgs {
+			if !mc.client.IsConnected() {
+				if err := mc.store.EnqueueMessage(msg); err != nil {
+					mc.logger.Error("re-queue message", zap.Error(err))
+				}
+				return
+			}
+
+			token := mc.client.Publish(msg.Topic, 1, false, msg.Payload)
+			if !token.WaitTimeout(5*time.Second) || token.Error() != nil {
+				if err := mc.store.EnqueueMessage(msg); err != nil {
+					mc.logger.Error("re-queue message", zap.Error(err))
+				}
+				return
+			}
+			mc.logger.Debug("drained queued message",
+				zap.String("topic", msg.Topic),
+				zap.Time("queued_at", msg.QueuedAt),
+			)
+		}
+	}
+}
+
 // Close disconnects from the MQTT broker.
 func (mc *MQTTClient) Close() {
 	mc.client.Disconnect(1000)
 	mc.logger.Info("MQTT disconnected")
 }
 
-// telemetryTopic returns the topic for this device's telemetry.
-func (mc *MQTTClient) telemetryTopic() string {
-	return fmt.Sprintf("%s/device/%s/telemetry", mc.topicRoot, mc.deviceID)
+// --- Internal helpers ---
+
+// topic returns a device-specific MQTT topic.
+func (mc *MQTTClient) topic(suffix string) string {
+	return fmt.Sprintf("%s/device/%s/%s", mc.topicRoot, mc.deviceID, suffix)
 }
 
-// commandTopic returns the topic for this device's commands.
-func (mc *MQTTClient) commandTopic() string {
-	return fmt.Sprintf("%s/device/%s/command", mc.topicRoot, mc.deviceID)
+// publishWithQueue marshals and publishes payload, falling back to BoltDB offline queue.
+func (mc *MQTTClient) publishWithQueue(topic string, payload interface{}) error {
+	data, err := json.Marshal(payload)
+	if err != nil {
+		return fmt.Errorf("marshal payload: %w", err)
+	}
+
+	if !mc.client.IsConnected() {
+		return mc.queueMessage(topic, data)
+	}
+
+	token := mc.client.Publish(topic, 1, false, data)
+	if !token.WaitTimeout(5 * time.Second) {
+		return mc.queueMessage(topic, data)
+	}
+	if token.Error() != nil {
+		return mc.queueMessage(topic, data)
+	}
+
+	mc.logger.Debug("published", zap.String("topic", topic))
+	return nil
 }
 
 // queueMessage stores a message in BoltDB for later delivery.
@@ -207,30 +317,40 @@ func (mc *MQTTClient) queueMessage(topic string, payload []byte) error {
 	})
 }
 
+// --- Connection callbacks ---
+
 // onConnect is called when the MQTT connection is established or re-established.
 func (mc *MQTTClient) onConnect(client mqtt.Client) {
-	mc.logger.Info("MQTT connection established, subscribing to commands")
+	mc.logger.Info("MQTT connection established, subscribing to topics")
 
 	// Subscribe to command topic.
-	topic := mc.commandTopic()
-	token := client.Subscribe(topic, 1, mc.handleCommand)
+	mc.subscribeToTopic(client, mc.topic("command"), mc.handleCommand)
+
+	// Subscribe to desired state pushes (retained messages).
+	mc.subscribeToTopic(client, mc.topic("state/desired"), mc.handleDesiredState)
+
+	// Drain any messages that were queued while offline.
+	go mc.DrainOfflineQueue()
+}
+
+func (mc *MQTTClient) subscribeToTopic(client mqtt.Client, topic string, handler mqtt.MessageHandler) {
+	token := client.Subscribe(topic, 1, handler)
 	if token.WaitTimeout(10*time.Second) && token.Error() == nil {
-		mc.logger.Info("subscribed to commands", zap.String("topic", topic))
+		mc.logger.Info("subscribed", zap.String("topic", topic))
 	} else {
-		mc.logger.Error("failed to subscribe to commands",
+		mc.logger.Error("failed to subscribe",
 			zap.String("topic", topic),
 			zap.Error(token.Error()),
 		)
 	}
-
-	// Drain any messages that were queued while offline.
-	go mc.DrainOfflineQueue()
 }
 
 // onConnectionLost is called when the MQTT connection drops.
 func (mc *MQTTClient) onConnectionLost(_ mqtt.Client, err error) {
 	mc.logger.Warn("MQTT connection lost", zap.Error(err))
 }
+
+// --- Message handlers ---
 
 // handleCommand processes incoming MQTT command messages.
 func (mc *MQTTClient) handleCommand(_ mqtt.Client, msg mqtt.Message) {
@@ -251,5 +371,27 @@ func (mc *MQTTClient) handleCommand(_ mqtt.Client, msg mqtt.Message) {
 
 	if handler != nil {
 		handler(cmdMsg.Command)
+	}
+}
+
+// handleDesiredState processes incoming desired state manifest pushes.
+func (mc *MQTTClient) handleDesiredState(_ mqtt.Client, msg mqtt.Message) {
+	mc.logger.Info("desired state received",
+		zap.String("topic", msg.Topic()),
+		zap.Int("payload_len", len(msg.Payload())),
+	)
+
+	var manifest model.DeviceManifest
+	if err := json.Unmarshal(msg.Payload(), &manifest); err != nil {
+		mc.logger.Error("unmarshal desired state", zap.Error(err))
+		return
+	}
+
+	mc.mu.RLock()
+	handler := mc.desiredStateHandler
+	mc.mu.RUnlock()
+
+	if handler != nil {
+		handler(&manifest)
 	}
 }

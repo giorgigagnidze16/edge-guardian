@@ -16,6 +16,6 @@ public record OtaDeploymentDto(
     public static OtaDeploymentDto from(OtaDeployment d) {
         return new OtaDeploymentDto(
                 d.getId(), d.getArtifactId(), d.getStrategy(),
-                d.getState(), d.getLabelSelector(), d.getCreatedAt());
+                d.getState().toDbValue(), d.getLabelSelector(), d.getCreatedAt());
     }
 }

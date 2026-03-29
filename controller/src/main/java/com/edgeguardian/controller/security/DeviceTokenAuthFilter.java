@@ -10,6 +10,7 @@ import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
+import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 
@@ -20,22 +21,16 @@ import java.util.Optional;
 
 /**
  * Authenticates agent requests via the X-Device-Token header (tokens issued during enrollment).
- * Applies to /api/v1/agent/** paths except /enroll.
  * Uses a custom header to avoid conflicts with the JWT BearerTokenAuthenticationFilter.
  */
 @Component
+@RequiredArgsConstructor
 public class DeviceTokenAuthFilter extends OncePerRequestFilter {
 
     private static final String DEVICE_TOKEN_HEADER = "X-Device-Token";
 
     private final DeviceTokenRepository deviceTokenRepository;
     private final DeviceRepository deviceRepository;
-
-    public DeviceTokenAuthFilter(DeviceTokenRepository deviceTokenRepository,
-                                 DeviceRepository deviceRepository) {
-        this.deviceTokenRepository = deviceTokenRepository;
-        this.deviceRepository = deviceRepository;
-    }
 
     @Override
     protected boolean shouldNotFilter(HttpServletRequest request) {

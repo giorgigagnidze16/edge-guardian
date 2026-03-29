@@ -6,6 +6,7 @@ import com.edgeguardian.controller.model.OrganizationMember;
 import com.edgeguardian.controller.repository.OrganizationMemberRepository;
 import com.edgeguardian.controller.repository.OrganizationRepository;
 import org.springframework.http.HttpStatus;
+import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
@@ -14,16 +15,11 @@ import java.util.List;
 import java.util.Optional;
 
 @Service
+@RequiredArgsConstructor
 public class OrganizationService {
 
     private final OrganizationRepository organizationRepository;
     private final OrganizationMemberRepository memberRepository;
-
-    public OrganizationService(OrganizationRepository organizationRepository,
-                               OrganizationMemberRepository memberRepository) {
-        this.organizationRepository = organizationRepository;
-        this.memberRepository = memberRepository;
-    }
 
     @Transactional
     public Organization create(String name, String slug, String description, Long ownerUserId) {

@@ -14,6 +14,7 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.server.ResponseStatusException;
+import lombok.RequiredArgsConstructor;
 
 import java.util.List;
 import java.util.Map;
@@ -22,19 +23,12 @@ import java.util.stream.Collectors;
 
 @RestController
 @RequestMapping("/api/v1/organizations")
+@RequiredArgsConstructor
 public class OrganizationController {
 
     private final OrganizationService organizationService;
     private final UserRepository userRepository;
     private final AuditService auditService;
-
-    public OrganizationController(OrganizationService organizationService,
-                                  UserRepository userRepository,
-                                  AuditService auditService) {
-        this.organizationService = organizationService;
-        this.userRepository = userRepository;
-        this.auditService = auditService;
-    }
 
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)

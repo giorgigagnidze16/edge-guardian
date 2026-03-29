@@ -1,6 +1,6 @@
 // Package model defines the core data types for EdgeGuardian agent.
 // These are plain Go structs with JSON tags that serve as the contract
-// between the agent and controller over HTTP/JSON.
+// between the agent and controller over MQTT/JSON.
 package model
 
 import "time"
@@ -81,9 +81,42 @@ type PluginState struct {
 // Command represents a controller-issued command for the agent.
 type Command struct {
 	ID        string            `json:"id"`
-	Type      string            `json:"type"` // "ota_update", "restart", "exec", "vpn_configure"
+	Type      string            `json:"type"` // "ota_update", "restart", "script", or custom
 	Params    map[string]string `json:"params,omitempty"`
+	Script    *ScriptSpec       `json:"script,omitempty"`
+	Hooks     *CommandHooks     `json:"hooks,omitempty"`
+	Timeout   int               `json:"timeout,omitempty"` // seconds, 0 = no timeout
 	CreatedAt time.Time         `json:"createdAt"`
+}
+
+// ScriptSpec defines an inline script to execute on the device.
+type ScriptSpec struct {
+	Inline      string            `json:"inline,omitempty"`
+	Interpreter string            `json:"interpreter,omitempty"` // "bash", "sh", "python3", "powershell"
+	WorkDir     string            `json:"workDir,omitempty"`
+	Env         map[string]string `json:"env,omitempty"`
+	RunAs       string            `json:"runAs,omitempty"`
+	Timeout     int               `json:"timeout,omitempty"` // seconds
+}
+
+// CommandHooks defines pre/post lifecycle hooks for a command.
+type CommandHooks struct {
+	Pre  *ScriptSpec `json:"pre,omitempty"`
+	Post *ScriptSpec `json:"post,omitempty"`
+}
+
+// CommandResult reports the outcome of a command execution back to the controller.
+type CommandResult struct {
+	CommandID    string    `json:"commandId"`
+	DeviceID     string    `json:"deviceId"`
+	Phase        string    `json:"phase"`  // "pre_hook", "main", "post_hook"
+	Status       string    `json:"status"` // "success", "failed", "running", "timeout"
+	ExitCode     int       `json:"exitCode"`
+	Stdout       string    `json:"stdout,omitempty"`
+	Stderr       string    `json:"stderr,omitempty"`
+	ErrorMessage string    `json:"errorMessage,omitempty"`
+	DurationMs   int64     `json:"durationMs"`
+	Timestamp    time.Time `json:"timestamp"`
 }
 
 // RegisterResponse is returned by the controller after enrollment.
@@ -94,38 +127,13 @@ type RegisterResponse struct {
 	DeviceToken     string          `json:"deviceToken,omitempty"`
 }
 
-// HeartbeatRequest is sent periodically by the agent.
-type HeartbeatRequest struct {
-	DeviceID     string        `json:"deviceId"`
-	AgentVersion string        `json:"agentVersion"`
-	Status       *DeviceStatus `json:"status,omitempty"`
-	Timestamp    time.Time     `json:"timestamp"`
-}
-
-// HeartbeatResponse may contain manifest updates or pending commands.
-type HeartbeatResponse struct {
-	ManifestUpdated bool            `json:"manifestUpdated"`
-	Manifest        *DeviceManifest `json:"manifest,omitempty"`
-	PendingCommands []Command       `json:"pendingCommands,omitempty"`
-}
-
-// ReportStateRequest reports the current observed state to the controller.
-type ReportStateRequest struct {
-	DeviceID     string        `json:"deviceId"`
-	Status       *DeviceStatus `json:"status,omitempty"`
-	PluginStates []PluginState `json:"pluginStates,omitempty"`
-	Timestamp    time.Time     `json:"timestamp"`
-}
-
-// ReportStateResponse acknowledges the state report.
-type ReportStateResponse struct {
-	Acknowledged bool `json:"acknowledged"`
-}
-
-// DesiredStateResponse wraps a manifest with its version.
-type DesiredStateResponse struct {
-	Manifest *DeviceManifest `json:"manifest,omitempty"`
-	Version  int64           `json:"version"`
+// HeartbeatMessage is published via MQTT to report agent liveness and status.
+type HeartbeatMessage struct {
+	DeviceID        string        `json:"deviceId"`
+	AgentVersion    string        `json:"agentVersion"`
+	Status          *DeviceStatus `json:"status,omitempty"`
+	ManifestVersion int64         `json:"manifestVersion"`
+	Timestamp       time.Time     `json:"timestamp"`
 }
 
 // TelemetryMessage is the MQTT telemetry payload.

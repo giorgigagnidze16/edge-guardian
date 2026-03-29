@@ -2,6 +2,7 @@ package com.edgeguardian.controller.api;
 
 import com.edgeguardian.controller.dto.TelemetryDataPoint;
 import com.edgeguardian.controller.service.TelemetryService;
+import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.Instant;
@@ -14,13 +15,10 @@ import java.util.List;
  */
 @RestController
 @RequestMapping("/api/v1/devices/{deviceId}/telemetry")
+@RequiredArgsConstructor
 public class TelemetryController {
 
     private final TelemetryService telemetryService;
-
-    public TelemetryController(TelemetryService telemetryService) {
-        this.telemetryService = telemetryService;
-    }
 
     @GetMapping
     public List<TelemetryDataPoint> getRawTelemetry(

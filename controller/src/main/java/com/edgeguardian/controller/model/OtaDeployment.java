@@ -32,7 +32,7 @@ public class OtaDeployment {
 
     @Column(nullable = false)
     @Builder.Default
-    private String state = "pending";
+    private DeploymentState state = DeploymentState.PENDING;
 
     @JdbcTypeCode(SqlTypes.JSON)
     @Column(name = "label_selector", nullable = false)

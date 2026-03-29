@@ -3,6 +3,7 @@ package com.edgeguardian.controller.service;
 import com.edgeguardian.controller.model.*;
 import com.edgeguardian.controller.mqtt.CommandPublisher;
 import com.edgeguardian.controller.repository.*;
+import static com.edgeguardian.controller.model.OtaDeviceState.*;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.eclipse.paho.mqttv5.common.MqttException;
@@ -24,6 +25,7 @@ public class OTAService {
     private final DeploymentDeviceStatusRepository deviceStatusRepository;
     private final DeviceRepository deviceRepository;
     private final CommandPublisher commandPublisher;
+    private final ArtifactStorageService artifactStorageService;
 
     // --- Artifacts ---
 
@@ -75,7 +77,8 @@ public class OTAService {
                 .filter(d -> matchesLabels(d, labelSelector))
                 .toList();
 
-        var downloadUrl = "/api/v1/agent/ota/artifacts/" + artifact.getId() + "/download";
+        var downloadUrl = artifactStorageService.generatePresignedUrl(
+                artifact.getS3Key(), java.time.Duration.ofHours(1));
 
         for (Device device : targetDevices) {
             deviceStatusRepository.save(DeploymentDeviceStatus.builder()
@@ -87,7 +90,7 @@ public class OTAService {
         }
 
         if (!targetDevices.isEmpty()) {
-            deployment.setState("in_progress");
+            deployment.setState(DeploymentState.IN_PROGRESS);
             deployment = deploymentRepository.save(deployment);
         }
 
@@ -122,13 +125,14 @@ public class OTAService {
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
                         "Device status not found for deployment"));
 
-        status.setState(state);
+        var otaState = OtaDeviceState.fromDbValue(state);
+        status.setState(otaState);
         status.setProgress(progress);
         if (errorMessage != null) status.setErrorMessage(errorMessage);
-        if ("downloading".equals(state) && status.getStartedAt() == null) {
+        if (otaState == DOWNLOADING && status.getStartedAt() == null) {
             status.setStartedAt(Instant.now());
         }
-        if (Set.of("completed", "failed", "rolled_back").contains(state)) {
+        if (otaState.isTerminal()) {
             status.setCompletedAt(Instant.now());
         }
         deviceStatusRepository.save(status);
@@ -138,7 +142,7 @@ public class OTAService {
 
     @Transactional(readOnly = true)
     public List<Map<String, Object>> getPendingOtaCommands(String deviceId) {
-        var pendingStatuses = deviceStatusRepository.findByDeviceIdAndState(deviceId, "pending");
+        var pendingStatuses = deviceStatusRepository.findByDeviceIdAndState(deviceId, PENDING);
         List<Map<String, Object>> commands = new ArrayList<>();
 
         for (var status : pendingStatuses) {
@@ -148,6 +152,9 @@ public class OTAService {
             if (artifact.isEmpty()) continue;
 
             var a = artifact.get();
+            var presignedUrl = artifactStorageService.generatePresignedUrl(
+                    a.getS3Key(), java.time.Duration.ofHours(1));
+
             Map<String, Object> cmd = new LinkedHashMap<>();
             cmd.put("id", UUID.randomUUID().toString());
             cmd.put("type", "ota_update");
@@ -157,7 +164,7 @@ public class OTAService {
                     "artifact_version", a.getVersion(),
                     "sha256", a.getSha256(),
                     "ed25519_sig", a.getEd25519Sig() != null ? a.getEd25519Sig() : "",
-                    "download_url", "/api/v1/agent/ota/artifacts/" + a.getId() + "/download"
+                    "download_url", presignedUrl
             ));
             cmd.put("createdAt", Instant.now().toString());
             commands.add(cmd);
@@ -170,14 +177,13 @@ public class OTAService {
 
     private void checkDeploymentCompletion(Long deploymentId) {
         var statuses = deviceStatusRepository.findByDeploymentId(deploymentId);
-        var terminalStates = Set.of("completed", "failed", "rolled_back");
 
-        boolean allDone = statuses.stream().allMatch(s -> terminalStates.contains(s.getState()));
+        boolean allDone = statuses.stream().allMatch(s -> s.getState().isTerminal());
         if (allDone && !statuses.isEmpty()) {
             boolean anyFailed = statuses.stream()
-                    .anyMatch(s -> "failed".equals(s.getState()) || "rolled_back".equals(s.getState()));
+                    .anyMatch(s -> s.getState() == FAILED || s.getState() == ROLLED_BACK);
             deploymentRepository.findById(deploymentId).ifPresent(deployment -> {
-                deployment.setState(anyFailed ? "failed" : "completed");
+                deployment.setState(anyFailed ? DeploymentState.FAILED : DeploymentState.COMPLETED);
                 deploymentRepository.save(deployment);
             });
         }

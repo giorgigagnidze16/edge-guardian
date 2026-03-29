@@ -18,3 +18,12 @@ spring:
       - logging
       - monitoring
       - storage
+
+edgeguardian:
+  controller:
+    device:
+      offline-threshold-minutes: 5
+    cors:
+      allowed-origins:
+        - http://localhost:3000
+        - http://localhost:3001

@@ -3,12 +3,11 @@ package com.edgeguardian.controller.service;
 import com.edgeguardian.controller.model.Device;
 import com.edgeguardian.controller.model.DeviceToken;
 import com.edgeguardian.controller.model.EnrollmentToken;
-import com.edgeguardian.controller.repository.DeviceRepository;
 import com.edgeguardian.controller.repository.DeviceTokenRepository;
 import com.edgeguardian.controller.repository.EnrollmentTokenRepository;
 import com.edgeguardian.controller.security.ApiKeyAuthenticationFilter;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -21,26 +20,16 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
+@Slf4j
 @Service
+@RequiredArgsConstructor
 public class EnrollmentService {
 
-    private static final Logger log = LoggerFactory.getLogger(EnrollmentService.class);
     private static final SecureRandom SECURE_RANDOM = new SecureRandom();
 
     private final EnrollmentTokenRepository tokenRepository;
-    private final DeviceRepository deviceRepository;
     private final DeviceTokenRepository deviceTokenRepository;
     private final DeviceRegistry deviceRegistry;
-
-    public EnrollmentService(EnrollmentTokenRepository tokenRepository,
-                             DeviceRepository deviceRepository,
-                             DeviceTokenRepository deviceTokenRepository,
-                             DeviceRegistry deviceRegistry) {
-        this.tokenRepository = tokenRepository;
-        this.deviceRepository = deviceRepository;
-        this.deviceTokenRepository = deviceTokenRepository;
-        this.deviceRegistry = deviceRegistry;
-    }
 
     @Transactional
     public EnrollmentToken createToken(Long orgId, String name, Instant expiresAt,
@@ -95,9 +84,7 @@ public class EnrollmentService {
         tokenRepository.save(token);
 
         // Register device with org binding
-        Device device = deviceRegistry.register(deviceId, hostname, architecture, os, agentVersion, labels);
-        device.setOrganizationId(token.getOrganizationId());
-        deviceRepository.save(device);
+        Device device = deviceRegistry.register(token.getOrganizationId(), deviceId, hostname, architecture, os, agentVersion, labels);
 
         // Revoke any existing device token (re-enrollment)
         deviceTokenRepository.findByDeviceId(deviceId).ifPresent(existing -> {

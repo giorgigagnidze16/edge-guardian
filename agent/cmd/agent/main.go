@@ -27,7 +27,7 @@ import (
 	"go.uber.org/zap/zapcore"
 )
 
-const agentVersion = "0.3.0"
+const agentVersion = "0.4.0"
 
 func main() {
 	configPath := flag.String("config", config.DefaultConfigPath, "path to agent config file")
@@ -90,31 +90,7 @@ func main() {
 		rec.SetDesiredState(&cachedManifest)
 	}
 
-	// Create HTTP controller client.
-	httpClient := comms.NewControllerClient(cfg.ControllerAddress, cfg.ControllerPort, logger)
-	defer func() {
-		if err := httpClient.Close(); err != nil {
-			logger.Error("failed to close HTTP client", zap.Error(err))
-		}
-	}()
-
-	// Enroll with controller (or load existing device token).
-	enrollWithController(ctx, cfg, httpClient, rec, store, logger)
-
-	// Create OTA updater and command dispatcher.
-	updater := ota.NewUpdater(cfg.DataDir, cfg.OTA.SignKey, logger)
-	dispatcher := commands.NewDispatcher(updater, httpClient, cfg.DeviceID, agentVersion, logger)
-
-	// Check for post-update or rollback markers.
-	checkPostUpdateStatus(ctx, updater, httpClient, cfg.DeviceID, logger)
-
-	// Start local health server for watchdog probing.
-	go startHealthServer(cfg.Health.Port, logger)
-
-	// Create health collector.
-	healthCollector := health.New(cfg.Health.DiskPath)
-
-	// Create and connect MQTT client.
+	// Create and connect MQTT client (sole communication channel).
 	mqttClient := comms.NewMQTTClient(comms.MQTTConfig{
 		BrokerURL: cfg.MQTT.BrokerURL,
 		DeviceID:  cfg.DeviceID,
@@ -124,6 +100,29 @@ func main() {
 		Store:     store,
 	}, logger)
 
+	// Wire desired state handler: updates reconciler + persists to BoltDB.
+	mqttClient.SetDesiredStateHandler(func(manifest *model.DeviceManifest) {
+		logger.Info("received desired state update",
+			zap.Int64("version", manifest.Version))
+		rec.SetDesiredState(manifest)
+		if err := store.SaveDesiredState("current", manifest); err != nil {
+			logger.Error("failed to save manifest to BoltDB", zap.Error(err))
+		}
+	})
+
+	if err := mqttClient.Connect(10 * time.Second); err != nil {
+		logger.Warn("MQTT connection failed (will retry via auto-reconnect)", zap.Error(err))
+	}
+	defer mqttClient.Close()
+
+	// Enroll with controller via MQTT (or load existing device token).
+	enrollViaMMQTT(cfg, mqttClient, rec, store, logger)
+
+	// Create OTA updater and command dispatcher.
+	updater := ota.NewUpdater(cfg.DataDir, cfg.OTA.SignKey, logger)
+	dispatcher := commands.NewDispatcher(updater, mqttClient, cfg.DeviceID, agentVersion, logger)
+
+	// Set command handler on MQTT client.
 	mqttClient.SetCommandHandler(func(cmd model.Command) {
 		if err := dispatcher.Dispatch(cmd); err != nil {
 			logger.Error("command dispatch failed",
@@ -133,13 +132,36 @@ func main() {
 		}
 	})
 
-	if err := mqttClient.Connect(10 * time.Second); err != nil {
-		logger.Warn("MQTT connection failed (will operate without telemetry)", zap.Error(err))
-	}
-	defer mqttClient.Close()
+	// Check for post-update or rollback markers.
+	checkPostUpdateStatus(updater, mqttClient, cfg.DeviceID, logger)
 
+	// Start local health server for watchdog probing.
+	go startHealthServer(cfg.Health.Port, logger)
+
+	// Create health collector.
+	healthCollector := health.New(cfg.Health.DiskPath)
+
+	// Start reconciler loop.
 	go rec.Run(ctx)
-	go heartbeatLoop(ctx, httpClient, cfg.DeviceID, rec, store, healthCollector, dispatcher, logger)
+
+	// Start heartbeat loop (via MQTT).
+	go mqttClient.RunHeartbeatLoop(ctx, 30*time.Second, func() *model.HeartbeatMessage {
+		status := healthCollector.Collect()
+		status.ReconcileStatus = rec.Status()
+		lastRec := rec.LastReconcile()
+		if !lastRec.IsZero() {
+			status.LastReconcile = lastRec.Format(time.RFC3339)
+		}
+		return &model.HeartbeatMessage{
+			DeviceID:        cfg.DeviceID,
+			AgentVersion:    agentVersion,
+			Status:          status,
+			ManifestVersion: rec.ManifestVersion(),
+			Timestamp:       time.Now(),
+		}
+	})
+
+	// Start telemetry loop (via MQTT).
 	go mqttClient.RunTelemetryLoop(ctx, 30*time.Second, func() *model.DeviceStatus {
 		status := healthCollector.Collect()
 		status.ReconcileStatus = rec.Status()
@@ -160,20 +182,17 @@ func main() {
 }
 
 // checkPostUpdateStatus detects post-update or rollback markers and reports
-// the final OTA status back to the controller.
-func checkPostUpdateStatus(ctx context.Context, updater *ota.Updater,
-	httpClient *comms.ControllerClient, deviceID string, logger *zap.Logger) {
+// the final OTA status back to the controller via MQTT.
+func checkPostUpdateStatus(updater *ota.Updater,
+	mqttClient *comms.MQTTClient, deviceID string, logger *zap.Logger) {
 
 	// Check rollback marker first (takes priority).
 	rollbackExists, _ := updater.ReadRollbackMarker()
 	if rollbackExists {
 		logger.Warn("rollback marker detected — previous OTA update was rolled back")
 
-		// Read the update marker to get deploymentID for reporting.
 		if marker, err := updater.ReadUpdateMarker(); err == nil {
-			reportCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
-			defer cancel()
-			_ = httpClient.ReportOTAStatus(reportCtx, &model.OTAStatusReport{
+			_ = mqttClient.PublishOTAStatus(&model.OTAStatusReport{
 				DeploymentID: marker.DeploymentID,
 				DeviceID:     deviceID,
 				State:        "rolled_back",
@@ -189,16 +208,14 @@ func checkPostUpdateStatus(ctx context.Context, updater *ota.Updater,
 	// Check update marker (successful update).
 	marker, err := updater.ReadUpdateMarker()
 	if err != nil {
-		return // No marker = not a post-update restart
+		return // No marker = not a post-update restart.
 	}
 
 	logger.Info("update marker detected — OTA update completed successfully",
 		zap.Int64("deployment_id", marker.DeploymentID),
 		zap.String("previous_version", marker.PreviousVersion))
 
-	reportCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
-	defer cancel()
-	_ = httpClient.ReportOTAStatus(reportCtx, &model.OTAStatusReport{
+	_ = mqttClient.PublishOTAStatus(&model.OTAStatusReport{
 		DeploymentID: marker.DeploymentID,
 		DeviceID:     deviceID,
 		State:        "completed",
@@ -241,10 +258,9 @@ func tokenFilePath(cfg *config.Config) string {
 	return filepath.Join(cfg.DataDir, "device-token")
 }
 
-func enrollWithController(
-	ctx context.Context,
+func enrollViaMMQTT(
 	cfg *config.Config,
-	client *comms.ControllerClient,
+	mqttClient *comms.MQTTClient,
 	rec *reconciler.Reconciler,
 	store *storage.Store,
 	logger *zap.Logger,
@@ -253,24 +269,19 @@ func enrollWithController(
 
 	// 1. Check for existing device token on disk.
 	if tokenData, err := os.ReadFile(tokenPath); err == nil && len(tokenData) > 0 {
-		token := string(tokenData)
-		client.SetAuthToken(token)
 		logger.Info("loaded device token from file, skipping enrollment",
 			zap.String("token_file", tokenPath))
 		return
 	}
 
-	// 2. Enroll with enrollment token.
+	// 2. Enroll with enrollment token via MQTT.
 	if cfg.Auth.EnrollmentToken == "" {
-		logger.Fatal("no device token file and no enrollment_token configured — cannot authenticate with controller")
+		logger.Fatal("no device token file and no enrollment_token configured — cannot enroll")
 	}
 
 	hostname, _ := os.Hostname()
 
-	enrollCtx, enrollCancel := context.WithTimeout(ctx, 15*time.Second)
-	defer enrollCancel()
-
-	resp, err := client.Enroll(enrollCtx, &model.EnrollRequest{
+	resp, err := mqttClient.PublishEnrollRequest(&model.EnrollRequest{
 		EnrollmentToken: cfg.Auth.EnrollmentToken,
 		DeviceID:        cfg.DeviceID,
 		Hostname:        hostname,
@@ -287,7 +298,7 @@ func enrollWithController(
 		logger.Fatal("enrollment rejected by controller", zap.String("message", resp.Message))
 	}
 
-	logger.Info("enrolled with controller", zap.String("message", resp.Message))
+	logger.Info("enrolled with controller via MQTT", zap.String("message", resp.Message))
 
 	// 3. Persist device token.
 	if resp.DeviceToken != "" {
@@ -296,7 +307,6 @@ func enrollWithController(
 		} else {
 			logger.Info("device token saved", zap.String("token_file", tokenPath))
 		}
-		client.SetAuthToken(resp.DeviceToken)
 	}
 
 	// 4. Apply initial manifest if provided.
@@ -306,66 +316,6 @@ func enrollWithController(
 		rec.SetDesiredState(resp.InitialManifest)
 		if err := store.SaveDesiredState("current", resp.InitialManifest); err != nil {
 			logger.Error("failed to save initial manifest to BoltDB", zap.Error(err))
-		}
-	}
-}
-
-func heartbeatLoop(
-	ctx context.Context,
-	client *comms.ControllerClient,
-	deviceID string,
-	rec *reconciler.Reconciler,
-	store *storage.Store,
-	healthCollector *health.Collector,
-	dispatcher *commands.Dispatcher,
-	logger *zap.Logger,
-) {
-	ticker := time.NewTicker(30 * time.Second)
-	defer ticker.Stop()
-
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case <-ticker.C:
-			status := healthCollector.Collect()
-			status.ReconcileStatus = rec.Status()
-			lastRec := rec.LastReconcile()
-			if !lastRec.IsZero() {
-				status.LastReconcile = lastRec.Format(time.RFC3339)
-			}
-
-			hbCtx, hbCancel := context.WithTimeout(ctx, 10*time.Second)
-			resp, err := client.Heartbeat(hbCtx, &model.HeartbeatRequest{
-				DeviceID:     deviceID,
-				AgentVersion: agentVersion,
-				Status:       status,
-				Timestamp:    time.Now(),
-			})
-			hbCancel()
-
-			if err != nil {
-				logger.Warn("heartbeat failed", zap.Error(err))
-				continue
-			}
-
-			if resp.ManifestUpdated && resp.Manifest != nil {
-				logger.Info("received updated manifest via heartbeat",
-					zap.Int64("version", resp.Manifest.Version))
-				rec.SetDesiredState(resp.Manifest)
-				if err := store.SaveDesiredState("current", resp.Manifest); err != nil {
-					logger.Error("failed to save manifest to BoltDB", zap.Error(err))
-				}
-			}
-
-			for _, cmd := range resp.PendingCommands {
-				if err := dispatcher.Dispatch(cmd); err != nil {
-					logger.Error("heartbeat command dispatch failed",
-						zap.String("id", cmd.ID),
-						zap.String("type", cmd.Type),
-						zap.Error(err))
-				}
-			}
 		}
 	}
 }
