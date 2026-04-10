@@ -41,6 +41,10 @@ build/
 *.env
 *.env.local
 
+# Dev launcher runtime files
+.dev-pids/
+.dev-logs/
+
 # Data
 *.db
 *.bolt

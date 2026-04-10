@@ -7,11 +7,12 @@ import com.edgeguardian.controller.model.Organization;
 import com.edgeguardian.controller.model.OrganizationMember;
 import com.edgeguardian.controller.model.User;
 import com.edgeguardian.controller.repository.UserRepository;
-import com.edgeguardian.controller.security.TenantContext;
+import com.edgeguardian.controller.security.TenantPrincipal;
 import com.edgeguardian.controller.service.AuditService;
 import com.edgeguardian.controller.service.OrganizationService;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.http.HttpStatus;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.server.ResponseStatusException;
 import lombok.RequiredArgsConstructor;
@@ -32,17 +33,17 @@ public class OrganizationController {
 
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
-    public OrganizationDto create(@RequestBody CreateOrganizationRequest request) {
-        Long userId = requireUserId();
+    public OrganizationDto create(@RequestBody CreateOrganizationRequest request,
+                                  @AuthenticationPrincipal TenantPrincipal principal) {
         Organization org = organizationService.create(
-                request.name(), request.slug(), request.description(), userId);
+                request.name(), request.slug(), request.description(), principal.userId());
         return OrganizationDto.from(org);
     }
 
     @GetMapping("/{orgId}")
-    public OrganizationDto get(@PathVariable Long orgId) {
-        Long userId = requireUserId();
-        organizationService.requireRole(orgId, userId,
+    public OrganizationDto get(@PathVariable Long orgId,
+                               @AuthenticationPrincipal TenantPrincipal principal) {
+        organizationService.requireRole(orgId, principal.userId(),
                 OrgRole.owner, OrgRole.admin, OrgRole.operator, OrgRole.viewer);
         return organizationService.findById(orgId)
                 .map(OrganizationDto::from)
@@ -51,27 +52,27 @@ public class OrganizationController {
 
     @PutMapping("/{orgId}")
     public OrganizationDto update(@PathVariable Long orgId,
-                                  @RequestBody UpdateOrganizationRequest request) {
-        Long userId = requireUserId();
-        organizationService.requireRole(orgId, userId, OrgRole.owner, OrgRole.admin);
+                                  @RequestBody UpdateOrganizationRequest request,
+                                  @AuthenticationPrincipal TenantPrincipal principal) {
+        organizationService.requireRole(orgId, principal.userId(), OrgRole.owner, OrgRole.admin);
         return OrganizationDto.from(
                 organizationService.update(orgId, request.name(), request.description()));
     }
 
     @DeleteMapping("/{orgId}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
-    public void delete(@PathVariable Long orgId) {
-        Long userId = requireUserId();
-        organizationService.requireRole(orgId, userId, OrgRole.owner);
+    public void delete(@PathVariable Long orgId,
+                       @AuthenticationPrincipal TenantPrincipal principal) {
+        organizationService.requireRole(orgId, principal.userId(), OrgRole.owner);
         organizationService.delete(orgId);
     }
 
     // --- Members ---
 
     @GetMapping("/{orgId}/members")
-    public List<MemberDto> listMembers(@PathVariable Long orgId) {
-        Long userId = requireUserId();
-        organizationService.requireRole(orgId, userId,
+    public List<MemberDto> listMembers(@PathVariable Long orgId,
+                                       @AuthenticationPrincipal TenantPrincipal principal) {
+        organizationService.requireRole(orgId, principal.userId(),
                 OrgRole.owner, OrgRole.admin, OrgRole.operator, OrgRole.viewer);
         List<OrganizationMember> members = organizationService.getMembers(orgId);
         List<Long> userIds = members.stream().map(OrganizationMember::getUserId).toList();
@@ -85,9 +86,9 @@ public class OrganizationController {
     @PostMapping("/{orgId}/members")
     @ResponseStatus(HttpStatus.CREATED)
     public MemberDto addMember(@PathVariable Long orgId,
-                               @RequestBody AddMemberRequest request) {
-        Long userId = requireUserId();
-        organizationService.requireRole(orgId, userId, OrgRole.owner, OrgRole.admin);
+                               @RequestBody AddMemberRequest request,
+                               @AuthenticationPrincipal TenantPrincipal principal) {
+        organizationService.requireRole(orgId, principal.userId(), OrgRole.owner, OrgRole.admin);
         OrganizationMember member = organizationService.addMember(
                 orgId, request.userId(), OrgRole.valueOf(request.role()));
         User user = userRepository.findById(member.getUserId())
@@ -97,9 +98,9 @@ public class OrganizationController {
 
     @DeleteMapping("/{orgId}/members/{memberId}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
-    public void removeMember(@PathVariable Long orgId, @PathVariable Long memberId) {
-        Long userId = requireUserId();
-        organizationService.requireRole(orgId, userId, OrgRole.owner, OrgRole.admin);
+    public void removeMember(@PathVariable Long orgId, @PathVariable Long memberId,
+                             @AuthenticationPrincipal TenantPrincipal principal) {
+        organizationService.requireRole(orgId, principal.userId(), OrgRole.owner, OrgRole.admin);
         organizationService.removeMember(orgId, memberId);
     }
 
@@ -119,9 +120,9 @@ public class OrganizationController {
     public List<AuditLogDto> listAuditLog(
             @PathVariable Long orgId,
             @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "50") int size) {
-        Long userId = requireUserId();
-        organizationService.requireRole(orgId, userId,
+            @RequestParam(defaultValue = "50") int size,
+            @AuthenticationPrincipal TenantPrincipal principal) {
+        organizationService.requireRole(orgId, principal.userId(),
                 OrgRole.owner, OrgRole.admin, OrgRole.operator, OrgRole.viewer);
         List<AuditLog> entries = auditService.findByOrganization(orgId, PageRequest.of(page, size)).getContent();
         List<Long> userIds = entries.stream().map(AuditLog::getUserId).filter(id -> id != null).distinct().toList();
@@ -133,11 +134,4 @@ public class OrganizationController {
                 .toList();
     }
 
-    private Long requireUserId() {
-        Long userId = TenantContext.getUserId();
-        if (userId == null) {
-            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "User not authenticated");
-        }
-        return userId;
-    }
 }

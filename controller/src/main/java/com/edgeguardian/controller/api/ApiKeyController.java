@@ -2,13 +2,13 @@ package com.edgeguardian.controller.api;
 
 import com.edgeguardian.controller.dto.*;
 import com.edgeguardian.controller.model.OrgRole;
-import com.edgeguardian.controller.security.TenantContext;
+import com.edgeguardian.controller.security.TenantPrincipal;
 import com.edgeguardian.controller.service.ApiKeyService;
 import com.edgeguardian.controller.service.OrganizationService;
 import org.springframework.http.HttpStatus;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
-import org.springframework.web.server.ResponseStatusException;
 
 import java.util.List;
 
@@ -21,9 +21,9 @@ public class ApiKeyController {
     private final OrganizationService organizationService;
 
     @GetMapping
-    public List<ApiKeyDto> list(@PathVariable Long orgId) {
-        Long userId = requireUserId();
-        organizationService.requireRole(orgId, userId, OrgRole.owner, OrgRole.admin);
+    public List<ApiKeyDto> list(@PathVariable Long orgId,
+                                @AuthenticationPrincipal TenantPrincipal principal) {
+        organizationService.requireRole(orgId, principal.userId(), OrgRole.owner, OrgRole.admin);
         return apiKeyService.findByOrganization(orgId).stream()
                 .map(ApiKeyDto::from)
                 .toList();
@@ -32,27 +32,19 @@ public class ApiKeyController {
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
     public ApiKeyCreateResponse create(@PathVariable Long orgId,
-                                       @RequestBody CreateApiKeyRequest request) {
-        Long userId = requireUserId();
-        organizationService.requireRole(orgId, userId, OrgRole.owner, OrgRole.admin);
+                                       @RequestBody CreateApiKeyRequest request,
+                                       @AuthenticationPrincipal TenantPrincipal principal) {
+        organizationService.requireRole(orgId, principal.userId(), OrgRole.owner, OrgRole.admin);
         ApiKeyService.ApiKeyCreateResult result = apiKeyService.create(
-                orgId, request.name(), request.scopes(), request.expiresAt(), userId);
+                orgId, request.name(), request.scopes(), request.expiresAt(), principal.userId());
         return new ApiKeyCreateResponse(ApiKeyDto.from(result.apiKey()), result.rawKey());
     }
 
     @DeleteMapping("/{keyId}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
-    public void revoke(@PathVariable Long orgId, @PathVariable Long keyId) {
-        Long userId = requireUserId();
-        organizationService.requireRole(orgId, userId, OrgRole.owner, OrgRole.admin);
+    public void revoke(@PathVariable Long orgId, @PathVariable Long keyId,
+                       @AuthenticationPrincipal TenantPrincipal principal) {
+        organizationService.requireRole(orgId, principal.userId(), OrgRole.owner, OrgRole.admin);
         apiKeyService.revoke(keyId);
-    }
-
-    private Long requireUserId() {
-        Long userId = TenantContext.getUserId();
-        if (userId == null) {
-            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "User not authenticated");
-        }
-        return userId;
     }
 }

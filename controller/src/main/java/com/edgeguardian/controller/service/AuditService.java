@@ -2,7 +2,6 @@ package com.edgeguardian.controller.service;
 
 import com.edgeguardian.controller.model.AuditLog;
 import com.edgeguardian.controller.repository.AuditLogRepository;
-import com.edgeguardian.controller.security.TenantContext;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import lombok.RequiredArgsConstructor;
@@ -16,21 +15,6 @@ import java.util.Map;
 public class AuditService {
 
     private final AuditLogRepository auditLogRepository;
-
-    @Transactional
-    public void log(String action, String resourceType, String resourceId,
-                    Map<String, Object> details, String ipAddress) {
-        AuditLog entry = AuditLog.builder()
-                .organizationId(TenantContext.getOrganizationId())
-                .userId(TenantContext.getUserId())
-                .action(action)
-                .resourceType(resourceType)
-                .resourceId(resourceId)
-                .details(details)
-                .ipAddress(ipAddress)
-                .build();
-        auditLogRepository.save(entry);
-    }
 
     @Transactional
     public void log(Long orgId, Long userId, String action, String resourceType,

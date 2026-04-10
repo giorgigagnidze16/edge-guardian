@@ -1,9 +1,15 @@
 server:
   port: 8443
+  error:
+    include-message: always
 
 spring:
   application:
     name: edgeguardian-controller
+  servlet:
+    multipart:
+      max-file-size: 1GB
+      max-request-size: 1GB
 
   threads:
     virtual:
@@ -24,6 +30,4 @@ edgeguardian:
     device:
       offline-threshold-minutes: 5
     cors:
-      allowed-origins:
-        - http://localhost:3000
-        - http://localhost:3001
+      allowed-origins: "*"

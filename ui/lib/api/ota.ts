@@ -75,7 +75,14 @@ export async function uploadArtifact(
 
   if (!response.ok) {
     const body = await response.text();
-    throw new Error(body || response.statusText);
+    let message = response.statusText || `HTTP ${response.status}`;
+    try {
+      const json = JSON.parse(body);
+      if (json.message) message = json.message;
+    } catch {
+      if (body) message = body;
+    }
+    throw new Error(message);
   }
 
   return response.json();

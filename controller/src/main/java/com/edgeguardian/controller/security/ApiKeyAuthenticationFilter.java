@@ -14,7 +14,6 @@ import java.util.HexFormat;
 import java.util.List;
 import java.util.Optional;
 import lombok.RequiredArgsConstructor;
-import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Component;
@@ -42,11 +41,9 @@ public class ApiKeyAuthenticationFilter extends OncePerRequestFilter {
             Optional<ApiKey> apiKey = apiKeyRepository.findByKeyHash(hash);
             if (apiKey.isPresent() && apiKey.get().isValid()) {
                 ApiKey key = apiKey.get();
-                TenantContext.setOrganizationId(key.getOrganizationId());
-
-                var auth = new UsernamePasswordAuthenticationToken(
-                    "apikey:" + key.getKeyPrefix(),
-                    null,
+                var principal = new TenantPrincipal(key.getOrganizationId(), null, "apikey:" + key.getKeyPrefix());
+                var auth = new TenantAuthenticationToken(
+                    principal,
                     List.of(new SimpleGrantedAuthority("ROLE_API_KEY"))
                 );
                 SecurityContextHolder.getContext().setAuthentication(auth);

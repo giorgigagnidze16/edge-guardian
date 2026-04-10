@@ -8,7 +8,7 @@ import com.edgeguardian.controller.model.DeviceStatus;
 import com.edgeguardian.controller.mqtt.CommandPublisher;
 import com.edgeguardian.controller.repository.CommandExecutionRepository;
 import com.edgeguardian.controller.repository.DeviceCommandRepository;
-import com.edgeguardian.controller.security.TenantContext;
+import com.edgeguardian.controller.security.TenantPrincipal;
 import com.edgeguardian.controller.service.DeviceRegistry;
 import com.edgeguardian.controller.service.LogService;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -19,6 +19,7 @@ import java.util.Map;
 import java.util.UUID;
 import org.eclipse.paho.mqttv5.common.MqttException;
 import org.springframework.http.HttpStatus;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -107,7 +108,8 @@ public class DeviceController {
     @PostMapping("/{deviceId}/commands")
     @ResponseStatus(HttpStatus.CREATED)
     public DeviceCommand sendCommand(@PathVariable String deviceId,
-                                     @RequestBody CreateCommandRequest request) {
+                                     @RequestBody CreateCommandRequest request,
+                                     @AuthenticationPrincipal TenantPrincipal principal) {
         Device device = registry.findById(deviceId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Device not found"));
 
@@ -122,7 +124,7 @@ public class DeviceController {
                 .script(request.script())
                 .hooks(request.hooks())
                 .timeoutSeconds(request.timeoutSeconds())
-                .createdBy(TenantContext.getUserId())
+                .createdBy(principal.userId())
                 .build());
 
         try {

@@ -7,7 +7,6 @@ import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
-import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
 import lombok.RequiredArgsConstructor;
@@ -70,14 +69,13 @@ public class DeviceTokenAuthFilter extends OncePerRequestFilter {
 
         DeviceToken deviceToken = tokenOpt.get();
 
-        // Set org context from the device's organization
-        deviceRepository.findByDeviceId(deviceToken.getDeviceId()).ifPresent(device ->
-            TenantContext.setOrganizationId(device.getOrganizationId())
-        );
+        Long orgId = deviceRepository.findByDeviceId(deviceToken.getDeviceId())
+                .map(device -> device.getOrganizationId())
+                .orElse(null);
 
-        var auth = new UsernamePasswordAuthenticationToken(
-                "device:" + deviceToken.getDeviceId(),
-                null,
+        var principal = new TenantPrincipal(orgId, null, "device:" + deviceToken.getDeviceId());
+        var auth = new TenantAuthenticationToken(
+                principal,
                 List.of(new SimpleGrantedAuthority("ROLE_DEVICE"))
         );
         SecurityContextHolder.getContext().setAuthentication(auth);
