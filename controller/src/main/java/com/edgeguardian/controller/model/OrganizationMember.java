@@ -27,7 +27,7 @@ public class OrganizationMember {
     @Enumerated(EnumType.STRING)
     @Column(name = "org_role", nullable = false)
     @Builder.Default
-    private OrgRole orgRole = OrgRole.viewer;
+    private OrgRole orgRole = OrgRole.VIEWER;
 
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;

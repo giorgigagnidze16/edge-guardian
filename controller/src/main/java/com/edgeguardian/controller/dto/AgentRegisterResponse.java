@@ -10,5 +10,10 @@ public record AgentRegisterResponse(
         boolean accepted,
         String message,
         Map<String, Object> initialManifest,
-        String deviceToken
-) {}
+        String deviceToken,
+        String caCertPem
+) {
+    public static AgentRegisterResponse error(String message) {
+        return new AgentRegisterResponse(false, message, null, null, null);
+    }
+}

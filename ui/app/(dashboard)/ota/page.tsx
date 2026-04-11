@@ -62,18 +62,18 @@ export default function OTAPage() {
 
   const { data: artifacts, isLoading: artifactsLoading } = useQuery({
     queryKey: ["ota-artifacts", orgId],
-    queryFn: () => listArtifacts(token, orgId!),
+    queryFn: () => listArtifacts(token),
     enabled: !!token && !!orgId,
   });
 
   const { data: deployments, isLoading: deploymentsLoading } = useQuery({
     queryKey: ["ota-deployments", orgId],
-    queryFn: () => listDeployments(token, orgId!),
+    queryFn: () => listDeployments(token),
     enabled: !!token && !!orgId,
   });
 
   const deleteMutation = useMutation({
-    mutationFn: (id: number) => deleteArtifact(token, orgId!, id),
+    mutationFn: (id: number) => deleteArtifact(token, id),
     onSuccess: () => {
       toast.success("Artifact deleted");
       queryClient.invalidateQueries({ queryKey: ["ota-artifacts"] });

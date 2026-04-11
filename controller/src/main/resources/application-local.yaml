@@ -1,6 +1,7 @@
 edgeguardian:
   controller:
     cors:
+      enabled: true
       allowed-origins:
         - "*"
       allowed-methods:

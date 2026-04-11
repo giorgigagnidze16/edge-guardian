@@ -24,6 +24,9 @@ public class MqttConfig {
     @Value("${edgeguardian.controller.mqtt.client-id:edgeguardian-controller}")
     private String clientId;
 
+    @Value("${edgeguardian.controller.mqtt.username:}")
+    private String username;
+
     private MqttClient mqttClient;
 
     @Bean
@@ -36,6 +39,9 @@ public class MqttConfig {
             options.setCleanStart(false);
             options.setConnectionTimeout(10);
             options.setKeepAliveInterval(60);
+            if (username != null && !username.isBlank()) {
+                options.setUserName(username);
+            }
 
             mqttClient.connect(options);
             log.info("MQTT client connected to {} as {}", brokerUrl, clientId);

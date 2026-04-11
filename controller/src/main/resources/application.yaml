@@ -21,6 +21,7 @@ spring:
       - db
       - mqtt
       - security
+      - ca
       - logging
       - monitoring
       - storage

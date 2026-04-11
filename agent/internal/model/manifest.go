@@ -23,9 +23,20 @@ type ManifestMetadata struct {
 
 // ManifestSpec defines the desired resources on the device.
 type ManifestSpec struct {
-	Files    []FileResource    `json:"files,omitempty" yaml:"files,omitempty"`
-	Services []ServiceResource `json:"services,omitempty" yaml:"services,omitempty"`
-	Health   *HealthCheckSpec  `json:"health,omitempty" yaml:"health,omitempty"`
+	Files        []FileResource        `json:"files,omitempty" yaml:"files,omitempty"`
+	Services     []ServiceResource     `json:"services,omitempty" yaml:"services,omitempty"`
+	Certificates []CertificateResource `json:"certificates,omitempty" yaml:"certificates,omitempty"`
+	Health       *HealthCheckSpec      `json:"health,omitempty" yaml:"health,omitempty"`
+}
+
+// CertificateResource declares a TLS certificate that should be provisioned on the device.
+type CertificateResource struct {
+	Name       string   `json:"name" yaml:"name"`
+	CommonName string   `json:"commonName" yaml:"commonName"`
+	SANs       []string `json:"sans,omitempty" yaml:"sans,omitempty"`
+	CertPath   string   `json:"certPath" yaml:"certPath"`
+	KeyPath    string   `json:"keyPath" yaml:"keyPath"`
+	KeyAlgo    string   `json:"keyAlgo,omitempty" yaml:"keyAlgo,omitempty"` // "ecdsa-p256" (default), "rsa-2048"
 }
 
 // FileResource declares a file that should exist with specific content and permissions.

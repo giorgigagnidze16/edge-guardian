@@ -50,7 +50,7 @@ public class HeartbeatListener {
 
         String topic = topicRoot + "/device/+/heartbeat";
         try {
-            var subscription = new MqttSubscription(topic, 1);
+            var subscription = new MqttSubscription(topic, MqttTopics.QOS_BEST_EFFORT);
             IMqttMessageListener listener = this::onHeartbeat;
             mqttClient.subscribe(new MqttSubscription[]{subscription},
                     new IMqttMessageListener[]{listener});
@@ -115,7 +115,7 @@ public class HeartbeatListener {
             String stateTopic = topicRoot + "/device/" + deviceId + "/state/desired";
             byte[] payload = objectMapper.writeValueAsBytes(manifestMap);
             var msg = new MqttMessage(payload);
-            msg.setQos(1);
+            msg.setQos(MqttTopics.QOS_BEST_EFFORT);
             msg.setRetained(true);
             mqttClient.publish(stateTopic, msg);
 

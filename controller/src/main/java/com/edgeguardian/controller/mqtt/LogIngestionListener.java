@@ -4,31 +4,22 @@ import com.edgeguardian.controller.service.LogService;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.annotation.PostConstruct;
+import lombok.extern.slf4j.Slf4j;
 import org.eclipse.paho.mqttv5.client.IMqttMessageListener;
 import org.eclipse.paho.mqttv5.client.MqttClient;
 import org.eclipse.paho.mqttv5.common.MqttException;
 import org.eclipse.paho.mqttv5.common.MqttMessage;
 import org.eclipse.paho.mqttv5.common.MqttSubscription;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 /**
  * Subscribes to MQTT log topics from devices and forwards log entries to Loki.
- *
  * Topic pattern: {topicRoot}/device/+/logs
- *
- * Payload is a JSON array of log entries:
- * [
- *   { "timestamp": "2024-01-01T00:00:00Z", "level": "INFO", "message": "...", "source": "agent" },
- *   ...
- * ]
  */
+@Slf4j
 @Component
 public class LogIngestionListener {
-
-    private static final Logger log = LoggerFactory.getLogger(LogIngestionListener.class);
 
     private final MqttClient mqttClient;
     private final LogService logService;
@@ -54,7 +45,7 @@ public class LogIngestionListener {
 
         String topic = topicRoot + "/device/+/logs";
         try {
-            MqttSubscription subscription = new MqttSubscription(topic, 1);
+            MqttSubscription subscription = new MqttSubscription(topic, MqttTopics.QOS_BEST_EFFORT);
             IMqttMessageListener listener = this::onLogMessage;
             mqttClient.subscribe(new MqttSubscription[]{subscription},
                     new IMqttMessageListener[]{listener});

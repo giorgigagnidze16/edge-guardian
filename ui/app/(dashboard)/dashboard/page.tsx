@@ -53,13 +53,13 @@ export default function DashboardHome() {
 
   const { data: deployments, isLoading: deploymentsLoading } = useQuery({
     queryKey: ["deployments", orgId],
-    queryFn: () => listDeployments(token, orgId!),
+    queryFn: () => listDeployments(token),
     enabled: !!token && !!orgId,
   });
 
   const { data: auditLog } = useQuery({
     queryKey: ["audit-log", orgId],
-    queryFn: () => listAuditLog(token, orgId!, { size: 10 }),
+    queryFn: () => listAuditLog(token, { size: 10 }),
     enabled: !!token && !!orgId,
   });
 

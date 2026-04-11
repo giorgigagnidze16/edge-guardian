@@ -6,6 +6,7 @@ import "github.com/edgeguardian/agent/internal/model"
 type DiffResult struct {
 	FileSpecs    []ResourceSpec
 	ServiceSpecs []ResourceSpec
+	CertSpecs    []ResourceSpec
 }
 
 // Diff converts a DeviceManifest into categorized ResourceSpecs that plugins
@@ -43,6 +44,21 @@ func Diff(manifest *model.DeviceManifest) DiffResult {
 		})
 	}
 
+	for _, c := range manifest.Spec.Certificates {
+		result.CertSpecs = append(result.CertSpecs, ResourceSpec{
+			Kind: "certificate",
+			Name: c.Name,
+			Fields: map[string]interface{}{
+				"name":       c.Name,
+				"commonName": c.CommonName,
+				"sans":       c.SANs,
+				"certPath":   c.CertPath,
+				"keyPath":    c.KeyPath,
+				"keyAlgo":    c.KeyAlgo,
+			},
+		})
+	}
+
 	return result
 }
 
@@ -53,6 +69,8 @@ func (d DiffResult) SpecsByKind(kind string) []ResourceSpec {
 		return d.FileSpecs
 	case "service":
 		return d.ServiceSpecs
+	case "certificate":
+		return d.CertSpecs
 	default:
 		return nil
 	}
@@ -63,10 +81,11 @@ func (d DiffResult) AllSpecs() []ResourceSpec {
 	var all []ResourceSpec
 	all = append(all, d.FileSpecs...)
 	all = append(all, d.ServiceSpecs...)
+	all = append(all, d.CertSpecs...)
 	return all
 }
 
 // HasResources returns true if the diff contains any resources to reconcile.
 func (d DiffResult) HasResources() bool {
-	return len(d.FileSpecs) > 0 || len(d.ServiceSpecs) > 0
+	return len(d.FileSpecs) > 0 || len(d.ServiceSpecs) > 0 || len(d.CertSpecs) > 0
 }

@@ -69,7 +69,7 @@ export default function SettingsPage() {
   // General
   const { data: org } = useQuery({
     queryKey: ["organization", orgId],
-    queryFn: () => getOrganization(token, orgId!),
+    queryFn: () => getOrganization(token),
     enabled: !!token && !!orgId,
   });
 
@@ -86,7 +86,7 @@ export default function SettingsPage() {
   };
 
   const updateOrgMutation = useMutation({
-    mutationFn: () => updateOrganization(token, orgId!, { name: orgName ?? org?.name ?? "", description: orgDesc ?? org?.description ?? "" }),
+    mutationFn: () => updateOrganization(token, { name: orgName ?? org?.name ?? "", description: orgDesc ?? org?.description ?? "" }),
     onMutate: async () => {
       await queryClient.cancelQueries({ queryKey: ["organization", orgId] });
       const previous = queryClient.getQueryData<Organization>(["organization", orgId]);
@@ -113,7 +113,7 @@ export default function SettingsPage() {
   // Members
   const { data: members, isLoading: membersLoading } = useQuery({
     queryKey: ["org-members", orgId],
-    queryFn: () => listMembers(token, orgId!),
+    queryFn: () => listMembers(token),
     enabled: !!token && !!orgId,
   });
   const [inviteOpen, setInviteOpen] = useState(false);
@@ -122,7 +122,7 @@ export default function SettingsPage() {
   const [removeMemberTarget, setRemoveMemberTarget] = useState<OrgMember | null>(null);
 
   const addMemberMutation = useMutation({
-    mutationFn: () => addMember(token, orgId!, { email: inviteEmail, role: inviteRole }),
+    mutationFn: () => addMember(token, { email: inviteEmail, role: inviteRole }),
     onSuccess: () => {
       toast.success("Member invited");
       queryClient.invalidateQueries({ queryKey: ["org-members", orgId] });
@@ -134,7 +134,7 @@ export default function SettingsPage() {
   });
 
   const removeMemberMutation = useMutation({
-    mutationFn: (userId: number) => removeMember(token, orgId!, userId),
+    mutationFn: (userId: number) => removeMember(token, userId),
     onSuccess: () => {
       toast.success("Member removed");
       queryClient.invalidateQueries({ queryKey: ["org-members", orgId] });
@@ -146,7 +146,7 @@ export default function SettingsPage() {
   // Enrollment Tokens
   const { data: tokens, isLoading: tokensLoading } = useQuery({
     queryKey: ["enrollment-tokens", orgId],
-    queryFn: () => listEnrollmentTokens(token, orgId!),
+    queryFn: () => listEnrollmentTokens(token),
     enabled: !!token && !!orgId,
   });
   const [tokenOpen, setTokenOpen] = useState(false);
@@ -154,19 +154,20 @@ export default function SettingsPage() {
   const [tokenMaxUses, setTokenMaxUses] = useState("100");
   const [deleteTokenTarget, setDeleteTokenTarget] = useState<EnrollmentToken | null>(null);
 
+  const [createdToken, setCreatedToken] = useState<string | null>(null);
+
   const createTokenMutation = useMutation({
-    mutationFn: () => createEnrollmentToken(token, orgId!, { description: tokenDesc, maxUses: Number(tokenMaxUses) }),
-    onSuccess: () => {
-      toast.success("Token created");
+    mutationFn: () => createEnrollmentToken(token, { description: tokenDesc, maxUses: Number(tokenMaxUses) }),
+    onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ["enrollment-tokens", orgId] });
-      setTokenOpen(false);
+      setCreatedToken(data.token);
       setTokenDesc("");
     },
     onError: (err: Error) => toast.error(err.message),
   });
 
   const deleteTokenMutation = useMutation({
-    mutationFn: (id: number) => deleteEnrollmentToken(token, orgId!, id),
+    mutationFn: (id: number) => deleteEnrollmentToken(token, id),
     onSuccess: () => {
       toast.success("Token revoked");
       queryClient.invalidateQueries({ queryKey: ["enrollment-tokens", orgId] });
@@ -178,7 +179,7 @@ export default function SettingsPage() {
   // API Keys
   const { data: apiKeys, isLoading: apiKeysLoading } = useQuery({
     queryKey: ["api-keys", orgId],
-    queryFn: () => listApiKeys(token, orgId!),
+    queryFn: () => listApiKeys(token),
     enabled: !!token && !!orgId,
   });
   const [apiKeyOpen, setApiKeyOpen] = useState(false);
@@ -188,7 +189,7 @@ export default function SettingsPage() {
   const [copied, setCopied] = useState(false);
 
   const createApiKeyMutation = useMutation({
-    mutationFn: () => createApiKey(token, orgId!, { name: apiKeyName }),
+    mutationFn: () => createApiKey(token, { name: apiKeyName }),
     onSuccess: (data) => {
       toast.success("API key created");
       queryClient.invalidateQueries({ queryKey: ["api-keys", orgId] });
@@ -199,7 +200,7 @@ export default function SettingsPage() {
   });
 
   const deleteKeyMutation = useMutation({
-    mutationFn: (id: number) => deleteApiKey(token, orgId!, id),
+    mutationFn: (id: number) => deleteApiKey(token, id),
     onSuccess: () => {
       toast.success("API key revoked");
       queryClient.invalidateQueries({ queryKey: ["api-keys", orgId] });
@@ -401,9 +402,9 @@ export default function SettingsPage() {
                     ) : (
                       tokens.map((t) => (
                         <TableRow key={t.id}>
-                          <TableCell className="font-mono text-xs">{t.token.slice(0, 12)}...</TableCell>
-                          <TableCell>{t.description}</TableCell>
-                          <TableCell>{t.currentUses} / {t.maxUses}</TableCell>
+                          <TableCell className="font-mono text-xs">{t.token.slice(0, 16)}...</TableCell>
+                          <TableCell>{t.name}</TableCell>
+                          <TableCell>{t.useCount} / {t.maxUses}</TableCell>
                           <TableCell>{t.expiresAt ? formatDistanceToNow(new Date(t.expiresAt), { addSuffix: true }) : "Never"}</TableCell>
                           <TableCell>
                             <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={() => setDeleteTokenTarget(t)}>
@@ -540,28 +541,47 @@ export default function SettingsPage() {
       </Dialog>
 
       {/* Create Token Dialog */}
-      <Dialog open={tokenOpen} onOpenChange={setTokenOpen}>
+      <Dialog open={tokenOpen} onOpenChange={(v) => { setTokenOpen(v); if (!v) setCreatedToken(null); }}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Create Enrollment Token</DialogTitle>
             <DialogDescription>Create a token devices will use to register.</DialogDescription>
           </DialogHeader>
-          <div className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="token-desc">Description</Label>
-              <Input id="token-desc" placeholder="Production fleet" value={tokenDesc} onChange={(e) => setTokenDesc(e.target.value)} />
+          {createdToken ? (
+            <div className="space-y-3">
+              <div className="rounded-lg border border-emerald-500/30 bg-emerald-500/5 p-3">
+                <p className="text-sm font-medium mb-2">Token created! Copy it now — it won&apos;t be shown again.</p>
+                <div className="flex items-center gap-2">
+                  <code className="flex-1 rounded bg-muted px-2 py-1 text-xs break-all">{createdToken}</code>
+                  <Button size="sm" variant="outline" onClick={() => { navigator.clipboard.writeText(createdToken); toast.success("Copied!"); }}>
+                    Copy
+                  </Button>
+                </div>
+              </div>
+              <DialogFooter>
+                <Button onClick={() => { setTokenOpen(false); setCreatedToken(null); }}>Done</Button>
+              </DialogFooter>
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="token-max">Max Uses</Label>
-              <Input id="token-max" type="number" value={tokenMaxUses} onChange={(e) => setTokenMaxUses(e.target.value)} />
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setTokenOpen(false)}>Cancel</Button>
-            <Button onClick={() => createTokenMutation.mutate()} disabled={!tokenDesc || createTokenMutation.isPending}>
-              {createTokenMutation.isPending ? "Creating..." : "Create"}
-            </Button>
-          </DialogFooter>
+          ) : (
+            <>
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="token-desc">Name</Label>
+                  <Input id="token-desc" placeholder="Production fleet" value={tokenDesc} onChange={(e) => setTokenDesc(e.target.value)} />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="token-max">Max Uses</Label>
+                  <Input id="token-max" type="number" value={tokenMaxUses} onChange={(e) => setTokenMaxUses(e.target.value)} />
+                </div>
+              </div>
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setTokenOpen(false)}>Cancel</Button>
+                <Button onClick={() => createTokenMutation.mutate()} disabled={!tokenDesc || createTokenMutation.isPending}>
+                  {createTokenMutation.isPending ? "Creating..." : "Create"}
+                </Button>
+              </DialogFooter>
+            </>
+          )}
         </DialogContent>
       </Dialog>
 

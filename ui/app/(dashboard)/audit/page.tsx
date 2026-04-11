@@ -45,7 +45,7 @@ export default function AuditPage() {
 
   const { data: entries, isLoading } = useQuery({
     queryKey: ["audit-log", orgId],
-    queryFn: () => listAuditLog(token, orgId!),
+    queryFn: () => listAuditLog(token),
     enabled: !!token && !!orgId,
   });
 

@@ -42,7 +42,7 @@ public class CommandResultListener {
 
         String topic = topicRoot + "/device/+/command/result";
         try {
-            var subscription = new MqttSubscription(topic, 1);
+            var subscription = new MqttSubscription(topic, MqttTopics.QOS_RELIABLE);
             IMqttMessageListener listener = this::onCommandResult;
             mqttClient.subscribe(new MqttSubscription[]{subscription},
                     new IMqttMessageListener[]{listener});

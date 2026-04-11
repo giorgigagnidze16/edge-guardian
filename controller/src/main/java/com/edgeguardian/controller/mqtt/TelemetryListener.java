@@ -42,7 +42,7 @@ public class TelemetryListener {
 
         String topic = topicRoot + "/device/+/telemetry";
         try {
-            MqttSubscription subscription = new MqttSubscription(topic, 1);
+            MqttSubscription subscription = new MqttSubscription(topic, MqttTopics.QOS_BEST_EFFORT);
             IMqttMessageListener listener = this::onTelemetryMessage;
             mqttClient.subscribe(new MqttSubscription[]{subscription},
                     new IMqttMessageListener[]{listener});
@@ -76,7 +76,8 @@ public class TelemetryListener {
     }
 
     @JsonIgnoreProperties(ignoreUnknown = true)
-    record TelemetryPayload(String deviceId, Instant timestamp, DeviceStatusPayload status) {}
+    record TelemetryPayload(String deviceId, Instant timestamp, DeviceStatusPayload status) {
+    }
 
     @JsonIgnoreProperties(ignoreUnknown = true)
     record DeviceStatusPayload(
@@ -102,7 +103,8 @@ public class TelemetryListener {
             if (lastReconcile != null && !lastReconcile.isEmpty()) {
                 try {
                     s.setLastReconcile(Instant.parse(lastReconcile));
-                } catch (Exception ignored) {}
+                } catch (Exception ignored) {
+                }
             }
             s.setReconcileStatus(reconcileStatus != null ? reconcileStatus : "unknown");
             return s;

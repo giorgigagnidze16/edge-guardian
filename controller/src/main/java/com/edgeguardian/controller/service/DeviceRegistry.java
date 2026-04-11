@@ -13,6 +13,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -23,11 +24,10 @@ import org.springframework.transaction.annotation.Transactional;
  * Replaces the Phase 1 in-memory ConcurrentHashMap implementation
  * with JPA repositories backed by PostgreSQL.
  */
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class DeviceRegistry {
-
-    private static final Logger log = LoggerFactory.getLogger(DeviceRegistry.class);
 
     private final DeviceRepository deviceRepository;
     private final DeviceManifestRepository manifestRepository;

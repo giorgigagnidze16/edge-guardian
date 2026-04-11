@@ -37,14 +37,14 @@ export default function DeploymentDetailPage() {
 
   const { data: deployment, isLoading } = useQuery({
     queryKey: ["deployment", orgId, depId],
-    queryFn: () => getDeployment(token, orgId!, depId),
+    queryFn: () => getDeployment(token, depId),
     enabled: !!token && !!orgId && !!depId,
     refetchInterval: 10_000,
   });
 
   const { data: devices, isLoading: devicesLoading } = useQuery({
     queryKey: ["deployment-devices", orgId, depId],
-    queryFn: () => getDeploymentDevices(token, orgId!, depId),
+    queryFn: () => getDeploymentDevices(token, depId),
     enabled: !!token && !!orgId && !!depId,
     refetchInterval: 10_000,
   });

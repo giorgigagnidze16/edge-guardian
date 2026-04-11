@@ -2,51 +2,46 @@ package com.edgeguardian.controller.api;
 
 import com.edgeguardian.controller.dto.CreateEnrollmentTokenRequest;
 import com.edgeguardian.controller.dto.EnrollmentTokenDto;
-import com.edgeguardian.controller.model.OrgRole;
 import com.edgeguardian.controller.security.TenantPrincipal;
 import com.edgeguardian.controller.service.EnrollmentService;
-import com.edgeguardian.controller.service.OrganizationService;
-import org.springframework.http.HttpStatus;
-import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
+import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 
 @RestController
-@RequestMapping("/api/v1/organizations/{orgId}/enrollment-tokens")
+@RequestMapping("/api/v1/enrollment-tokens")
 @RequiredArgsConstructor
 public class EnrollmentTokenController {
 
     private final EnrollmentService enrollmentService;
-    private final OrganizationService organizationService;
 
     @GetMapping
-    public List<EnrollmentTokenDto> list(@PathVariable Long orgId,
-                                         @AuthenticationPrincipal TenantPrincipal principal) {
-        organizationService.requireRole(orgId, principal.userId(),
-                OrgRole.owner, OrgRole.admin, OrgRole.operator);
-        return enrollmentService.findByOrganization(orgId).stream()
+    @PreAuthorize("@orgSecurity.hasMinRole(authentication, 'OPERATOR')")
+    public List<EnrollmentTokenDto> list(@AuthenticationPrincipal TenantPrincipal principal) {
+        return enrollmentService.findByOrganization(principal.organizationId()).stream()
                 .map(EnrollmentTokenDto::from)
                 .toList();
     }
 
     @PostMapping
+    @PreAuthorize("@orgSecurity.hasMinRole(authentication, 'ADMIN')")
     @ResponseStatus(HttpStatus.CREATED)
-    public EnrollmentTokenDto create(@PathVariable Long orgId,
-                                     @RequestBody CreateEnrollmentTokenRequest request,
-                                     @AuthenticationPrincipal TenantPrincipal principal) {
-        organizationService.requireRole(orgId, principal.userId(), OrgRole.owner, OrgRole.admin);
+    public EnrollmentTokenDto create(
+            @RequestBody CreateEnrollmentTokenRequest request,
+            @AuthenticationPrincipal TenantPrincipal principal) {
         return EnrollmentTokenDto.from(
-                enrollmentService.createToken(orgId, request.name(), request.expiresAt(),
-                        request.maxUses(), principal.userId()));
+                enrollmentService.createToken(principal.organizationId(), request.resolvedName(),
+                        request.expiresAt(), request.maxUses(), principal.userId()));
     }
 
     @DeleteMapping("/{tokenId}")
+    @PreAuthorize("@orgSecurity.hasMinRole(authentication, 'ADMIN')")
     @ResponseStatus(HttpStatus.NO_CONTENT)
-    public void revoke(@PathVariable Long orgId, @PathVariable Long tokenId,
-                       @AuthenticationPrincipal TenantPrincipal principal) {
-        organizationService.requireRole(orgId, principal.userId(), OrgRole.owner, OrgRole.admin);
+    public void revoke(@PathVariable Long tokenId) {
         enrollmentService.revokeToken(tokenId);
     }
 }

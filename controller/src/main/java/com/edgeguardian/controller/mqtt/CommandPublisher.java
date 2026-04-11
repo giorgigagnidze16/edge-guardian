@@ -59,7 +59,7 @@ public class CommandPublisher {
         try {
             byte[] bytes = objectMapper.writeValueAsBytes(payload);
             var message = new MqttMessage(bytes);
-            message.setQos(1);
+            message.setQos(MqttTopics.QOS_RELIABLE);
             message.setRetained(retained);
             mqttClient.publish(topic, message);
         } catch (JsonProcessingException e) {

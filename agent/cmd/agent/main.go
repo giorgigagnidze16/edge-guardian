@@ -21,6 +21,7 @@ import (
 	"github.com/edgeguardian/agent/internal/ota"
 	"github.com/edgeguardian/agent/internal/reconciler"
 	"github.com/edgeguardian/agent/internal/storage"
+	"github.com/edgeguardian/agent/plugins/certificate"
 	"github.com/edgeguardian/agent/plugins/filemanager"
 	"github.com/edgeguardian/agent/plugins/service"
 	"go.uber.org/zap"
@@ -78,6 +79,7 @@ func main() {
 	rec := reconciler.New(cfg.ReconcileInterval, logger)
 	rec.RegisterPlugin(filemanager.New(logger))
 	rec.RegisterPlugin(service.New(logger))
+	// Certificate plugin registered after MQTT client is created (needs requester callback).
 
 	// Load cached desired state from BoltDB (offline-first).
 	var cachedManifest model.DeviceManifest
@@ -99,6 +101,25 @@ func main() {
 		TopicRoot: cfg.MQTT.TopicRoot,
 		Store:     store,
 	}, logger)
+
+	// Register certificate plugin with MQTT-backed requester.
+	rec.RegisterPlugin(certificate.New(logger,
+		func(name, cn string, sans []string, csrPEM []byte, reqType, serial string) error {
+			return mqttClient.PublishCertRequest(name, cn, sans, csrPEM, reqType, serial)
+		}, store))
+
+	// Wire cert response handler: stores signed certs in BoltDB for the plugin to install.
+	mqttClient.SetCertResponseHandler(func(name string, certPEM, caCertPEM []byte) {
+		logger.Info("received signed certificate", zap.String("name", name))
+		if err := store.SaveMeta("cert:"+name, string(certPEM)); err != nil {
+			logger.Error("failed to save cert to BoltDB", zap.String("name", name), zap.Error(err))
+		}
+		if len(caCertPEM) > 0 {
+			if err := store.SaveMeta("ca_cert", string(caCertPEM)); err != nil {
+				logger.Error("failed to save CA cert to BoltDB", zap.Error(err))
+			}
+		}
+	})
 
 	// Wire desired state handler: updates reconciler + persists to BoltDB.
 	mqttClient.SetDesiredStateHandler(func(manifest *model.DeviceManifest) {

@@ -21,6 +21,40 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         token.refreshToken = account.refresh_token;
         token.expiresAt = account.expires_at;
       }
+
+      // Return early if the access token has not expired
+      if (typeof token.expiresAt === "number" && Date.now() < token.expiresAt * 1000) {
+        return token;
+      }
+
+      // Access token expired — try to refresh
+      if (!token.refreshToken) return token;
+      try {
+        const issuer =
+          process.env.KEYCLOAK_ISSUER ??
+          "http://localhost:9090/realms/edgeguardian";
+        const response = await fetch(`${issuer}/protocol/openid-connect/token`, {
+          method: "POST",
+          headers: { "Content-Type": "application/x-www-form-urlencoded" },
+          body: new URLSearchParams({
+            grant_type: "refresh_token",
+            client_id: process.env.KEYCLOAK_CLIENT_ID ?? "edgeguardian-ui",
+            client_secret: process.env.KEYCLOAK_CLIENT_SECRET ?? "",
+            refresh_token: token.refreshToken as string,
+          }),
+        });
+
+        const refreshed = await response.json();
+        if (!response.ok) throw refreshed;
+
+        token.accessToken = refreshed.access_token;
+        token.refreshToken = refreshed.refresh_token ?? token.refreshToken;
+        token.expiresAt = Math.floor(Date.now() / 1000) + refreshed.expires_in;
+      } catch {
+        // Refresh failed — force re-login
+        token.error = "RefreshTokenError";
+      }
+
       return token;
     },
     async session({ session, token }) {

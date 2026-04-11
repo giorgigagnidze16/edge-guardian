@@ -51,7 +51,7 @@ export function UploadArtifactDialog({ open, onOpenChange }: UploadArtifactDialo
 
   const mutation = useMutation({
     mutationFn: () =>
-      uploadArtifact(session?.accessToken ?? "", orgId!, {
+      uploadArtifact(session?.accessToken ?? "", {
         name,
         version,
         architecture,

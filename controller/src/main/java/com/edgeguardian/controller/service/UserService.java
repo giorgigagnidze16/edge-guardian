@@ -1,85 +1,29 @@
 package com.edgeguardian.controller.service;
 
-import com.edgeguardian.controller.model.OrgRole;
-import com.edgeguardian.controller.model.Organization;
-import com.edgeguardian.controller.model.OrganizationMember;
 import com.edgeguardian.controller.model.User;
-import com.edgeguardian.controller.repository.OrganizationMemberRepository;
-import com.edgeguardian.controller.repository.OrganizationRepository;
 import com.edgeguardian.controller.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.Optional;
 
-/**
- * Syncs user from Keycloak JWT on first login, auto-creates personal org.
- */
 @Slf4j
 @Service
 @RequiredArgsConstructor
 public class UserService {
 
     private final UserRepository userRepository;
-    private final OrganizationRepository organizationRepository;
-    private final OrganizationMemberRepository memberRepository;
+    private final OrganizationService organizationService;
 
-    /**
-     * Sync user from Keycloak JWT. Creates user + personal org on first login.
-     */
     @Transactional
     public User syncFromJwt(Jwt jwt) {
-        String keycloakId = jwt.getSubject();
-        String email = jwt.getClaimAsString("email");
-        String name = jwt.getClaimAsString("name");
-        String picture = jwt.getClaimAsString("picture");
-
-        Optional<User> existing = userRepository.findByKeycloakId(keycloakId);
-        if (existing.isPresent()) {
-            User user = existing.get();
-            // Update fields that may have changed in Keycloak
-            if (name != null) user.setDisplayName(name);
-            if (picture != null) user.setAvatarUrl(picture);
-            if (email != null) user.setEmail(email);
-            return userRepository.save(user);
-        }
-
-        // Create new user
-        User user = User.builder()
-                .keycloakId(keycloakId)
-                .email(email)
-                .displayName(name != null ? name : email)
-                .avatarUrl(picture)
-                .build();
-        user = userRepository.save(user);
-        log.info("New user synced from Keycloak: {} ({})", email, keycloakId);
-
-        // Auto-create personal organization
-        String slug = generateSlug(email);
-        Organization personalOrg = Organization.builder()
-                .name(user.getDisplayName() + "'s Organization")
-                .slug(slug)
-                .description("Personal organization")
-                .build();
-        personalOrg = organizationRepository.save(personalOrg);
-
-        OrganizationMember membership = OrganizationMember.builder()
-                .organizationId(personalOrg.getId())
-                .userId(user.getId())
-                .orgRole(OrgRole.owner)
-                .build();
-        memberRepository.save(membership);
-
-        log.info("Personal org created for user {}: {}", email, slug);
-        return user;
-    }
-
-    @Transactional(readOnly = true)
-    public Optional<User> findByKeycloakId(String keycloakId) {
-        return userRepository.findByKeycloakId(keycloakId);
+        return userRepository.findByKeycloakId(jwt.getSubject())
+                .map(existing -> updateProfile(existing, jwt))
+                .orElseGet(() -> registerNewUser(jwt));
     }
 
     @Transactional(readOnly = true)
@@ -87,17 +31,51 @@ public class UserService {
         return userRepository.findById(id);
     }
 
-    private String generateSlug(String email) {
-        String base = email.split("@")[0]
-                .toLowerCase()
-                .replaceAll("[^a-z0-9]", "-")
-                .replaceAll("-+", "-");
-        // Ensure uniqueness
-        String slug = base;
-        int counter = 1;
-        while (organizationRepository.existsBySlug(slug)) {
-            slug = base + "-" + counter++;
+    private User updateProfile(User user, Jwt jwt) {
+        boolean changed = false;
+
+        String email = jwt.getClaimAsString("email");
+        if (email != null && !email.equals(user.getEmail())) {
+            user.setEmail(email);
+            changed = true;
         }
-        return slug;
+
+        String name = jwt.getClaimAsString("name");
+        if (name != null && !name.equals(user.getDisplayName())) {
+            user.setDisplayName(name);
+            changed = true;
+        }
+
+        String picture = jwt.getClaimAsString("picture");
+        if (picture != null && !picture.equals(user.getAvatarUrl())) {
+            user.setAvatarUrl(picture);
+            changed = true;
+        }
+
+        return changed ? userRepository.save(user) : user;
+    }
+
+    private User registerNewUser(Jwt jwt) {
+        String keycloakId = jwt.getSubject();
+        String email = jwt.getClaimAsString("email");
+        String name = jwt.getClaimAsString("name");
+
+        User user;
+        try {
+            user = userRepository.save(User.builder()
+                    .keycloakId(keycloakId)
+                    .email(email)
+                    .displayName(name != null ? name : email)
+                    .avatarUrl(jwt.getClaimAsString("picture"))
+                    .build());
+        } catch (DataIntegrityViolationException e) {
+            return userRepository.findByKeycloakId(keycloakId)
+                    .orElseThrow(() -> new IllegalStateException(
+                            "User not found after concurrent insert", e));
+        }
+
+        log.info("New user synced from Keycloak: {} ({})", email, keycloakId);
+        organizationService.createPersonalOrganization(user);
+        return user;
     }
 }

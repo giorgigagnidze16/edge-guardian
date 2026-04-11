@@ -3,19 +3,19 @@ package com.edgeguardian.controller.api;
 import com.edgeguardian.controller.dto.*;
 import com.edgeguardian.controller.model.AuditLog;
 import com.edgeguardian.controller.model.OrgRole;
-import com.edgeguardian.controller.model.Organization;
 import com.edgeguardian.controller.model.OrganizationMember;
 import com.edgeguardian.controller.model.User;
 import com.edgeguardian.controller.repository.UserRepository;
 import com.edgeguardian.controller.security.TenantPrincipal;
 import com.edgeguardian.controller.service.AuditService;
 import com.edgeguardian.controller.service.OrganizationService;
+import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.http.HttpStatus;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.server.ResponseStatusException;
-import lombok.RequiredArgsConstructor;
 
 import java.util.List;
 import java.util.Map;
@@ -23,7 +23,7 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 
 @RestController
-@RequestMapping("/api/v1/organizations")
+@RequestMapping("/api/v1/organization")
 @RequiredArgsConstructor
 public class OrganizationController {
 
@@ -31,50 +31,35 @@ public class OrganizationController {
     private final UserRepository userRepository;
     private final AuditService auditService;
 
-    @PostMapping
-    @ResponseStatus(HttpStatus.CREATED)
-    public OrganizationDto create(@RequestBody CreateOrganizationRequest request,
-                                  @AuthenticationPrincipal TenantPrincipal principal) {
-        Organization org = organizationService.create(
-                request.name(), request.slug(), request.description(), principal.userId());
-        return OrganizationDto.from(org);
-    }
-
-    @GetMapping("/{orgId}")
-    public OrganizationDto get(@PathVariable Long orgId,
-                               @AuthenticationPrincipal TenantPrincipal principal) {
-        organizationService.requireRole(orgId, principal.userId(),
-                OrgRole.owner, OrgRole.admin, OrgRole.operator, OrgRole.viewer);
-        return organizationService.findById(orgId)
+    @GetMapping
+    @PreAuthorize("@orgSecurity.hasMinRole(authentication, 'VIEWER')")
+    public OrganizationDto get(@AuthenticationPrincipal TenantPrincipal principal) {
+        return organizationService.findById(principal.organizationId())
                 .map(OrganizationDto::from)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND));
     }
 
-    @PutMapping("/{orgId}")
-    public OrganizationDto update(@PathVariable Long orgId,
-                                  @RequestBody UpdateOrganizationRequest request,
+    @PutMapping
+    @PreAuthorize("@orgSecurity.hasMinRole(authentication, 'ADMIN')")
+    public OrganizationDto update(@RequestBody UpdateOrganizationRequest request,
                                   @AuthenticationPrincipal TenantPrincipal principal) {
-        organizationService.requireRole(orgId, principal.userId(), OrgRole.owner, OrgRole.admin);
         return OrganizationDto.from(
-                organizationService.update(orgId, request.name(), request.description()));
+                organizationService.update(principal.organizationId(), request.name(), request.description()));
     }
 
-    @DeleteMapping("/{orgId}")
+    @DeleteMapping
+    @PreAuthorize("@orgSecurity.hasMinRole(authentication, 'OWNER')")
     @ResponseStatus(HttpStatus.NO_CONTENT)
-    public void delete(@PathVariable Long orgId,
-                       @AuthenticationPrincipal TenantPrincipal principal) {
-        organizationService.requireRole(orgId, principal.userId(), OrgRole.owner);
-        organizationService.delete(orgId);
+    public void delete(@AuthenticationPrincipal TenantPrincipal principal) {
+        organizationService.delete(principal.organizationId());
     }
 
     // --- Members ---
 
-    @GetMapping("/{orgId}/members")
-    public List<MemberDto> listMembers(@PathVariable Long orgId,
-                                       @AuthenticationPrincipal TenantPrincipal principal) {
-        organizationService.requireRole(orgId, principal.userId(),
-                OrgRole.owner, OrgRole.admin, OrgRole.operator, OrgRole.viewer);
-        List<OrganizationMember> members = organizationService.getMembers(orgId);
+    @GetMapping("/members")
+    @PreAuthorize("@orgSecurity.hasMinRole(authentication, 'VIEWER')")
+    public List<MemberDto> listMembers(@AuthenticationPrincipal TenantPrincipal principal) {
+        List<OrganizationMember> members = organizationService.getMembers(principal.organizationId());
         List<Long> userIds = members.stream().map(OrganizationMember::getUserId).toList();
         Map<Long, User> usersById = userRepository.findAllById(userIds).stream()
                 .collect(Collectors.toMap(User::getId, Function.identity()));
@@ -83,25 +68,24 @@ public class OrganizationController {
                 .toList();
     }
 
-    @PostMapping("/{orgId}/members")
+    @PostMapping("/members")
+    @PreAuthorize("@orgSecurity.hasMinRole(authentication, 'ADMIN')")
     @ResponseStatus(HttpStatus.CREATED)
-    public MemberDto addMember(@PathVariable Long orgId,
-                               @RequestBody AddMemberRequest request,
+    public MemberDto addMember(@RequestBody AddMemberRequest request,
                                @AuthenticationPrincipal TenantPrincipal principal) {
-        organizationService.requireRole(orgId, principal.userId(), OrgRole.owner, OrgRole.admin);
         OrganizationMember member = organizationService.addMember(
-                orgId, request.userId(), OrgRole.valueOf(request.role()));
+                principal.organizationId(), request.userId(), OrgRole.valueOf(request.role()));
         User user = userRepository.findById(member.getUserId())
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "User not found"));
         return MemberDto.from(member, user);
     }
 
-    @DeleteMapping("/{orgId}/members/{memberId}")
+    @DeleteMapping("/members/{memberId}")
+    @PreAuthorize("@orgSecurity.hasMinRole(authentication, 'ADMIN')")
     @ResponseStatus(HttpStatus.NO_CONTENT)
-    public void removeMember(@PathVariable Long orgId, @PathVariable Long memberId,
+    public void removeMember(@PathVariable Long memberId,
                              @AuthenticationPrincipal TenantPrincipal principal) {
-        organizationService.requireRole(orgId, principal.userId(), OrgRole.owner, OrgRole.admin);
-        organizationService.removeMember(orgId, memberId);
+        organizationService.removeMember(principal.organizationId(), memberId);
     }
 
     // --- Audit Log ---
@@ -116,15 +100,14 @@ public class OrganizationController {
         }
     }
 
-    @GetMapping("/{orgId}/audit-log")
+    @GetMapping("/audit-log")
+    @PreAuthorize("@orgSecurity.hasMinRole(authentication, 'VIEWER')")
     public List<AuditLogDto> listAuditLog(
-            @PathVariable Long orgId,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "50") int size,
             @AuthenticationPrincipal TenantPrincipal principal) {
-        organizationService.requireRole(orgId, principal.userId(),
-                OrgRole.owner, OrgRole.admin, OrgRole.operator, OrgRole.viewer);
-        List<AuditLog> entries = auditService.findByOrganization(orgId, PageRequest.of(page, size)).getContent();
+        List<AuditLog> entries = auditService.findByOrganization(
+                principal.organizationId(), PageRequest.of(page, size)).getContent();
         List<Long> userIds = entries.stream().map(AuditLog::getUserId).filter(id -> id != null).distinct().toList();
         Map<Long, User> usersById = userRepository.findAllById(userIds).stream()
                 .collect(Collectors.toMap(User::getId, Function.identity()));
@@ -133,5 +116,4 @@ public class OrganizationController {
                         ? usersById.get(e.getUserId()).getEmail() : null))
                 .toList();
     }
-
 }

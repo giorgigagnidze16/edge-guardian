@@ -39,7 +39,7 @@ public class OtaStatusListener {
 
         String topic = topicRoot + "/device/+/ota/status";
         try {
-            var subscription = new MqttSubscription(topic, 1);
+            var subscription = new MqttSubscription(topic, MqttTopics.QOS_RELIABLE);
             IMqttMessageListener listener = this::onOtaStatus;
             mqttClient.subscribe(new MqttSubscription[]{subscription},
                     new IMqttMessageListener[]{listener});

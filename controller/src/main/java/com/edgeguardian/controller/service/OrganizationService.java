@@ -3,10 +3,12 @@ package com.edgeguardian.controller.service;
 import com.edgeguardian.controller.model.OrgRole;
 import com.edgeguardian.controller.model.Organization;
 import com.edgeguardian.controller.model.OrganizationMember;
+import com.edgeguardian.controller.model.User;
 import com.edgeguardian.controller.repository.OrganizationMemberRepository;
 import com.edgeguardian.controller.repository.OrganizationRepository;
-import org.springframework.http.HttpStatus;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
@@ -14,6 +16,7 @@ import org.springframework.web.server.ResponseStatusException;
 import java.util.List;
 import java.util.Optional;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class OrganizationService {
@@ -36,7 +39,7 @@ public class OrganizationService {
         OrganizationMember membership = OrganizationMember.builder()
                 .organizationId(org.getId())
                 .userId(ownerUserId)
-                .orgRole(OrgRole.owner)
+                .orgRole(OrgRole.OWNER)
                 .build();
         memberRepository.save(membership);
 
@@ -69,8 +72,6 @@ public class OrganizationService {
         organizationRepository.deleteById(orgId);
     }
 
-    // --- Member management ---
-
     @Transactional(readOnly = true)
     public List<OrganizationMember> getMembers(Long orgId) {
         return memberRepository.findByOrganizationId(orgId);
@@ -102,13 +103,27 @@ public class OrganizationService {
         memberRepository.deleteByOrganizationIdAndUserId(orgId, userId);
     }
 
-    @Transactional(readOnly = true)
-    public void requireRole(Long orgId, Long userId, OrgRole... allowedRoles) {
-        OrganizationMember member = memberRepository.findByOrganizationIdAndUserId(orgId, userId)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.FORBIDDEN, "Not a member of this organization"));
-        for (OrgRole role : allowedRoles) {
-            if (member.getOrgRole() == role) return;
+    @Transactional
+    public void createPersonalOrganization(User user) {
+        String slug = generateUniqueSlug(user.getEmail());
+        Organization org = create(
+                user.getDisplayName() + "'s Organization",
+                slug,
+                "Personal organization",
+                user.getId());
+        log.info("Personal org created for user {}: {}", user.getEmail(), slug);
+    }
+
+    private String generateUniqueSlug(String email) {
+        String base = email.split("@")[0]
+                .toLowerCase()
+                .replaceAll("[^a-z0-9]", "-")
+                .replaceAll("-+", "-");
+        String slug = base;
+        int counter = 1;
+        while (organizationRepository.existsBySlug(slug)) {
+            slug = base + "-" + counter++;
         }
-        throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Insufficient role");
+        return slug;
     }
 }

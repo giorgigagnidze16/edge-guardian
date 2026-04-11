@@ -1,6 +1,9 @@
 package com.edgeguardian.controller.mqtt;
 
 import com.edgeguardian.controller.dto.AgentRegisterResponse;
+import com.edgeguardian.controller.model.Device;
+import com.edgeguardian.controller.model.DeviceManifestEntity;
+import com.edgeguardian.controller.service.CertificateAuthorityService;
 import com.edgeguardian.controller.service.DeviceRegistry;
 import com.edgeguardian.controller.service.EnrollmentService;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
@@ -16,12 +19,12 @@ import org.eclipse.paho.mqttv5.common.MqttSubscription;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
+import java.util.LinkedHashMap;
 import java.util.Map;
 
 /**
- * Handles device enrollment requests over MQTT.
- * Subscribe: {topicRoot}/device/+/enroll/request
- * Publish:   {topicRoot}/device/{deviceId}/enroll/response
+ * Handles device enrollment over MQTT.
+ * Validates enrollment token, registers device, returns device token + CA cert.
  */
 @Slf4j
 @Component
@@ -30,9 +33,9 @@ public class EnrollmentListener {
 
     private final MqttClient mqttClient;
     private final ObjectMapper objectMapper;
-    private final EnrollmentService enrollmentService;
     private final DeviceRegistry deviceRegistry;
-    private final CommandPublisher publisher;
+    private final EnrollmentService enrollmentService;
+    private final CertificateAuthorityService caService;
 
     @Value("${edgeguardian.controller.mqtt.topic-root:edgeguardian}")
     private String topicRoot;
@@ -40,86 +43,86 @@ public class EnrollmentListener {
     @PostConstruct
     public void subscribe() {
         if (!mqttClient.isConnected()) {
-            log.warn("MQTT client not connected, enrollment subscription deferred");
+            log.warn("MQTT not connected, enrollment subscription deferred");
             return;
         }
-
         String topic = topicRoot + "/device/+/enroll/request";
         try {
-            var subscription = new MqttSubscription(topic, 1);
-            IMqttMessageListener listener = this::onEnrollRequest;
-            mqttClient.subscribe(new MqttSubscription[]{subscription},
-                    new IMqttMessageListener[]{listener});
+            mqttClient.subscribe(
+                    new MqttSubscription[]{new MqttSubscription(topic, MqttTopics.QOS_RELIABLE)},
+                    new IMqttMessageListener[]{this::onEnrollRequest});
             log.info("Subscribed to enrollment topic: {}", topic);
         } catch (MqttException e) {
-            log.error("Failed to subscribe to enrollment topic: {}", e.getMessage());
+            log.error("Failed to subscribe to enrollment topic", e);
         }
     }
 
     private void onEnrollRequest(String topic, MqttMessage message) {
+        String deviceId = MqttTopics.extractDeviceId(topic);
         try {
             var request = objectMapper.readValue(message.getPayload(), EnrollRequestPayload.class);
+            String resolvedId = request.deviceId() != null ? request.deviceId() : deviceId;
 
-            if (request.deviceId() == null || request.deviceId().isBlank()) {
-                publishResponse(request.deviceId(), false, "deviceId is required", null);
-                return;
-            }
-            if (request.enrollmentToken() == null || request.enrollmentToken().isBlank()) {
-                publishResponse(request.deviceId(), false, "enrollmentToken is required", null);
-                return;
-            }
+            validate(resolvedId, request);
 
             var result = enrollmentService.enrollDevice(
-                    request.enrollmentToken(), request.deviceId(), request.hostname(),
+                    request.enrollmentToken(), resolvedId, request.hostname(),
                     request.architecture(), request.os(), request.agentVersion(), request.labels());
 
-            Map<String, Object> manifestMap = deviceRegistry.getManifest(result.device().getDeviceId())
-                    .map(entity -> {
-                        Map<String, Object> map = new java.util.LinkedHashMap<>();
-                        map.put("apiVersion", entity.getApiVersion());
-                        map.put("kind", entity.getKind());
-                        map.put("metadata", entity.getMetadata() != null ? entity.getMetadata() : Map.of());
-                        map.put("spec", entity.getSpec() != null ? entity.getSpec() : Map.of());
-                        map.put("version", entity.getVersion());
-                        return map;
-                    }).orElse(null);
+            Device device = result.device();
+            var response = new AgentRegisterResponse(
+                    true,
+                    "Device enrolled successfully",
+                    buildManifestMap(device.getDeviceId()),
+                    result.deviceToken(),
+                    caService.getCaCertPem(device.getOrganizationId())
+            );
 
-            var response = new AgentRegisterResponse(true, "Device enrolled successfully",
-                    manifestMap, result.deviceToken());
-
-            publishResponse(request.deviceId(), response);
-            log.info("Device {} enrolled via MQTT", request.deviceId());
+            publish(resolvedId, response);
+            log.info("Device {} enrolled to org {}", resolvedId, device.getOrganizationId());
 
         } catch (Exception e) {
-            log.error("Failed to process enrollment request from topic {}: {}", topic, e.getMessage());
-            String deviceId = extractDeviceId(topic);
+            log.error("Enrollment failed for topic {}: {}", topic, e.getMessage(), e);
             if (deviceId != null) {
-                publishResponse(deviceId, false, e.getMessage(), null);
+                publish(deviceId, AgentRegisterResponse.error(e.getMessage()));
             }
         }
     }
 
-    private void publishResponse(String deviceId, boolean accepted, String message, String token) {
-        publishResponse(deviceId, new AgentRegisterResponse(accepted, message, null, token));
-    }
-
-    private void publishResponse(String deviceId, AgentRegisterResponse response) {
-        if (deviceId == null) return;
-        try {
-            String responseTopic = topicRoot + "/device/" + deviceId + "/enroll/response";
-            byte[] payload = objectMapper.writeValueAsBytes(response);
-            var msg = new MqttMessage(payload);
-            msg.setQos(1);
-            msg.setRetained(false);
-            mqttClient.publish(responseTopic, msg);
-        } catch (Exception e) {
-            log.error("Failed to publish enrollment response to device {}: {}", deviceId, e.getMessage());
+    private void validate(String deviceId, EnrollRequestPayload request) {
+        if (deviceId == null || deviceId.isBlank()) {
+            throw new IllegalArgumentException("deviceId is required");
+        }
+        if (request.enrollmentToken() == null || request.enrollmentToken().isBlank()) {
+            throw new IllegalArgumentException("enrollmentToken is required");
         }
     }
 
-    private String extractDeviceId(String topic) {
-        String[] parts = topic.split("/");
-        return parts.length >= 3 ? parts[2] : null;
+    private Map<String, Object> buildManifestMap(String deviceId) {
+        return deviceRegistry.getManifest(deviceId)
+                .map(EnrollmentListener::toManifestMap)
+                .orElse(null);
+    }
+
+    private void publish(String deviceId, AgentRegisterResponse response) {
+        String responseTopic = topicRoot + "/device/" + deviceId + "/enroll/response";
+        try {
+            var msg = new MqttMessage(objectMapper.writeValueAsBytes(response));
+            msg.setQos(MqttTopics.QOS_RELIABLE);
+            mqttClient.publish(responseTopic, msg);
+        } catch (Exception e) {
+            log.error("Failed to publish enrollment response to {}: {}", deviceId, e.getMessage());
+        }
+    }
+
+    private static Map<String, Object> toManifestMap(DeviceManifestEntity entity) {
+        var map = new LinkedHashMap<String, Object>();
+        map.put("apiVersion", entity.getApiVersion());
+        map.put("kind", entity.getKind());
+        map.put("metadata", entity.getMetadata() != null ? entity.getMetadata() : Map.of());
+        map.put("spec", entity.getSpec() != null ? entity.getSpec() : Map.of());
+        map.put("version", entity.getVersion());
+        return map;
     }
 
     @JsonIgnoreProperties(ignoreUnknown = true)
@@ -131,5 +134,6 @@ public class EnrollmentListener {
             String os,
             String agentVersion,
             Map<String, String> labels
-    ) {}
+    ) {
+    }
 }

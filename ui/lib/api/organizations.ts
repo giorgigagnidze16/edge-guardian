@@ -28,22 +28,17 @@ export async function getMe(token: string): Promise<MeResponse> {
   return apiFetch<MeResponse>("/api/v1/me", { token });
 }
 
-export async function createOrganization(
-  token: string,
-  data: { name: string; slug: string; description?: string },
-): Promise<Organization> {
-  return apiFetch<Organization>("/api/v1/organizations", {
-    method: "POST",
-    token,
-    body: JSON.stringify(data),
-  });
+export async function getOrganization(token: string): Promise<Organization> {
+  return apiFetch<Organization>("/api/v1/organization", { token });
 }
 
-export async function getOrganization(
+export async function updateOrganization(
   token: string,
-  orgId: number,
+  data: { name?: string; description?: string },
 ): Promise<Organization> {
-  return apiFetch<Organization>(`/api/v1/organizations/${orgId}`, { token });
+  return apiFetch<Organization>("/api/v1/organization", {
+    method: "PUT", token, body: JSON.stringify(data),
+  });
 }
 
 export interface OrgMember {
@@ -59,9 +54,9 @@ export interface OrgMember {
 export interface EnrollmentToken {
   id: number;
   token: string;
-  description: string;
+  name: string;
   maxUses: number;
-  currentUses: number;
+  useCount: number;
   expiresAt: string | null;
   createdAt: string;
 }
@@ -75,114 +70,47 @@ export interface ApiKeyEntry {
   createdAt: string;
 }
 
-export async function listMembers(
-  token: string,
-  orgId: number,
-): Promise<OrgMember[]> {
-  return apiFetch<OrgMember[]>(
-    `/api/v1/organizations/${orgId}/members`,
-    { token },
-  );
+export async function listMembers(token: string): Promise<OrgMember[]> {
+  return apiFetch<OrgMember[]>("/api/v1/organization/members", { token });
 }
 
-export async function addMember(
-  token: string,
-  orgId: number,
-  data: { email: string; role: string },
-): Promise<void> {
-  return apiFetch(`/api/v1/organizations/${orgId}/members`, {
-    method: "POST",
-    token,
-    body: JSON.stringify(data),
+export async function addMember(token: string, data: { email: string; role: string }): Promise<void> {
+  return apiFetch("/api/v1/organization/members", {
+    method: "POST", token, body: JSON.stringify(data),
   });
 }
 
-export async function listEnrollmentTokens(
-  token: string,
-  orgId: number,
-): Promise<EnrollmentToken[]> {
-  return apiFetch<EnrollmentToken[]>(
-    `/api/v1/organizations/${orgId}/enrollment-tokens`,
-    { token },
-  );
+export async function removeMember(token: string, userId: number): Promise<void> {
+  return apiFetch(`/api/v1/organization/members/${userId}`, { method: "DELETE", token });
+}
+
+export async function listEnrollmentTokens(token: string): Promise<EnrollmentToken[]> {
+  return apiFetch<EnrollmentToken[]>("/api/v1/enrollment-tokens", { token });
 }
 
 export async function createEnrollmentToken(
   token: string,
-  orgId: number,
   data: { description: string; maxUses: number },
 ): Promise<EnrollmentToken> {
-  return apiFetch<EnrollmentToken>(
-    `/api/v1/organizations/${orgId}/enrollment-tokens`,
-    { method: "POST", token, body: JSON.stringify(data) },
-  );
-}
-
-export async function listApiKeys(
-  token: string,
-  orgId: number,
-): Promise<ApiKeyEntry[]> {
-  return apiFetch<ApiKeyEntry[]>(
-    `/api/v1/organizations/${orgId}/api-keys`,
-    { token },
-  );
-}
-
-export async function createApiKey(
-  token: string,
-  orgId: number,
-  data: { name: string },
-): Promise<{ id: number; rawKey: string }> {
-  return apiFetch(`/api/v1/organizations/${orgId}/api-keys`, {
-    method: "POST",
-    token,
-    body: JSON.stringify(data),
+  return apiFetch<EnrollmentToken>("/api/v1/enrollment-tokens", {
+    method: "POST", token, body: JSON.stringify(data),
   });
 }
 
-export async function updateOrganization(
-  token: string,
-  orgId: number,
-  data: { name?: string; description?: string },
-): Promise<Organization> {
-  return apiFetch<Organization>(`/api/v1/organizations/${orgId}`, {
-    method: "PUT",
-    token,
-    body: JSON.stringify(data),
-  });
+export async function deleteEnrollmentToken(token: string, tokenId: number): Promise<void> {
+  return apiFetch(`/api/v1/enrollment-tokens/${tokenId}`, { method: "DELETE", token });
 }
 
-export async function removeMember(
-  token: string,
-  orgId: number,
-  userId: number,
-): Promise<void> {
-  return apiFetch(`/api/v1/organizations/${orgId}/members/${userId}`, {
-    method: "DELETE",
-    token,
-  });
+export async function listApiKeys(token: string): Promise<ApiKeyEntry[]> {
+  return apiFetch<ApiKeyEntry[]>("/api/v1/api-keys", { token });
 }
 
-export async function deleteEnrollmentToken(
-  token: string,
-  orgId: number,
-  tokenId: number,
-): Promise<void> {
-  return apiFetch(`/api/v1/organizations/${orgId}/enrollment-tokens/${tokenId}`, {
-    method: "DELETE",
-    token,
-  });
+export async function createApiKey(token: string, data: { name: string }): Promise<{ id: number; rawKey: string }> {
+  return apiFetch("/api/v1/api-keys", { method: "POST", token, body: JSON.stringify(data) });
 }
 
-export async function deleteApiKey(
-  token: string,
-  orgId: number,
-  keyId: number,
-): Promise<void> {
-  return apiFetch(`/api/v1/organizations/${orgId}/api-keys/${keyId}`, {
-    method: "DELETE",
-    token,
-  });
+export async function deleteApiKey(token: string, keyId: number): Promise<void> {
+  return apiFetch(`/api/v1/api-keys/${keyId}`, { method: "DELETE", token });
 }
 
 export interface AuditLogEntry {
@@ -198,7 +126,6 @@ export interface AuditLogEntry {
 
 export async function listAuditLog(
   token: string,
-  orgId: number,
   params?: { page?: number; size?: number; action?: string; resourceType?: string },
 ): Promise<AuditLogEntry[]> {
   const searchParams = new URLSearchParams();
@@ -208,7 +135,6 @@ export async function listAuditLog(
   if (params?.resourceType) searchParams.set("resourceType", params.resourceType);
   const qs = searchParams.toString();
   return apiFetch<AuditLogEntry[]>(
-    `/api/v1/organizations/${orgId}/audit-log${qs ? `?${qs}` : ""}`,
-    { token },
+    `/api/v1/organization/audit-log${qs ? `?${qs}` : ""}`, { token },
   );
 }

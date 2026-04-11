@@ -108,7 +108,7 @@ public class Device {
     }
 
     public enum DeviceState {
-        ONLINE, DEGRADED, OFFLINE
+        ONLINE, DEGRADED, OFFLINE, SUSPENDED
     }
 
     @Override

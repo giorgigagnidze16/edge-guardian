@@ -19,6 +19,9 @@ type CommandHandler func(cmd model.Command)
 // DesiredStateHandler is called when a new desired state manifest is pushed.
 type DesiredStateHandler func(manifest *model.DeviceManifest)
 
+// CertResponseHandler is called when a signed certificate is received from the controller.
+type CertResponseHandler func(name string, certPEM, caCertPEM []byte)
+
 // MQTTClient manages the MQTT connection for all agent-controller communication.
 // It uses BoltDB for offline buffering of outgoing messages.
 type MQTTClient struct {
@@ -29,6 +32,7 @@ type MQTTClient struct {
 	logger              *zap.Logger
 	cmdHandler          CommandHandler
 	desiredStateHandler DesiredStateHandler
+	certResponseHandler CertResponseHandler
 	enrollResponseCh    chan *model.RegisterResponse
 	mu                  sync.RWMutex
 }
@@ -84,6 +88,13 @@ func (mc *MQTTClient) SetDesiredStateHandler(handler DesiredStateHandler) {
 	mc.mu.Lock()
 	defer mc.mu.Unlock()
 	mc.desiredStateHandler = handler
+}
+
+// SetCertResponseHandler sets the callback for certificate responses from the controller.
+func (mc *MQTTClient) SetCertResponseHandler(handler CertResponseHandler) {
+	mc.mu.Lock()
+	defer mc.mu.Unlock()
+	mc.certResponseHandler = handler
 }
 
 // Connect establishes the MQTT connection. Non-blocking: returns error only
@@ -194,6 +205,22 @@ func (mc *MQTTClient) PublishOTAStatus(report *model.OTAStatusReport) error {
 // PublishCommandResult sends the outcome of a command execution.
 func (mc *MQTTClient) PublishCommandResult(result *model.CommandResult) error {
 	return mc.publishWithQueue(mc.topic("command/result"), result)
+}
+
+// --- Certificates ---
+
+// PublishCertRequest sends a certificate signing request to the controller.
+func (mc *MQTTClient) PublishCertRequest(name, commonName string, sans []string, csrPEM []byte, reqType, currentSerial string) error {
+	msg := map[string]interface{}{
+		"deviceId":      mc.deviceID,
+		"name":          name,
+		"commonName":    commonName,
+		"sans":          sans,
+		"csrPem":        string(csrPEM),
+		"type":          reqType,
+		"currentSerial": currentSerial,
+	}
+	return mc.publishWithQueue(mc.topic("cert/request"), msg)
 }
 
 // --- Telemetry ---
@@ -329,6 +356,9 @@ func (mc *MQTTClient) onConnect(client mqtt.Client) {
 	// Subscribe to desired state pushes (retained messages).
 	mc.subscribeToTopic(client, mc.topic("state/desired"), mc.handleDesiredState)
 
+	// Subscribe to certificate responses.
+	mc.subscribeToTopic(client, mc.topic("cert/response"), mc.handleCertResponse)
+
 	// Drain any messages that were queued while offline.
 	go mc.DrainOfflineQueue()
 }
@@ -371,6 +401,40 @@ func (mc *MQTTClient) handleCommand(_ mqtt.Client, msg mqtt.Message) {
 
 	if handler != nil {
 		handler(cmdMsg.Command)
+	}
+}
+
+// handleCertResponse processes certificate responses from the controller.
+func (mc *MQTTClient) handleCertResponse(_ mqtt.Client, msg mqtt.Message) {
+	mc.logger.Info("cert response received",
+		zap.String("topic", msg.Topic()),
+		zap.Int("payload_len", len(msg.Payload())),
+	)
+
+	var resp struct {
+		Name      string `json:"name"`
+		Accepted  bool   `json:"accepted"`
+		Message   string `json:"message"`
+		CertPem   string `json:"certPem"`
+		CaCertPem string `json:"caCertPem"`
+	}
+	if err := json.Unmarshal(msg.Payload(), &resp); err != nil {
+		mc.logger.Error("unmarshal cert response", zap.Error(err))
+		return
+	}
+
+	if !resp.Accepted {
+		mc.logger.Warn("cert request rejected",
+			zap.String("name", resp.Name), zap.String("message", resp.Message))
+		return
+	}
+
+	mc.mu.RLock()
+	handler := mc.certResponseHandler
+	mc.mu.RUnlock()
+
+	if handler != nil {
+		handler(resp.Name, []byte(resp.CertPem), []byte(resp.CaCertPem))
 	}
 }
 

@@ -48,13 +48,13 @@ export function CreateDeploymentDialog({ open, onOpenChange }: CreateDeploymentD
 
   const { data: artifacts } = useQuery({
     queryKey: ["ota-artifacts", orgId],
-    queryFn: () => listArtifacts(token, orgId!),
+    queryFn: () => listArtifacts(token),
     enabled: !!token && !!orgId && open,
   });
 
   const mutation = useMutation({
     mutationFn: () =>
-      createDeployment(token, orgId!, {
+      createDeployment(token, {
         artifactId: Number(artifactId),
         strategy,
         labelSelector: labels,

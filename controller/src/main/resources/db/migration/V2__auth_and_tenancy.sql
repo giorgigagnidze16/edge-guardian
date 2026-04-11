@@ -27,11 +27,11 @@ CREATE TABLE IF NOT EXISTS organization_members (
     id              BIGSERIAL PRIMARY KEY,
     organization_id BIGINT NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
     user_id         BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    org_role        VARCHAR(32) NOT NULL DEFAULT 'viewer',
+    org_role        VARCHAR(32) NOT NULL DEFAULT 'VIEWER',
     created_at      TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
 
     CONSTRAINT uq_org_member UNIQUE (organization_id, user_id),
-    CONSTRAINT chk_org_role CHECK (org_role IN ('owner', 'admin', 'operator', 'viewer'))
+    CONSTRAINT chk_org_role CHECK (org_role IN ('OWNER', 'ADMIN', 'OPERATOR', 'VIEWER'))
 );
 
 -- Enrollment tokens for device registration
@@ -76,12 +76,25 @@ CREATE TABLE IF NOT EXISTS audit_log (
     created_at      TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
 );
 
--- Add nullable organization_id to existing tables
+-- Add organization_id to existing tables (NOT NULL — all devices must belong to an org)
 ALTER TABLE devices
-    ADD COLUMN IF NOT EXISTS organization_id BIGINT REFERENCES organizations(id) ON DELETE SET NULL;
+    ADD COLUMN IF NOT EXISTS organization_id BIGINT NOT NULL REFERENCES organizations(id) ON DELETE CASCADE;
 
 ALTER TABLE device_manifests
-    ADD COLUMN IF NOT EXISTS organization_id BIGINT REFERENCES organizations(id) ON DELETE SET NULL;
+    ADD COLUMN IF NOT EXISTS organization_id BIGINT NOT NULL REFERENCES organizations(id) ON DELETE CASCADE;
+
+-- Device tokens for authenticated agent access after enrollment
+CREATE TABLE IF NOT EXISTS device_tokens (
+    id           BIGSERIAL PRIMARY KEY,
+    device_id    VARCHAR(255) NOT NULL UNIQUE REFERENCES devices(device_id) ON DELETE CASCADE,
+    token_hash   VARCHAR(64) NOT NULL UNIQUE,
+    token_prefix VARCHAR(16) NOT NULL,
+    issued_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    last_used_at TIMESTAMPTZ,
+    revoked      BOOLEAN NOT NULL DEFAULT FALSE
+);
+
+CREATE INDEX idx_device_tokens_hash ON device_tokens(token_hash);
 
 -- Indexes
 CREATE INDEX IF NOT EXISTS idx_org_members_org_id ON organization_members(organization_id);

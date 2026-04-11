@@ -33,29 +33,16 @@ export interface DeploymentDeviceStatus {
   updatedAt: string;
 }
 
-export async function listArtifacts(
-  token: string,
-  orgId: number,
-): Promise<OtaArtifact[]> {
-  return apiFetch<OtaArtifact[]>(
-    `/api/v1/organizations/${orgId}/ota/artifacts`,
-    { token },
-  );
+export async function listArtifacts(token: string): Promise<OtaArtifact[]> {
+  return apiFetch<OtaArtifact[]>("/api/v1/ota/artifacts", { token });
 }
 
-export async function listDeployments(
-  token: string,
-  orgId: number,
-): Promise<OtaDeployment[]> {
-  return apiFetch<OtaDeployment[]>(
-    `/api/v1/organizations/${orgId}/ota/deployments`,
-    { token },
-  );
+export async function listDeployments(token: string): Promise<OtaDeployment[]> {
+  return apiFetch<OtaDeployment[]>("/api/v1/ota/deployments", { token });
 }
 
 export async function uploadArtifact(
   token: string,
-  orgId: number,
   data: { name: string; version: string; architecture: string; file: File },
 ): Promise<OtaArtifact> {
   const formData = new FormData();
@@ -64,14 +51,11 @@ export async function uploadArtifact(
   formData.append("version", data.version);
   formData.append("architecture", data.architecture);
 
-  const response = await fetch(
-    `${API_BASE_URL}/api/v1/organizations/${orgId}/ota/artifacts`,
-    {
-      method: "POST",
-      headers: { Authorization: `Bearer ${token}` },
-      body: formData,
-    },
-  );
+  const response = await fetch(`${API_BASE_URL}/api/v1/ota/artifacts`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}` },
+    body: formData,
+  });
 
   if (!response.ok) {
     const body = await response.text();
@@ -90,44 +74,21 @@ export async function uploadArtifact(
 
 export async function createDeployment(
   token: string,
-  orgId: number,
   data: { artifactId: number; strategy: string; labelSelector: Record<string, string> },
 ): Promise<OtaDeployment> {
-  return apiFetch<OtaDeployment>(
-    `/api/v1/organizations/${orgId}/ota/deployments`,
-    { method: "POST", token, body: JSON.stringify(data) },
-  );
+  return apiFetch<OtaDeployment>("/api/v1/ota/deployments", {
+    method: "POST", token, body: JSON.stringify(data),
+  });
 }
 
-export async function getDeployment(
-  token: string,
-  orgId: number,
-  deploymentId: number,
-): Promise<OtaDeployment> {
-  return apiFetch<OtaDeployment>(
-    `/api/v1/organizations/${orgId}/ota/deployments/${deploymentId}`,
-    { token },
-  );
+export async function getDeployment(token: string, deploymentId: number): Promise<OtaDeployment> {
+  return apiFetch<OtaDeployment>(`/api/v1/ota/deployments/${deploymentId}`, { token });
 }
 
-export async function getDeploymentDevices(
-  token: string,
-  orgId: number,
-  deploymentId: number,
-): Promise<DeploymentDeviceStatus[]> {
-  return apiFetch<DeploymentDeviceStatus[]>(
-    `/api/v1/organizations/${orgId}/ota/deployments/${deploymentId}/devices`,
-    { token },
-  );
+export async function getDeploymentDevices(token: string, deploymentId: number): Promise<DeploymentDeviceStatus[]> {
+  return apiFetch<DeploymentDeviceStatus[]>(`/api/v1/ota/deployments/${deploymentId}/devices`, { token });
 }
 
-export async function deleteArtifact(
-  token: string,
-  orgId: number,
-  artifactId: number,
-): Promise<void> {
-  return apiFetch(
-    `/api/v1/organizations/${orgId}/ota/artifacts/${artifactId}`,
-    { method: "DELETE", token },
-  );
+export async function deleteArtifact(token: string, artifactId: number): Promise<void> {
+  return apiFetch(`/api/v1/ota/artifacts/${artifactId}`, { method: "DELETE", token });
 }
