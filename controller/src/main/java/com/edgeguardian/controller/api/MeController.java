@@ -6,11 +6,11 @@ import com.edgeguardian.controller.model.Organization;
 import com.edgeguardian.controller.model.OrganizationMember;
 import com.edgeguardian.controller.model.User;
 import com.edgeguardian.controller.repository.OrganizationMemberRepository;
-import com.edgeguardian.controller.security.TenantAuthenticationToken;
+import com.edgeguardian.controller.security.TenantPrincipal;
 import com.edgeguardian.controller.service.OrganizationService;
 import com.edgeguardian.controller.service.UserService;
 import org.springframework.http.HttpStatus;
-import org.springframework.security.core.Authentication;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -33,11 +33,9 @@ public class MeController {
     private final OrganizationMemberRepository memberRepository;
 
     @GetMapping
-    public MeResponse me(Authentication authentication) {
-        if (!(authentication instanceof TenantAuthenticationToken tenantAuth) || tenantAuth.getJwt() == null) {
-            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "JWT authentication required");
-        }
-        User user = userService.syncFromJwt(tenantAuth.getJwt());
+    public MeResponse me(@AuthenticationPrincipal TenantPrincipal principal) {
+        User user = userService.findById(principal.userId())
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "User not found"));
         UserDto userDto = UserDto.from(user);
 
         List<OrganizationMember> memberships = memberRepository.findByUserId(user.getId());

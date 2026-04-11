@@ -29,5 +29,3 @@ edgeguardian:
   controller:
     device:
       offline-threshold-minutes: 5
-    cors:
-      allowed-origins: "*"

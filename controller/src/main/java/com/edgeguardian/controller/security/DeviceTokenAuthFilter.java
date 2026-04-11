@@ -1,5 +1,6 @@
 package com.edgeguardian.controller.security;
 
+import com.edgeguardian.controller.model.Device;
 import com.edgeguardian.controller.model.DeviceToken;
 import com.edgeguardian.controller.repository.DeviceTokenRepository;
 import com.edgeguardian.controller.repository.DeviceRepository;
@@ -7,6 +8,8 @@ import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import org.springframework.http.MediaType;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
 import lombok.RequiredArgsConstructor;
@@ -16,7 +19,6 @@ import org.springframework.web.filter.OncePerRequestFilter;
 import java.io.IOException;
 import java.time.Instant;
 import java.util.List;
-import java.util.Optional;
 
 /**
  * Authenticates agent requests via the X-Device-Token header (tokens issued during enrollment).
@@ -34,7 +36,6 @@ public class DeviceTokenAuthFilter extends OncePerRequestFilter {
     @Override
     protected boolean shouldNotFilter(HttpServletRequest request) {
         String path = request.getServletPath();
-        // Only filter agent API paths (except /enroll which is unauthenticated)
         if (!path.startsWith("/api/v1/agent/")) {
             return true;
         }
@@ -44,7 +45,6 @@ public class DeviceTokenAuthFilter extends OncePerRequestFilter {
     @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response,
                                     FilterChain filterChain) throws ServletException, IOException {
-        // Skip if already authenticated (e.g., by API key filter)
         if (SecurityContextHolder.getContext().getAuthentication() != null) {
             filterChain.doFilter(request, response);
             return;
@@ -52,38 +52,38 @@ public class DeviceTokenAuthFilter extends OncePerRequestFilter {
 
         String rawToken = request.getHeader(DEVICE_TOKEN_HEADER);
         if (rawToken == null || rawToken.isBlank()) {
-            response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
-            response.setContentType("application/json");
-            response.getWriter().write("{\"error\":\"Missing X-Device-Token header\"}");
-            return;
-        }
-        String tokenHash = ApiKeyAuthenticationFilter.sha256(rawToken);
-
-        Optional<DeviceToken> tokenOpt = deviceTokenRepository.findByTokenHash(tokenHash);
-        if (tokenOpt.isEmpty() || tokenOpt.get().isRevoked()) {
-            response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
-            response.setContentType("application/json");
-            response.getWriter().write("{\"error\":\"Invalid or revoked device token\"}");
+            writeError(response, "Missing X-Device-Token header");
             return;
         }
 
-        DeviceToken deviceToken = tokenOpt.get();
+        DeviceToken deviceToken = deviceTokenRepository
+                .findByTokenHash(TokenHasher.sha256(rawToken))
+                .filter(t -> !t.isRevoked())
+                .orElse(null);
+
+        if (deviceToken == null) {
+            writeError(response, "Invalid or revoked device token");
+            return;
+        }
 
         Long orgId = deviceRepository.findByDeviceId(deviceToken.getDeviceId())
-                .map(device -> device.getOrganizationId())
+                .map(Device::getOrganizationId)
                 .orElse(null);
 
         var principal = new TenantPrincipal(orgId, null, "device:" + deviceToken.getDeviceId());
-        var auth = new TenantAuthenticationToken(
-                principal,
-                List.of(new SimpleGrantedAuthority("ROLE_DEVICE"))
-        );
+        var auth = UsernamePasswordAuthenticationToken.authenticated(
+                principal, null, List.of(new SimpleGrantedAuthority("ROLE_DEVICE")));
         SecurityContextHolder.getContext().setAuthentication(auth);
 
-        // Update last used timestamp
         deviceToken.setLastUsedAt(Instant.now());
         deviceTokenRepository.save(deviceToken);
 
         filterChain.doFilter(request, response);
+    }
+
+    private void writeError(HttpServletResponse response, String message) throws IOException {
+        response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+        response.setContentType(MediaType.APPLICATION_JSON_VALUE);
+        response.getWriter().write("{\"error\":\"" + message + "\"}");
     }
 }

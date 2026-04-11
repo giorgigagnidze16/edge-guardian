@@ -1,0 +1,10 @@
+edgeguardian:
+  controller:
+    cors:
+      allowed-origins:
+        - "*"
+      allowed-methods:
+        - "*"
+      allowed-headers:
+        - "*"
+      allow-credentials: true

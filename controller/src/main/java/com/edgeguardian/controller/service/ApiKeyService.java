@@ -2,7 +2,7 @@ package com.edgeguardian.controller.service;
 
 import com.edgeguardian.controller.model.ApiKey;
 import com.edgeguardian.controller.repository.ApiKeyRepository;
-import com.edgeguardian.controller.security.ApiKeyAuthenticationFilter;
+import com.edgeguardian.controller.security.TokenHasher;
 import org.springframework.http.HttpStatus;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -30,7 +30,7 @@ public class ApiKeyService {
                                      Instant expiresAt, Long createdBy) {
         String rawKey = generateRawKey();
         String prefix = rawKey.substring(0, 8);
-        String hash = ApiKeyAuthenticationFilter.sha256(rawKey);
+        String hash = TokenHasher.sha256(rawKey);
 
         ApiKey apiKey = ApiKey.builder()
                 .organizationId(orgId)

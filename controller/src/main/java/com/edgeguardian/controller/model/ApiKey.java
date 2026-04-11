@@ -60,7 +60,6 @@ public class ApiKey {
 
     public boolean isValid() {
         if (revoked) return false;
-        if (expiresAt != null && Instant.now().isAfter(expiresAt)) return false;
-        return true;
+        return expiresAt == null || !Instant.now().isAfter(expiresAt);
     }
 }

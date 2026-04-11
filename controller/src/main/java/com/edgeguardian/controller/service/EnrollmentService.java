@@ -5,7 +5,7 @@ import com.edgeguardian.controller.model.DeviceToken;
 import com.edgeguardian.controller.model.EnrollmentToken;
 import com.edgeguardian.controller.repository.DeviceTokenRepository;
 import com.edgeguardian.controller.repository.EnrollmentTokenRepository;
-import com.edgeguardian.controller.security.ApiKeyAuthenticationFilter;
+import com.edgeguardian.controller.security.TokenHasher;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
@@ -94,7 +94,7 @@ public class EnrollmentService {
 
         // Generate device token
         String rawToken = generateDeviceToken();
-        String tokenHash = ApiKeyAuthenticationFilter.sha256(rawToken);
+        String tokenHash = TokenHasher.sha256(rawToken);
         String prefix = rawToken.substring(0, Math.min(12, rawToken.length()));
 
         DeviceToken deviceToken = DeviceToken.builder()
