@@ -27,6 +27,9 @@ public class MqttConfig {
     @Value("${edgeguardian.controller.mqtt.username:}")
     private String username;
 
+    @Value("${edgeguardian.controller.mqtt.password:}")
+    private String password;
+
     private MqttClient mqttClient;
 
     @Bean
@@ -41,6 +44,9 @@ public class MqttConfig {
             options.setKeepAliveInterval(60);
             if (username != null && !username.isBlank()) {
                 options.setUserName(username);
+            }
+            if (password != null && !password.isBlank()) {
+                options.setPassword(password.getBytes());
             }
 
             mqttClient.connect(options);

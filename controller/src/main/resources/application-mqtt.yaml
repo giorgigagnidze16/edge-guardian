@@ -4,4 +4,5 @@ edgeguardian:
       broker-url: tcp://localhost:1883
       client-id: edgeguardian-controller
       username: controller
+      password: controller-secret
       topic-root: edgeguardian

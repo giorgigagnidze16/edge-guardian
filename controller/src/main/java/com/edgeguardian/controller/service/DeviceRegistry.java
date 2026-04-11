@@ -45,6 +45,7 @@ public class DeviceRegistry {
         if (existing.isPresent()) {
             Device device = existing.get();
             log.info("Device re-registered: {}", deviceId);
+            device.setOrganizationId(organizationId);
             device.setHostname(hostname);
             device.setArchitecture(architecture);
             device.setOs(os);

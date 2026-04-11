@@ -86,22 +86,16 @@ public class EnrollmentService {
         // Register device with org binding
         Device device = deviceRegistry.register(token.getOrganizationId(), deviceId, hostname, architecture, os, agentVersion, labels);
 
-        // Revoke any existing device token (re-enrollment)
-        deviceTokenRepository.findByDeviceId(deviceId).ifPresent(existing -> {
-            existing.setRevoked(true);
-            deviceTokenRepository.save(existing);
-        });
-
-        // Generate device token
+        // Generate new device token (update existing on re-enrollment)
         String rawToken = generateDeviceToken();
         String tokenHash = TokenHasher.sha256(rawToken);
         String prefix = rawToken.substring(0, Math.min(12, rawToken.length()));
 
-        DeviceToken deviceToken = DeviceToken.builder()
-                .deviceId(deviceId)
-                .tokenHash(tokenHash)
-                .tokenPrefix(prefix)
-                .build();
+        DeviceToken deviceToken = deviceTokenRepository.findByDeviceId(deviceId)
+                .orElse(DeviceToken.builder().deviceId(deviceId).build());
+        deviceToken.setTokenHash(tokenHash);
+        deviceToken.setTokenPrefix(prefix);
+        deviceToken.setRevoked(false);
         deviceTokenRepository.save(deviceToken);
 
         log.info("Device {} enrolled to org {} via token {}",

@@ -1,0 +1,7 @@
+1edgeguardian:
+  controller:
+    ca:
+      encryption-key: ${CA_ENCRYPTION_KEY:}
+      ca-validity-days: 3650
+      cert-validity-days: 365
+      renew-before-days: 30

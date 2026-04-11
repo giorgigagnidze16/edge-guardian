@@ -56,8 +56,16 @@ services:
     environment:
       EMQX_NAME: edgeguardian
       EMQX_HOST: 127.0.0.1
-      EMQX_LOADED_PLUGINS: "emqx_auth_mnesia"
-      EMQX_ALLOW_ANONYMOUS: "true"
+      EMQX_DASHBOARD__DEFAULT_PASSWORD: "admin-secret"
+      # Auth: password-based with built-in database
+      EMQX_AUTHENTICATION__1__MECHANISM: password_based
+      EMQX_AUTHENTICATION__1__BACKEND: built_in_database
+      EMQX_AUTHENTICATION__1__USER_ID_TYPE: username
+      # Authz: file ACL, deny-by-default
+      EMQX_AUTHORIZATION__NO_MATCH: deny
+      EMQX_AUTHORIZATION__DENY_ACTION: disconnect
+      EMQX_AUTHORIZATION__SOURCES__1__TYPE: file
+      EMQX_AUTHORIZATION__SOURCES__1__PATH: "etc/acl.conf"
     ports:
       - "1883:1883"     # MQTT
       - "8083:8083"     # MQTT WebSocket
@@ -70,6 +78,17 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+
+  emqx-init:
+    image: curlimages/curl:latest
+    container_name: edgeguardian-emqx-init
+    depends_on:
+      emqx:
+        condition: service_healthy
+    restart: "no"
+    volumes:
+      - ./emqx/init-auth.sh:/init-auth.sh:ro
+    entrypoint: ["sh", "/init-auth.sh"]
 
   minio:
     image: minio/minio:latest
