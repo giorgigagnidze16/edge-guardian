@@ -34,24 +34,6 @@ spec:
   selector:
     {{- include "edgeguardian.componentSelector" (dict "ctx" . "component" "keycloak") | nindent 4 }}
 ---
-apiVersion: v1
-kind: Service
-metadata:
-  name: keycloak-external
-  labels:
-    {{- include "edgeguardian.componentLabels" (dict "ctx" . "component" "keycloak") | nindent 4 }}
-spec:
-  type: {{ include "edgeguardian.externalServiceType" . }}
-  ports:
-    - name: http
-      port: 9090
-      targetPort: http
-      {{- if eq .Values.externalAccess.mode "nodePort" }}
-      nodePort: {{ .Values.externalAccess.nodePorts.keycloak }}
-      {{- end }}
-  selector:
-    {{- include "edgeguardian.componentSelector" (dict "ctx" . "component" "keycloak") | nindent 4 }}
----
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -100,6 +82,8 @@ spec:
             - name: KEYCLOAK_ADMIN_PASSWORD
               valueFrom:
                 secretKeyRef: { name: keycloak-admin, key: password }
+            - name: KC_HTTP_RELATIVE_PATH
+              value: /kc
             - name: KC_HOSTNAME_STRICT
               value: "false"
             - name: KC_HOSTNAME
@@ -108,8 +92,10 @@ spec:
                   name: edgeguardian-runtime-urls
                   key: KEYCLOAK_HOSTNAME_URL
                   optional: true
-            - name: KC_PROXY_HEADERS
-              value: xforwarded
+            # KC_PROXY_HEADERS intentionally unset — otherwise Keycloak
+            # derives iss from X-Forwarded-Host (browser's Host) instead of
+            # KC_HOSTNAME, breaking OIDC iss validation when the browser uses
+            # a hostname (localhost) that differs from KC_HOSTNAME (127.0.0.1).
           volumeMounts:
             - name: realm-import
               mountPath: /opt/keycloak/data/import
@@ -119,14 +105,14 @@ spec:
               mountPath: /opt/keycloak/themes/edgeguardian/login/resources/css
           readinessProbe:
             httpGet:
-              path: /health/ready
+              path: /kc/health/ready
               port: management
             initialDelaySeconds: 30
             periodSeconds: 10
             failureThreshold: 30
           livenessProbe:
             httpGet:
-              path: /health/live
+              path: /kc/health/live
               port: management
             initialDelaySeconds: 60
             periodSeconds: 30

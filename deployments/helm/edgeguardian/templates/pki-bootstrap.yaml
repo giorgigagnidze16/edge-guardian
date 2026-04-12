@@ -151,9 +151,8 @@ spec:
               fi
 
               UI_PORT={{ .Values.externalAccess.nodePorts.ui }}
-              KC_PORT={{ .Values.externalAccess.nodePorts.keycloak }}
               NEXTAUTH_URL="http://${NODE_IP}:${UI_PORT}"
-              KC_HOSTNAME="http://${NODE_IP}:${KC_PORT}"
+              KC_HOSTNAME="${NEXTAUTH_URL}/kc"
               KC_ISSUER="${KC_HOSTNAME}/realms/edgeguardian"
 
               kubectl -n "$NS" create configmap edgeguardian-runtime-urls \

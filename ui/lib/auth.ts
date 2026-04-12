@@ -1,22 +1,31 @@
 import NextAuth from "next-auth";
 import Keycloak from "next-auth/providers/keycloak";
 
-const externalIssuer =
-  process.env.KEYCLOAK_ISSUER ?? "http://localhost:9090/realms/edgeguardian";
-const internalIssuer =
-  process.env.KEYCLOAK_INTERNAL_URL ?? externalIssuer;
+// Single URL for browser + server: Keycloak is proxied under /kc by the UI's
+// Next.js rewrite (see next.config.ts). No split-brain.
+const issuer =
+  process.env.KEYCLOAK_ISSUER ?? "http://localhost:3000/kc/realms/edgeguardian";
 
 export const { handlers, auth } = NextAuth({
+  debug: true,
+  logger: {
+    error(code, ...rest) {
+      console.error("[auth-dbg] error", code);
+      console.error("[auth-dbg] cause:", (code as any)?.cause?.message || (code as any)?.cause);
+      console.error("[auth-dbg] cause-stack:", (code as any)?.cause?.stack);
+    },
+    warn(code) {
+      console.warn("[auth-dbg] warn", code);
+    },
+    debug(code, metadata) {
+      console.log("[auth-dbg]", code, JSON.stringify(metadata));
+    },
+  },
   providers: [
     Keycloak({
       clientId: process.env.KEYCLOAK_CLIENT_ID ?? "edgeguardian-ui",
       clientSecret: process.env.KEYCLOAK_CLIENT_SECRET ?? "",
-      issuer: externalIssuer,
-      wellKnown: `${internalIssuer}/.well-known/openid-configuration`,
-      authorization: `${externalIssuer}/protocol/openid-connect/auth`,
-      token: `${internalIssuer}/protocol/openid-connect/token`,
-      userinfo: `${internalIssuer}/protocol/openid-connect/userinfo`,
-      jwks_endpoint: `${internalIssuer}/protocol/openid-connect/certs`,
+      issuer,
     }),
   ],
   callbacks: {
@@ -38,7 +47,7 @@ export const { handlers, auth } = NextAuth({
       // Access token expired — try to refresh
       if (!token.refreshToken) return token;
       try {
-        const response = await fetch(`${internalIssuer}/protocol/openid-connect/token`, {
+        const response = await fetch(`${issuer}/protocol/openid-connect/token`, {
           method: "POST",
           headers: { "Content-Type": "application/x-www-form-urlencoded" },
           body: new URLSearchParams({

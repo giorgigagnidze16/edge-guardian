@@ -19,10 +19,12 @@ ui:
   # Override per-cluster: --set ui.keycloakIssuerUrl=http://<minikube-ip>:30090/realms/edgeguardian
   keycloakIssuerUrl: http://localhost:30090/realms/edgeguardian
   keycloakClientId: edgeguardian-ui
-  keycloakClientSecret: ""
+  keycloakClientSecret: "edgeguardian-ui-secret"
   # NextAuth session cookie encryption key. Generate: openssl rand -base64 32
   nextAuthSecret: "dev-only-not-for-production-abcdef0123456789abcdef0123456789"
   nextAuthUrl: http://localhost:30080
+  # Internal Keycloak URL for the UI's Next.js rewrite proxy (/kc/* → Keycloak).
+  internalKeycloakUrl: http://keycloak:9090
 
 # ---- Service exposure --------------------------------------------------------
 # externalAccess: off ⇒ everything is ClusterIP only (prod: use Ingress separately)
@@ -53,7 +55,7 @@ controller:
   # CRL Distribution Point URL embedded in every leaf cert. EMQX dereferences this
   # URL on each TLS handshake. Override with the public hostname in prod.
   crlUrl: http://edgeguardian-controller:8443/api/v1/pki/crl
-  keycloakIssuerUri: http://keycloak:9090/realms/edgeguardian
+  keycloakIssuerUri: http://keycloak:9090/kc/realms/edgeguardian
 
 # ---- Postgres ----------------------------------------------------------------
 postgres:

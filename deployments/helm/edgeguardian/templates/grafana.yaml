@@ -76,11 +76,11 @@ spec:
             - name: GF_AUTH_GENERIC_OAUTH_SCOPES
               value: openid profile email
             - name: GF_AUTH_GENERIC_OAUTH_AUTH_URL
-              value: http://keycloak:9090/realms/edgeguardian/protocol/openid-connect/auth
+              value: http://keycloak:9090/kc/realms/edgeguardian/protocol/openid-connect/auth
             - name: GF_AUTH_GENERIC_OAUTH_TOKEN_URL
-              value: http://keycloak:9090/realms/edgeguardian/protocol/openid-connect/token
+              value: http://keycloak:9090/kc/realms/edgeguardian/protocol/openid-connect/token
             - name: GF_AUTH_GENERIC_OAUTH_API_URL
-              value: http://keycloak:9090/realms/edgeguardian/protocol/openid-connect/userinfo
+              value: http://keycloak:9090/kc/realms/edgeguardian/protocol/openid-connect/userinfo
           readinessProbe:
             httpGet: { path: /api/health, port: http }
             initialDelaySeconds: 15

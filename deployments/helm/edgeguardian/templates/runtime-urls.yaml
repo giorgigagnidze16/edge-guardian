@@ -90,24 +90,27 @@ spec:
               i=1
               while [ $i -le 60 ]; do
                 UI_IP=$(get_lb_ip ui-external || true)
-                KC_IP=$(get_lb_ip keycloak-external || true)
-                if [ -n "$UI_IP" ] && [ -n "$KC_IP" ]; then
+                if [ -n "$UI_IP" ]; then
                   break
                 fi
-                echo "Waiting for LoadBalancer IPs (ui=$UI_IP keycloak=$KC_IP) — requires 'minikube tunnel' running"
+                echo "Waiting for LoadBalancer IP (ui=$UI_IP) — requires 'minikube tunnel' running"
                 sleep 5
                 i=$((i + 1))
               done
 
-              if [ -z "$UI_IP" ] || [ -z "$KC_IP" ]; then
-                echo "ERROR: LoadBalancer IPs not assigned after 5 min — run 'minikube tunnel' (admin)"
+              if [ -z "$UI_IP" ]; then
+                echo "ERROR: LoadBalancer IP not assigned after 5 min — run 'minikube tunnel' (admin)"
                 exit 1
               fi
 
-              NEXTAUTH_URL="http://${UI_IP}:3000"
-              KC_HOSTNAME="http://${KC_IP}:9090"
+              # Single origin: UI hosts Keycloak under /kc via Next.js rewrites.
+              # Use 'localhost' — same IP as 127.0.0.1 but matches what most
+              # users type in the browser. OIDC iss is hostname-string-equal.
+              _=${UI_IP}  # IP is kept for NODE_IP bookkeeping
+              NEXTAUTH_URL="http://localhost:3000"
+              KC_HOSTNAME="${NEXTAUTH_URL}/kc"
               KC_ISSUER="${KC_HOSTNAME}/realms/edgeguardian"
-              echo "LB IPs: UI=$NEXTAUTH_URL  Keycloak=$KC_ISSUER"
+              echo "Runtime URLs: UI=$NEXTAUTH_URL  Keycloak=$KC_ISSUER"
 
               kubectl -n "$NS" create configmap edgeguardian-runtime-urls \
                 --from-literal=NEXTAUTH_URL="$NEXTAUTH_URL" \

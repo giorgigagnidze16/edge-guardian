@@ -1,12 +1,16 @@
 import type { NextConfig } from "next";
 
 const apiUpstream = process.env.INTERNAL_API_URL ?? "http://controller:8443";
+const keycloakUpstream = process.env.INTERNAL_KEYCLOAK_URL ?? "http://keycloak:9090";
 
 const nextConfig: NextConfig = {
   output: "standalone",
   async rewrites() {
     return [
       { source: "/api/v1/:path*", destination: `${apiUpstream}/api/v1/:path*` },
+      // Keycloak served under /kc so UI + Keycloak share one origin.
+      // Requires Keycloak KC_HTTP_RELATIVE_PATH=/kc so its own paths match.
+      { source: "/kc/:path*", destination: `${keycloakUpstream}/kc/:path*` },
     ];
   },
   experimental: {

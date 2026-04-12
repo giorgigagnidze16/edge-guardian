@@ -38,8 +38,8 @@ spec:
             - name: KEYCLOAK_ISSUER
               valueFrom:
                 configMapKeyRef: { name: edgeguardian-runtime-urls, key: KEYCLOAK_ISSUER_URL }
-            - name: KEYCLOAK_INTERNAL_URL
-              value: "http://keycloak:9090/realms/edgeguardian"
+            - name: INTERNAL_KEYCLOAK_URL
+              value: {{ .Values.ui.internalKeycloakUrl | quote }}
             - name: KEYCLOAK_CLIENT_ID
               value: {{ .Values.ui.keycloakClientId | quote }}
             - name: KEYCLOAK_CLIENT_SECRET

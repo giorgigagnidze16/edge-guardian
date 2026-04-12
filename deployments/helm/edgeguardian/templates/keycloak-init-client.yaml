@@ -8,7 +8,7 @@ data:
   init.sh: |
     set -eu
     apk add --no-cache curl >/dev/null
-    KC="http://keycloak:9090"
+    KC="http://keycloak:9090/kc"
     REALM="edgeguardian"
     CLIENT_ID="edgeguardian-ui"
 
