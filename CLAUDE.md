@@ -47,16 +47,19 @@ npm run build    # Production build
 npm run lint     # ESLint
 ```
 
-### Infrastructure (Kubernetes)
+### Infrastructure (Kubernetes via Helm)
 ```bash
-# Prereqs: cert-manager + trust-manager installed in the cluster.
-cd controller && ./gradlew bootBuildImage     # produces edgeguardian/controller:latest
-kubectl apply -k deployments/k8s/overlays/dev
+# On minikube: eval $(minikube docker-env) first
+cd controller && ./gradlew bootBuildImage
+
+cd deployments/helm/edgeguardian
+helm dependency update                 # pulls cert-manager + trust-manager subcharts
+helm install edgeguardian . --namespace edgeguardian --create-namespace --wait --timeout 10m
 ```
 
-See `deployments/k8s/README.md` for the full bring-up sequence, first-org bootstrap,
-and NodePort mapping for edge devices. docker-compose was removed — K8s is the only
-supported deployment path.
+See `deployments/helm/edgeguardian/README.md` for the full bring-up sequence,
+first-org bootstrap, and NodePort mapping for edge devices. `helm install` is the
+only supported deployment path — docker-compose and Kustomize were removed.
 
 ## Architecture
 

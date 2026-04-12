@@ -1,27 +1,53 @@
+apiVersion: v1
+kind: Secret
+metadata:
+  name: postgres-credentials
+  labels:
+    {{- include "edgeguardian.componentLabels" (dict "ctx" . "component" "postgres") | nindent 4 }}
+type: Opaque
+stringData:
+  database: {{ .Values.postgres.credentials.database | quote }}
+  username: {{ .Values.postgres.credentials.username | quote }}
+  password: {{ .Values.postgres.credentials.password | quote }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres
+  labels:
+    {{- include "edgeguardian.componentLabels" (dict "ctx" . "component" "postgres") | nindent 4 }}
+spec:
+  type: ClusterIP
+  clusterIP: None
+  ports:
+    - name: pg
+      port: 5432
+      targetPort: pg
+  selector:
+    {{- include "edgeguardian.componentSelector" (dict "ctx" . "component" "postgres") | nindent 4 }}
+---
 apiVersion: apps/v1
 kind: StatefulSet
 metadata:
   name: postgres
   labels:
-    app.kubernetes.io/name: postgres
-    app.kubernetes.io/component: database
+    {{- include "edgeguardian.componentLabels" (dict "ctx" . "component" "postgres") | nindent 4 }}
 spec:
   serviceName: postgres
   replicas: 1
   selector:
     matchLabels:
-      app.kubernetes.io/name: postgres
+      {{- include "edgeguardian.componentSelector" (dict "ctx" . "component" "postgres") | nindent 6 }}
   template:
     metadata:
       labels:
-        app.kubernetes.io/name: postgres
-        app.kubernetes.io/component: database
+        {{- include "edgeguardian.componentLabels" (dict "ctx" . "component" "postgres") | nindent 8 }}
     spec:
       securityContext:
         fsGroup: 999
       containers:
         - name: postgres
-          image: timescale/timescaledb:latest-pg16
+          image: {{ .Values.postgres.image | quote }}
           ports:
             - name: pg
               containerPort: 5432
@@ -60,4 +86,4 @@ spec:
         accessModes: ["ReadWriteOnce"]
         resources:
           requests:
-            storage: 10Gi
+            storage: {{ .Values.postgres.storage | quote }}

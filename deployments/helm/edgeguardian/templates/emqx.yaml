@@ -1,0 +1,311 @@
+apiVersion: v1
+kind: Secret
+metadata:
+  name: emqx-admin
+  labels:
+    {{- include "edgeguardian.componentLabels" (dict "ctx" . "component" "emqx") | nindent 4 }}
+type: Opaque
+stringData:
+  username: admin
+  password: {{ .Values.emqx.dashboardPassword | quote }}
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: emqx-mqtt-users
+  labels:
+    {{- include "edgeguardian.componentLabels" (dict "ctx" . "component" "emqx") | nindent 4 }}
+type: Opaque
+stringData:
+  controller_username: {{ .Values.emqx.mqttUsers.controllerUsername | quote }}
+  controller_password: {{ .Values.emqx.mqttUsers.controllerPassword | quote }}
+  bootstrap_username: {{ .Values.emqx.mqttUsers.bootstrapUsername | quote }}
+  bootstrap_password: {{ .Values.emqx.mqttUsers.bootstrapPassword | quote }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: emqx-acl
+  labels:
+    {{- include "edgeguardian.componentLabels" (dict "ctx" . "component" "emqx") | nindent 4 }}
+data:
+  acl.conf: |
+    %% controller (password listener 1883): full access
+    {allow, {username, "controller"}, all, ["edgeguardian/#"]}.
+
+    %% bootstrap (password listener 1883): enrollment + cert exchange only
+    {allow, {username, "bootstrap"}, publish,   ["edgeguardian/device/+/enroll/request"]}.
+    {allow, {username, "bootstrap"}, publish,   ["edgeguardian/device/+/cert/request"]}.
+    {allow, {username, "bootstrap"}, subscribe, ["edgeguardian/device/+/enroll/response"]}.
+    {allow, {username, "bootstrap"}, subscribe, ["edgeguardian/device/+/cert/response"]}.
+
+    %% mTLS listener 8883: ${clientid} == cert CN == deviceId
+    {allow, all, publish,   ["edgeguardian/device/${clientid}/telemetry"]}.
+    {allow, all, publish,   ["edgeguardian/device/${clientid}/logs"]}.
+    {allow, all, publish,   ["edgeguardian/device/${clientid}/heartbeat"]}.
+    {allow, all, publish,   ["edgeguardian/device/${clientid}/ota/status"]}.
+    {allow, all, publish,   ["edgeguardian/device/${clientid}/command/result"]}.
+    {allow, all, publish,   ["edgeguardian/device/${clientid}/cert/request"]}.
+    {allow, all, subscribe, ["edgeguardian/device/${clientid}/command"]}.
+    {allow, all, subscribe, ["edgeguardian/device/${clientid}/state/desired"]}.
+    {allow, all, subscribe, ["edgeguardian/device/${clientid}/cert/response"]}.
+
+    {deny, all}.
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: emqx
+  labels:
+    {{- include "edgeguardian.componentLabels" (dict "ctx" . "component" "emqx") | nindent 4 }}
+spec:
+  type: ClusterIP
+  ports:
+    - name: mqtt
+      port: 1883
+      targetPort: mqtt
+    - name: mqtts
+      port: 8883
+      targetPort: mqtts
+    - name: dashboard
+      port: 18083
+      targetPort: dashboard
+  selector:
+    {{- include "edgeguardian.componentSelector" (dict "ctx" . "component" "emqx") | nindent 4 }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: emqx-external
+  labels:
+    {{- include "edgeguardian.componentLabels" (dict "ctx" . "component" "emqx") | nindent 4 }}
+    app.kubernetes.io/exposure: external
+spec:
+  type: {{ if eq .Values.externalAccess.mode "nodePort" }}NodePort{{ else }}ClusterIP{{ end }}
+  ports:
+    - name: mqtts
+      port: 8883
+      targetPort: mqtts
+      {{- if eq .Values.externalAccess.mode "nodePort" }}
+      nodePort: {{ .Values.externalAccess.nodePorts.emqxMtls }}
+      {{- end }}
+    - name: mqtt-bootstrap
+      port: 1883
+      targetPort: mqtt
+      {{- if eq .Values.externalAccess.mode "nodePort" }}
+      nodePort: {{ .Values.externalAccess.nodePorts.emqxBootstrap }}
+      {{- end }}
+  selector:
+    {{- include "edgeguardian.componentSelector" (dict "ctx" . "component" "emqx") | nindent 4 }}
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: emqx-init-users
+  labels:
+    {{- include "edgeguardian.componentLabels" (dict "ctx" . "component" "emqx-init-users") | nindent 4 }}
+spec:
+  backoffLimit: 10
+  ttlSecondsAfterFinished: 300
+  template:
+    metadata:
+      labels:
+        {{- include "edgeguardian.componentLabels" (dict "ctx" . "component" "emqx-init-users") | nindent 8 }}
+    spec:
+      restartPolicy: OnFailure
+      containers:
+        - name: init-users
+          image: curlimages/curl:8.10.1
+          env:
+            - name: ADMIN_USERNAME
+              valueFrom: { secretKeyRef: { name: emqx-admin, key: username } }
+            - name: ADMIN_PASSWORD
+              valueFrom: { secretKeyRef: { name: emqx-admin, key: password } }
+            - name: CONTROLLER_USER
+              valueFrom: { secretKeyRef: { name: emqx-mqtt-users, key: controller_username } }
+            - name: CONTROLLER_PASS
+              valueFrom: { secretKeyRef: { name: emqx-mqtt-users, key: controller_password } }
+            - name: BOOTSTRAP_USER
+              valueFrom: { secretKeyRef: { name: emqx-mqtt-users, key: bootstrap_username } }
+            - name: BOOTSTRAP_PASS
+              valueFrom: { secretKeyRef: { name: emqx-mqtt-users, key: bootstrap_password } }
+          command:
+            - sh
+            - -c
+            - |
+              set -eu
+              EMQX_API="http://emqx:18083/api/v5"
+              i=1
+              while [ $i -le 60 ]; do
+                if curl -sf -o /dev/null "$EMQX_API/status"; then break; fi
+                sleep 2
+                i=$((i + 1))
+              done
+
+              TOKEN=$(curl -sf -X POST "$EMQX_API/login" \
+                -H "Content-Type: application/json" \
+                -d "{\"username\":\"$ADMIN_USERNAME\",\"password\":\"$ADMIN_PASSWORD\"}" \
+                | sed 's/.*"token":"\([^"]*\)".*/\1/')
+              if [ -z "$TOKEN" ]; then
+                echo "ERROR: admin login failed"
+                exit 1
+              fi
+
+              create_user() {
+                uid="$1"; pw="$2"
+                code=$(curl -s -o /dev/null -w "%{http_code}" \
+                  -X POST "$EMQX_API/authentication/password_based:built_in_database/users" \
+                  -H "Authorization: Bearer $TOKEN" \
+                  -H "Content-Type: application/json" \
+                  -d "{\"user_id\":\"$uid\",\"password\":\"$pw\"}")
+                case "$code" in
+                  201|409) : ;;
+                  *)   echo "FAILED: $uid HTTP $code"; exit 1 ;;
+                esac
+              }
+
+              create_user "$CONTROLLER_USER" "$CONTROLLER_PASS"
+              create_user "$BOOTSTRAP_USER"  "$BOOTSTRAP_PASS"
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: emqx
+  labels:
+    {{- include "edgeguardian.componentLabels" (dict "ctx" . "component" "emqx") | nindent 4 }}
+spec:
+  serviceName: emqx
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "edgeguardian.componentSelector" (dict "ctx" . "component" "emqx") | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "edgeguardian.componentLabels" (dict "ctx" . "component" "emqx") | nindent 8 }}
+    spec:
+      initContainers:
+        - name: fetch-ca-bundle
+          image: alpine:3.20
+          command:
+            - sh
+            - -c
+            - |
+              set -eu
+              apk add --no-cache curl >/dev/null
+              i=1
+              while [ $i -le 120 ]; do
+                status=$(curl -s -o /certs/client-ca-bundle.pem.tmp -w "%{http_code}" \
+                  "http://controller:8443/api/v1/pki/ca-bundle" || echo "000")
+                if [ "$status" = "200" ] && [ -s /certs/client-ca-bundle.pem.tmp ]; then
+                  mv /certs/client-ca-bundle.pem.tmp /certs/client-ca-bundle.pem
+                  exit 0
+                fi
+                sleep 2
+                i=$((i + 1))
+              done
+              echo "ERROR: controller never returned a non-empty CA bundle"
+              exit 1
+          volumeMounts:
+            - name: client-ca-bundle
+              mountPath: /certs
+      containers:
+        - name: emqx
+          image: {{ .Values.emqx.image | quote }}
+          ports:
+            - name: mqtt
+              containerPort: 1883
+            - name: mqtts
+              containerPort: 8883
+            - name: dashboard
+              containerPort: 18083
+          env:
+            - name: EMQX_NAME
+              value: edgeguardian
+            - name: EMQX_HOST
+              value: 127.0.0.1
+            - name: EMQX_DASHBOARD__DEFAULT_PASSWORD
+              valueFrom: { secretKeyRef: { name: emqx-admin, key: password } }
+            - name: EMQX_AUTHENTICATION__1__MECHANISM
+              value: password_based
+            - name: EMQX_AUTHENTICATION__1__BACKEND
+              value: built_in_database
+            - name: EMQX_AUTHENTICATION__1__USER_ID_TYPE
+              value: username
+            - name: EMQX_AUTHORIZATION__NO_MATCH
+              value: deny
+            - name: EMQX_AUTHORIZATION__DENY_ACTION
+              value: disconnect
+            - name: EMQX_AUTHORIZATION__SOURCES__1__TYPE
+              value: file
+            - name: EMQX_AUTHORIZATION__SOURCES__1__PATH
+              value: etc/acl.conf
+            - name: EMQX_LISTENERS__TCP__DEFAULT__BIND
+              value: "0.0.0.0:1883"
+            - name: EMQX_LISTENERS__TCP__DEFAULT__ENABLE_AUTHN
+              value: "true"
+            - name: EMQX_LISTENERS__SSL__DEFAULT__BIND
+              value: "0.0.0.0:8883"
+            - name: EMQX_LISTENERS__SSL__DEFAULT__ENABLE_AUTHN
+              value: "false"
+            - name: EMQX_LISTENERS__SSL__DEFAULT__SSL_OPTIONS__KEYFILE
+              value: /tls/tls.key
+            - name: EMQX_LISTENERS__SSL__DEFAULT__SSL_OPTIONS__CERTFILE
+              value: /tls/tls.crt
+            - name: EMQX_LISTENERS__SSL__DEFAULT__SSL_OPTIONS__CACERTFILE
+              value: /client-ca/client-ca-bundle.pem
+            - name: EMQX_LISTENERS__SSL__DEFAULT__SSL_OPTIONS__VERIFY
+              value: verify_peer
+            - name: EMQX_LISTENERS__SSL__DEFAULT__SSL_OPTIONS__FAIL_IF_NO_PEER_CERT
+              value: "true"
+            - name: EMQX_LISTENERS__SSL__DEFAULT__SSL_OPTIONS__ENABLE_CRL_CHECK
+              value: "true"
+            - name: EMQX_LISTENERS__SSL__DEFAULT__PEER_CERT_AS_CLIENTID
+              value: cn
+            - name: EMQX_LISTENERS__SSL__DEFAULT__PEER_CERT_AS_USERNAME
+              value: cn
+            - name: EMQX_CRL_CACHE__REFRESH_INTERVAL
+              value: 300s
+            - name: EMQX_CRL_CACHE__HTTP_TIMEOUT
+              value: 15s
+          volumeMounts:
+            - name: acl
+              mountPath: /opt/emqx/etc/acl.conf
+              subPath: acl.conf
+            - name: tls
+              mountPath: /tls
+              readOnly: true
+            - name: client-ca-bundle
+              mountPath: /client-ca
+              readOnly: true
+            - name: data
+              mountPath: /opt/emqx/data
+          readinessProbe:
+            tcpSocket: { port: mqtt }
+            initialDelaySeconds: 10
+            periodSeconds: 5
+          livenessProbe:
+            exec:
+              command: ["emqx", "ping"]
+            initialDelaySeconds: 30
+            periodSeconds: 15
+          resources:
+            requests: { cpu: 200m, memory: 512Mi }
+            limits: { memory: 1Gi }
+      volumes:
+        - name: acl
+          configMap:
+            name: emqx-acl
+        - name: tls
+          secret:
+            secretName: emqx-server-tls
+        - name: client-ca-bundle
+          emptyDir: {}
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: {{ .Values.emqx.storage | quote }}

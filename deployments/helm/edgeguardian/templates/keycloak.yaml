@@ -1,33 +1,71 @@
+apiVersion: v1
+kind: Secret
+metadata:
+  name: keycloak-admin
+  labels:
+    {{- include "edgeguardian.componentLabels" (dict "ctx" . "component" "keycloak") | nindent 4 }}
+type: Opaque
+stringData:
+  username: {{ .Values.keycloak.admin.username | quote }}
+  password: {{ .Values.keycloak.admin.password | quote }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: keycloak-realm
+  labels:
+    {{- include "edgeguardian.componentLabels" (dict "ctx" . "component" "keycloak") | nindent 4 }}
+data:
+  edgeguardian-realm.json: |-
+{{ .Files.Get "files/edgeguardian-realm.json" | indent 4 }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: keycloak
+  labels:
+    {{- include "edgeguardian.componentLabels" (dict "ctx" . "component" "keycloak") | nindent 4 }}
+spec:
+  type: ClusterIP
+  ports:
+    - name: http
+      port: 9090
+      targetPort: http
+  selector:
+    {{- include "edgeguardian.componentSelector" (dict "ctx" . "component" "keycloak") | nindent 4 }}
+---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: keycloak
   labels:
-    app.kubernetes.io/name: keycloak
-    app.kubernetes.io/component: identity
+    {{- include "edgeguardian.componentLabels" (dict "ctx" . "component" "keycloak") | nindent 4 }}
 spec:
   replicas: 1
   strategy:
-    type: Recreate  # ReadWriteOnce volumes + single replica
+    type: Recreate
   selector:
     matchLabels:
-      app.kubernetes.io/name: keycloak
+      {{- include "edgeguardian.componentSelector" (dict "ctx" . "component" "keycloak") | nindent 6 }}
   template:
     metadata:
       labels:
-        app.kubernetes.io/name: keycloak
-        app.kubernetes.io/component: identity
+        {{- include "edgeguardian.componentLabels" (dict "ctx" . "component" "keycloak") | nindent 8 }}
     spec:
       containers:
         - name: keycloak
-          image: quay.io/keycloak/keycloak:26.0
+          image: {{ .Values.keycloak.image | quote }}
           args: ["start-dev", "--import-realm"]
           ports:
             - name: http
               containerPort: 9090
+            - name: management
+              containerPort: 9000
           env:
             - name: KC_HTTP_PORT
               value: "9090"
+            - name: KC_HEALTH_ENABLED
+              value: "true"
             - name: KC_DB
               value: postgres
             - name: KC_DB_URL
@@ -52,14 +90,14 @@ spec:
           readinessProbe:
             httpGet:
               path: /health/ready
-              port: http
+              port: management
             initialDelaySeconds: 30
             periodSeconds: 10
             failureThreshold: 30
           livenessProbe:
             httpGet:
               path: /health/live
-              port: http
+              port: management
             initialDelaySeconds: 60
             periodSeconds: 30
           resources:
@@ -69,4 +107,4 @@ spec:
         - name: realm-import
           configMap:
             name: keycloak-realm
-            optional: true  # operator can populate later
+            optional: true

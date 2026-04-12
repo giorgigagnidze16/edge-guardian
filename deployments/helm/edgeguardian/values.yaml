@@ -1,0 +1,95 @@
+# ---- Global -----------------------------------------------------------------
+nameOverride: ""
+fullnameOverride: ""
+
+# ---- Controller image --------------------------------------------------------
+image:
+  repository: edgeguardian/controller
+  tag: latest
+  pullPolicy: IfNotPresent
+
+# ---- Service exposure --------------------------------------------------------
+# externalAccess: off ⇒ everything is ClusterIP only (prod: use Ingress separately)
+# externalAccess: nodePort ⇒ emqx-external + edgeguardian-controller exposed on fixed ports
+externalAccess:
+  mode: nodePort
+  nodePorts:
+    controller: 30443
+    emqxMtls: 30883
+    emqxBootstrap: 31883
+
+# ---- Controller --------------------------------------------------------------
+controller:
+  replicas: 1
+  resources:
+    requests: { cpu: 200m, memory: 512Mi }
+    limits:   { memory: 1Gi }
+  # CA key encryption key for CaKeyEncryption. Blank uses an insecure dev default.
+  # For prod: openssl rand -base64 32
+  caEncryptionKey: ""
+  # CRL Distribution Point URL embedded in every leaf cert. EMQX dereferences this
+  # URL on each TLS handshake. Override with the public hostname in prod.
+  crlUrl: http://edgeguardian-controller:8443/api/v1/pki/crl
+  keycloakIssuerUri: http://keycloak:9090/realms/edgeguardian
+
+# ---- Postgres ----------------------------------------------------------------
+postgres:
+  image: timescale/timescaledb:latest-pg16
+  storage: 10Gi
+  credentials:
+    database: edgeguardian
+    username: edgeguardian
+    password: edgeguardian-dev
+
+# ---- Keycloak ----------------------------------------------------------------
+keycloak:
+  image: quay.io/keycloak/keycloak:26.0
+  admin:
+    username: admin
+    password: admin
+
+# ---- MinIO -------------------------------------------------------------------
+minio:
+  image: minio/minio:latest
+  storage: 20Gi
+  credentials:
+    username: edgeguardian
+    password: edgeguardian-dev
+
+# ---- Loki --------------------------------------------------------------------
+loki:
+  image: grafana/loki:3.3.0
+  storage: 10Gi
+
+# ---- Grafana -----------------------------------------------------------------
+grafana:
+  image: grafana/grafana:11.4.0
+  storage: 5Gi
+  admin:
+    username: admin
+    password: admin
+
+# ---- EMQX --------------------------------------------------------------------
+emqx:
+  image: emqx/emqx:5.8
+  storage: 5Gi
+  dashboardPassword: admin-secret
+  mqttUsers:
+    controllerUsername: controller
+    controllerPassword: controller-secret
+    bootstrapUsername: bootstrap
+    bootstrapPassword: bootstrap-secret
+
+# ---- PKI (cert-manager resources) --------------------------------------------
+pki:
+  brokerCa:
+    duration: 87600h
+    renewBefore: 720h
+  brokerServerCert:
+    duration: 8760h
+    renewBefore: 720h
+
+# ---- PKI bootstrap Job image -------------------------------------------------
+# Image must contain openssl + kubectl (alpine/k8s ships both).
+pkiBootstrap:
+  image: alpine/k8s:1.31.1

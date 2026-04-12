@@ -2,7 +2,35 @@ management:
   tracing:
     sampling:
       probability: 1.0
+
   endpoints:
     web:
       exposure:
+        # Whitelist only. Notably absent: env, configprops, beans, heapdump, threaddump,
+        # loggers, mappings, scheduledtasks, httpexchanges — any of which could leak
+        # config values, secrets, or internal state.
         include: health,info,metrics,prometheus
+        exclude: env,configprops,beans,heapdump,threaddump,loggers,mappings,scheduledtasks,httpexchanges,shutdown
+
+  endpoint:
+    health:
+      # status-only payload; never include component details, DB URL, disk paths, etc.
+      show-details: never
+      show-components: never
+      # Probes are on /actuator/health/liveness and /actuator/health/readiness — these
+      # group endpoints just return UP/DOWN regardless of show-details.
+      probes:
+        enabled: true
+    info:
+      # An empty info payload by default. Don't auto-expose git/env/build info which
+      # can leak commit SHAs, build hosts, and other recon-useful metadata.
+      env:
+        enabled: false
+
+  info:
+    git:
+      enabled: false
+    env:
+      enabled: false
+    build:
+      enabled: false

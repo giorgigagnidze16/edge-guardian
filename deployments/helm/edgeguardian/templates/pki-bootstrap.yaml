@@ -1,0 +1,108 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: pki-bootstrap
+  labels:
+    {{- include "edgeguardian.componentLabels" (dict "ctx" . "component" "pki-bootstrap") | nindent 4 }}
+  annotations:
+    "helm.sh/hook": pre-install,pre-upgrade
+    "helm.sh/hook-weight": "-10"
+    "helm.sh/hook-delete-policy": before-hook-creation
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: pki-bootstrap
+  labels:
+    {{- include "edgeguardian.componentLabels" (dict "ctx" . "component" "pki-bootstrap") | nindent 4 }}
+  annotations:
+    "helm.sh/hook": pre-install,pre-upgrade
+    "helm.sh/hook-weight": "-10"
+    "helm.sh/hook-delete-policy": before-hook-creation
+rules:
+  - apiGroups: [""]
+    resources: [secrets]
+    verbs: [get, create, patch, update]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: pki-bootstrap
+  labels:
+    {{- include "edgeguardian.componentLabels" (dict "ctx" . "component" "pki-bootstrap") | nindent 4 }}
+  annotations:
+    "helm.sh/hook": pre-install,pre-upgrade
+    "helm.sh/hook-weight": "-10"
+    "helm.sh/hook-delete-policy": before-hook-creation
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: pki-bootstrap
+subjects:
+  - kind: ServiceAccount
+    name: pki-bootstrap
+    namespace: {{ .Release.Namespace }}
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: pki-bootstrap
+  labels:
+    {{- include "edgeguardian.componentLabels" (dict "ctx" . "component" "pki-bootstrap") | nindent 4 }}
+  annotations:
+    "helm.sh/hook": pre-install,pre-upgrade
+    "helm.sh/hook-weight": "-5"
+    "helm.sh/hook-delete-policy": before-hook-creation
+spec:
+  backoffLimit: 1
+  ttlSecondsAfterFinished: 600
+  template:
+    metadata:
+      labels:
+        {{- include "edgeguardian.componentLabels" (dict "ctx" . "component" "pki-bootstrap") | nindent 8 }}
+    spec:
+      serviceAccountName: pki-bootstrap
+      restartPolicy: Never
+      containers:
+        - name: bootstrap
+          image: {{ .Values.pkiBootstrap.image | quote }}
+          command:
+            - sh
+            - -c
+            - |
+              set -eux
+              apk add --no-cache openssl
+              NS="{{ .Release.Namespace }}"
+
+              if kubectl -n "$NS" get secret edgeguardian-broker-ca-secret >/dev/null 2>&1 \
+                 && kubectl -n "$NS" get secret emqx-server-tls >/dev/null 2>&1; then
+                echo "Broker CA + server cert already present — skipping"
+                exit 0
+              fi
+
+              cd /tmp
+              openssl ecparam -name prime256v1 -genkey -noout -out ca.key
+              openssl req -new -x509 -key ca.key -sha256 -days 3650 -nodes \
+                -subj "/CN=EdgeGuardian Broker CA/O=EdgeGuardian" -out ca.crt
+
+              openssl ecparam -name prime256v1 -genkey -noout -out server.key
+              openssl req -new -key server.key -nodes -subj "/CN=emqx" -out server.csr
+
+              printf 'subjectAltName = DNS:emqx,DNS:emqx.%s.svc.cluster.local,DNS:localhost,IP:127.0.0.1\nextendedKeyUsage = serverAuth\n' "$NS" > server.ext
+
+              openssl x509 -req -in server.csr -CA ca.crt -CAkey ca.key -CAcreateserial \
+                -out server.crt -days 365 -sha256 -extfile server.ext
+
+              kubectl -n "$NS" create secret generic edgeguardian-broker-ca-secret \
+                --from-file=ca.crt=ca.crt \
+                --from-file=tls.crt=ca.crt \
+                --from-file=tls.key=ca.key \
+                --dry-run=client -o yaml | kubectl apply -f -
+
+              kubectl -n "$NS" create secret generic emqx-server-tls \
+                --from-file=tls.crt=server.crt \
+                --from-file=tls.key=server.key \
+                --from-file=ca.crt=ca.crt \
+                --dry-run=client -o yaml | kubectl apply -f -
+
+              echo "PKI bootstrap complete"
