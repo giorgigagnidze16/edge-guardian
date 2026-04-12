@@ -1,0 +1,91 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: controller
+  labels:
+    app.kubernetes.io/name: controller
+    app.kubernetes.io/component: control-plane
+spec:
+  replicas: 1
+  strategy:
+    type: RollingUpdate
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: controller
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: controller
+        app.kubernetes.io/component: control-plane
+    spec:
+      containers:
+        - name: controller
+          image: edgeguardian/controller:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 8443
+          env:
+            - name: SPRING_DATASOURCE_URL
+              value: jdbc:postgresql://postgres:5432/edgeguardian
+            - name: SPRING_DATASOURCE_USERNAME
+              valueFrom: { secretKeyRef: { name: postgres-credentials, key: username } }
+            - name: SPRING_DATASOURCE_PASSWORD
+              valueFrom: { secretKeyRef: { name: postgres-credentials, key: password } }
+            - name: KEYCLOAK_ISSUER_URI
+              value: http://keycloak:9090/realms/edgeguardian
+            - name: EDGEGUARDIAN_CONTROLLER_MQTT_BROKER_URL
+              value: tcp://emqx:1883
+            - name: EDGEGUARDIAN_CONTROLLER_MQTT_USERNAME
+              valueFrom: { secretKeyRef: { name: emqx-mqtt-users, key: controller_username } }
+            - name: EDGEGUARDIAN_CONTROLLER_MQTT_PASSWORD
+              valueFrom: { secretKeyRef: { name: emqx-mqtt-users, key: controller_password } }
+            - name: EMQX_ADMIN_URL
+              value: http://emqx:18083/api/v5
+            - name: EMQX_ADMIN_USERNAME
+              valueFrom: { secretKeyRef: { name: emqx-admin, key: username } }
+            - name: EMQX_ADMIN_PASSWORD
+              valueFrom: { secretKeyRef: { name: emqx-admin, key: password } }
+            - name: EDGEGUARDIAN_CONTROLLER_MINIO_ENDPOINT
+              value: http://minio:9000
+            - name: EDGEGUARDIAN_CONTROLLER_MINIO_ACCESS_KEY
+              valueFrom: { secretKeyRef: { name: minio-credentials, key: username } }
+            - name: EDGEGUARDIAN_CONTROLLER_MINIO_SECRET_KEY
+              valueFrom: { secretKeyRef: { name: minio-credentials, key: password } }
+            - name: EDGEGUARDIAN_CONTROLLER_LOGGING_LOKI_URL
+              value: http://loki:3100
+            # Embedded in every leaf cert's CDP extension; must be reachable by EMQX
+            # and by external devices. Override to the public ingress hostname in prod.
+            - name: PKI_CRL_URL
+              value: http://edgeguardian-controller:8443/api/v1/pki/crl
+            - name: PKI_BROKER_CA_PATH
+              value: /pki/broker-ca/broker-ca.pem
+            - name: CA_ENCRYPTION_KEY
+              valueFrom: { secretKeyRef: { name: controller-secrets, key: ca_encryption_key } }
+          readinessProbe:
+            httpGet:
+              path: /actuator/health/readiness
+              port: http
+            initialDelaySeconds: 20
+            periodSeconds: 5
+            failureThreshold: 24
+          livenessProbe:
+            httpGet:
+              path: /actuator/health/liveness
+              port: http
+            initialDelaySeconds: 60
+            periodSeconds: 15
+          volumeMounts:
+            - name: broker-ca
+              mountPath: /pki/broker-ca
+              readOnly: true
+          resources:
+            requests: { cpu: 200m, memory: 512Mi }
+            limits: { memory: 1Gi }
+      volumes:
+        - name: broker-ca
+          configMap:
+            name: broker-ca
+            items:
+              - key: broker-ca.pem
+                path: broker-ca.pem

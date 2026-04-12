@@ -2,6 +2,7 @@ package com.edgeguardian.controller.api;
 
 import com.edgeguardian.controller.dto.CertificateDto;
 import com.edgeguardian.controller.dto.CertificateRequestDto;
+import com.edgeguardian.controller.dto.RejectCertRequest;
 import com.edgeguardian.controller.model.IssuedCertificate;
 import com.edgeguardian.controller.mqtt.CertRequestListener;
 import com.edgeguardian.controller.security.TenantPrincipal;
@@ -46,7 +47,7 @@ public class CertificateController {
     public CertificateDto approve(
             @PathVariable Long requestId,
             @AuthenticationPrincipal TenantPrincipal principal) {
-        IssuedCertificate cert = certificateService.approve(requestId, principal.userId());
+        IssuedCertificate cert = certificateService.approve(requestId, principal.organizationId(), principal.userId());
         certRequestListener.publishCertResponse(
                 cert.getDeviceId(), principal.organizationId(), cert.getName(), cert.getCertPem());
         return CertificateDto.from(cert);
@@ -57,9 +58,9 @@ public class CertificateController {
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void reject(
             @PathVariable Long requestId,
-            @RequestBody(required = false) RejectRequest body,
+            @RequestBody(required = false) RejectCertRequest body,
             @AuthenticationPrincipal TenantPrincipal principal) {
-        certificateService.reject(requestId, principal.userId(),
+        certificateService.reject(requestId, principal.organizationId(), principal.userId(),
                 body != null ? body.reason() : null);
     }
 
@@ -68,7 +69,7 @@ public class CertificateController {
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void revoke(@PathVariable Long certId,
                        @AuthenticationPrincipal TenantPrincipal principal) {
-        certificateService.revoke(certId, principal.userId());
+        certificateService.revoke(certId, principal.organizationId(), principal.userId());
     }
 
     @GetMapping(value = "/ca", produces = MediaType.TEXT_PLAIN_VALUE)
@@ -76,6 +77,4 @@ public class CertificateController {
     public String getCaCert(@AuthenticationPrincipal TenantPrincipal principal) {
         return caService.getCaCertPem(principal.organizationId());
     }
-
-    record RejectRequest(String reason) {}
 }

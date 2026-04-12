@@ -1,8 +1,7 @@
 package com.edgeguardian.controller.mqtt;
 
-import com.edgeguardian.controller.model.DeviceStatus;
+import com.edgeguardian.controller.mqtt.payload.TelemetryPayload;
 import com.edgeguardian.controller.service.DeviceRegistry;
-import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
@@ -14,8 +13,6 @@ import org.eclipse.paho.mqttv5.common.MqttMessage;
 import org.eclipse.paho.mqttv5.common.MqttSubscription;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
-
-import java.time.Instant;
 
 /**
  * Subscribes to MQTT telemetry topics and updates device status in the database.
@@ -75,39 +72,4 @@ public class TelemetryListener {
         }
     }
 
-    @JsonIgnoreProperties(ignoreUnknown = true)
-    record TelemetryPayload(String deviceId, Instant timestamp, DeviceStatusPayload status) {
-    }
-
-    @JsonIgnoreProperties(ignoreUnknown = true)
-    record DeviceStatusPayload(
-            double cpuUsagePercent,
-            long memoryUsedBytes,
-            long memoryTotalBytes,
-            long diskUsedBytes,
-            long diskTotalBytes,
-            double temperatureCelsius,
-            long uptimeSeconds,
-            String lastReconcile,
-            String reconcileStatus
-    ) {
-        DeviceStatus toEntity() {
-            var s = new DeviceStatus();
-            s.setCpuUsagePercent(cpuUsagePercent);
-            s.setMemoryUsedBytes(memoryUsedBytes);
-            s.setMemoryTotalBytes(memoryTotalBytes);
-            s.setDiskUsedBytes(diskUsedBytes);
-            s.setDiskTotalBytes(diskTotalBytes);
-            s.setTemperatureCelsius(temperatureCelsius);
-            s.setUptimeSeconds(uptimeSeconds);
-            if (lastReconcile != null && !lastReconcile.isEmpty()) {
-                try {
-                    s.setLastReconcile(Instant.parse(lastReconcile));
-                } catch (Exception ignored) {
-                }
-            }
-            s.setReconcileStatus(reconcileStatus != null ? reconcileStatus : "unknown");
-            return s;
-        }
-    }
 }

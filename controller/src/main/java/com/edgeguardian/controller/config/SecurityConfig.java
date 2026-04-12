@@ -36,9 +36,14 @@ public class SecurityConfig {
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/actuator/health", "/actuator/info").permitAll()
                         .requestMatchers("/api/v1/agent/enroll").permitAll()
-                        .requestMatchers("/api/v1/pki/crl/**", "/api/v1/pki/ca-bundle").permitAll()
+                        .requestMatchers("/api/v1/pki/crl/**", "/api/v1/pki/ca-bundle",
+                                "/api/v1/pki/broker-ca").permitAll()
                         .requestMatchers("/api/v1/**").authenticated()
-                        .anyRequest().permitAll()
+                        // Deny by default — any path not explicitly permitted or authenticated
+                        // above is refused. Prevents accidental public exposure when new
+                        // endpoints are added outside /api/v1/ (management paths, static assets,
+                        // future Swagger UI, etc.) without a matching rule.
+                        .anyRequest().denyAll()
                 )
                 .oauth2ResourceServer(oauth2 -> oauth2
                         .jwt(jwt -> jwt.jwtAuthenticationConverter(jwtTenantConverter)));

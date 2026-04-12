@@ -1,8 +1,8 @@
 edgeguardian:
   controller:
     mqtt:
-      broker-url: tcp://localhost:1883
-      client-id: edgeguardian-controller
-      username: controller
-      password: controller-secret
-      topic-root: edgeguardian
+      broker-url: ${EDGEGUARDIAN_CONTROLLER_MQTT_BROKER_URL:tcp://localhost:1883}
+      client-id: ${EDGEGUARDIAN_CONTROLLER_MQTT_CLIENT_ID:edgeguardian-controller}
+      username: ${EDGEGUARDIAN_CONTROLLER_MQTT_USERNAME:controller}
+      password: ${EDGEGUARDIAN_CONTROLLER_MQTT_PASSWORD:controller-secret}
+      topic-root: ${EDGEGUARDIAN_CONTROLLER_MQTT_TOPIC_ROOT:edgeguardian}

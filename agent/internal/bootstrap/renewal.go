@@ -10,26 +10,22 @@ import (
 	"go.uber.org/zap"
 )
 
+// IdentityCertName is the fixed name used in cert/request and cert/response messages
+// for the device's mTLS identity certificate.
+const IdentityCertName = "device-identity"
+
 // CertRequester is the subset of MQTT client functionality the renewal loop needs.
-// Kept as an interface so tests can verify the flow without a live broker.
 type CertRequester interface {
 	PublishCertRequest(name, commonName string, sans []string, csrPEM []byte, reqType, currentSerial string) error
 }
 
+const (
+	defaultMinBetweenAttempts     = 4 * time.Hour
+	defaultCriticalWindow         = 24 * time.Hour
+	defaultMaxFailuresBeforeFatal = 3
+)
+
 // Renewer drives the periodic identity-cert renewal loop.
-//
-// Contract:
-//   - On every tick, compare {NotAfter - now} against renewWindow. If inside the window,
-//     publish a RENEWAL cert request with currentSerial pointing at the live cert.
-//   - The controller auto-approves renewals and publishes the new cert on cert/response.
-//   - A cert-response callback (wired at construction time) decrypts the response,
-//     swaps the on-disk material atomically via Manager.Replace, and updates the
-//     in-memory identity so subsequent ticks compare against the new NotAfter.
-//
-// The agent's MQTT TLS config is loaded at connect time, so reloading the cert
-// mid-session requires a reconnect to pick up the new key pair — deferred to a
-// follow-up (today the reconnect happens on the next restart, which is acceptable
-// given the agent runs under watchdog supervision).
 type Renewer struct {
 	mgr          *Manager
 	requester    CertRequester
@@ -37,30 +33,35 @@ type Renewer struct {
 	tickInterval time.Duration
 	logger       *zap.Logger
 
-	mu       sync.Mutex
-	identity *Identity
+	minBetweenAttempts     time.Duration
+	criticalWindow         time.Duration
+	maxFailuresBeforeFatal int
+
+	mu                sync.Mutex
+	identity          *Identity
+	lastAttempt       time.Time
+	consecutiveFailed int
 }
 
-// NewRenewer wires a renewer around an already-enrolled identity. renewWindow is how
-// close to expiry we trigger a renewal request (e.g. 14 days). tickInterval is how
-// often we check (e.g. 1 hour — renewWindow is long, so this can be lazy).
+// NewRenewer wires a renewer around an already-enrolled identity.
 func NewRenewer(mgr *Manager, requester CertRequester, id *Identity,
 	renewWindow, tickInterval time.Duration, logger *zap.Logger) *Renewer {
 
 	return &Renewer{
-		mgr:          mgr,
-		requester:    requester,
-		renewWindow:  renewWindow,
-		tickInterval: tickInterval,
-		logger:       logger,
-		identity:     id,
+		mgr:                    mgr,
+		requester:              requester,
+		renewWindow:            renewWindow,
+		tickInterval:           tickInterval,
+		logger:                 logger,
+		minBetweenAttempts:     defaultMinBetweenAttempts,
+		criticalWindow:         defaultCriticalWindow,
+		maxFailuresBeforeFatal: defaultMaxFailuresBeforeFatal,
+		identity:               id,
 	}
 }
 
 // Run blocks until ctx is cancelled, checking expiry on every tick.
 func (r *Renewer) Run(ctx context.Context) {
-	// Check immediately on startup so a device that missed its window while powered off
-	// renews on the next boot rather than waiting for the first tick.
 	r.tryRenew()
 
 	t := time.NewTicker(r.tickInterval)
@@ -70,6 +71,9 @@ func (r *Renewer) Run(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case <-t.C:
+			if ctx.Err() != nil {
+				return
+			}
 			r.tryRenew()
 		}
 	}
@@ -78,6 +82,8 @@ func (r *Renewer) Run(ctx context.Context) {
 func (r *Renewer) tryRenew() {
 	r.mu.Lock()
 	id := r.identity
+	lastAttempt := r.lastAttempt
+	failed := r.consecutiveFailed
 	r.mu.Unlock()
 	if id == nil {
 		return
@@ -86,13 +92,42 @@ func (r *Renewer) tryRenew() {
 		return
 	}
 
+	now := time.Now()
+
+	// A RENEWAL response can take minutes under load; skip if still in cooldown.
+	if !lastAttempt.IsZero() && now.Sub(lastAttempt) < r.minBetweenAttempts {
+		return
+	}
+
+	// Escalate to FATAL so the watchdog can restart us into a clean enrollment path.
+	timeToExpiry := time.Until(id.NotAfter)
+	if timeToExpiry <= r.criticalWindow && failed >= r.maxFailuresBeforeFatal {
+		r.logger.Fatal("identity cert renewal failed repeatedly; aborting for watchdog restart",
+			zap.String("current_serial", id.SerialHex),
+			zap.Duration("time_to_expiry", timeToExpiry),
+			zap.Int("consecutive_failures", failed))
+	}
+
 	r.logger.Info("identity cert within renewal window, requesting renewal",
 		zap.String("current_serial", id.SerialHex),
-		zap.Time("not_after", id.NotAfter))
+		zap.Time("not_after", id.NotAfter),
+		zap.Int("consecutive_failures", failed))
+
+	r.mu.Lock()
+	r.lastAttempt = now
+	r.mu.Unlock()
 
 	if err := r.publishRenewal(id); err != nil {
-		r.logger.Error("renewal request failed", zap.Error(err))
+		r.mu.Lock()
+		r.consecutiveFailed++
+		r.mu.Unlock()
+		r.logger.Error("renewal request publish failed", zap.Error(err))
+		return
 	}
+	// Bumped optimistically; reset in HandleRenewalResponse when a response arrives.
+	r.mu.Lock()
+	r.consecutiveFailed++
+	r.mu.Unlock()
 }
 
 func (r *Renewer) publishRenewal(id *Identity) error {
@@ -105,8 +140,7 @@ func (r *Renewer) publishRenewal(id *Identity) error {
 		return fmt.Errorf("create renewal CSR: %w", err)
 	}
 
-	// Stash the new private key alongside the existing one so we can atomically swap
-	// when the signed cert arrives (same pattern the per-app cert plugin uses).
+	// Stash the new private key so we can atomically swap when the signed cert arrives.
 	keyPEM, err := certificate.MarshalPrivateKey(newKey)
 	if err != nil {
 		return fmt.Errorf("marshal renewal key: %w", err)
@@ -115,9 +149,8 @@ func (r *Renewer) publishRenewal(id *Identity) error {
 		return fmt.Errorf("stash renewal key: %w", err)
 	}
 
-	const identityCertName = "device-identity"
 	if err := r.requester.PublishCertRequest(
-		identityCertName,
+		IdentityCertName,
 		id.Certificate.Subject.CommonName,
 		nil,
 		csrPEM,
@@ -129,9 +162,7 @@ func (r *Renewer) publishRenewal(id *Identity) error {
 	return nil
 }
 
-// HandleRenewalResponse is called by the cert/response handler when a renewal arrives.
-// It swaps in the stashed key + new cert atomically and updates the in-memory identity.
-// Returns the new identity for logging/telemetry.
+// HandleRenewalResponse swaps in the stashed key + new cert atomically.
 func (r *Renewer) HandleRenewalResponse(certPEM []byte) (*Identity, error) {
 	r.mu.Lock()
 	current := r.identity
@@ -146,7 +177,6 @@ func (r *Renewer) HandleRenewalResponse(certPEM []byte) (*Identity, error) {
 		return nil, fmt.Errorf("read stashed renewal key: %w", err)
 	}
 
-	// Swap: replace current key + cert atomically. CA unchanged.
 	if err := r.mgr.Replace(newKeyPEM, certPEM, nil); err != nil {
 		return nil, fmt.Errorf("replace identity material: %w", err)
 	}
@@ -158,6 +188,8 @@ func (r *Renewer) HandleRenewalResponse(certPEM []byte) (*Identity, error) {
 	}
 	r.mu.Lock()
 	r.identity = updated
+	r.consecutiveFailed = 0
+	r.lastAttempt = time.Time{}
 	r.mu.Unlock()
 	r.logger.Info("identity cert renewed",
 		zap.String("new_serial", updated.SerialHex),

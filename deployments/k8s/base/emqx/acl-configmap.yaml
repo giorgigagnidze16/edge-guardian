@@ -1,0 +1,27 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: emqx-acl
+data:
+  acl.conf: |
+    %% controller (password listener 1883): full access
+    {allow, {username, "controller"}, all, ["edgeguardian/#"]}.
+
+    %% bootstrap (password listener 1883): enrollment + cert exchange only
+    {allow, {username, "bootstrap"}, publish,   ["edgeguardian/device/+/enroll/request"]}.
+    {allow, {username, "bootstrap"}, publish,   ["edgeguardian/device/+/cert/request"]}.
+    {allow, {username, "bootstrap"}, subscribe, ["edgeguardian/device/+/enroll/response"]}.
+    {allow, {username, "bootstrap"}, subscribe, ["edgeguardian/device/+/cert/response"]}.
+
+    %% mTLS listener 8883: ${clientid} == cert CN == deviceId
+    {allow, all, publish,   ["edgeguardian/device/${clientid}/telemetry"]}.
+    {allow, all, publish,   ["edgeguardian/device/${clientid}/logs"]}.
+    {allow, all, publish,   ["edgeguardian/device/${clientid}/heartbeat"]}.
+    {allow, all, publish,   ["edgeguardian/device/${clientid}/ota/status"]}.
+    {allow, all, publish,   ["edgeguardian/device/${clientid}/command/result"]}.
+    {allow, all, publish,   ["edgeguardian/device/${clientid}/cert/request"]}.
+    {allow, all, subscribe, ["edgeguardian/device/${clientid}/command"]}.
+    {allow, all, subscribe, ["edgeguardian/device/${clientid}/state/desired"]}.
+    {allow, all, subscribe, ["edgeguardian/device/${clientid}/cert/response"]}.
+
+    {deny, all}.

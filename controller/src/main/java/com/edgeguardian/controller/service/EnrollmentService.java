@@ -6,6 +6,7 @@ import com.edgeguardian.controller.model.EnrollmentToken;
 import com.edgeguardian.controller.repository.DeviceTokenRepository;
 import com.edgeguardian.controller.repository.EnrollmentTokenRepository;
 import com.edgeguardian.controller.security.TokenHasher;
+import com.edgeguardian.controller.service.result.EnrollmentResult;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
@@ -52,17 +53,13 @@ public class EnrollmentService {
     }
 
     @Transactional
-    public void revokeToken(Long tokenId) {
+    public void revokeToken(Long tokenId, Long expectedOrgId) {
         EnrollmentToken token = tokenRepository.findById(tokenId)
+                .filter(t -> expectedOrgId.equals(t.getOrganizationId()))
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Token not found"));
         token.setRevoked(true);
         tokenRepository.save(token);
     }
-
-    /**
-     * Result of a successful device enrollment.
-     */
-    public record EnrollmentResult(Device device, String deviceToken) {}
 
     /**
      * Enroll a device using an enrollment token.

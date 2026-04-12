@@ -21,7 +21,7 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
 import org.springframework.web.server.ResponseStatusException;
 
-@Import({CertificateService.class, CertificateAuthorityService.class, CaKeyEncryption.class,
+@Import({CertificateService.class, CertificateAuthorityService.class, com.edgeguardian.controller.service.pki.OrganizationCaStore.class, CaKeyEncryption.class,
         AuditService.class, CrlService.class, CertificateServiceTest.MockEmqxConfig.class})
 class CertificateServiceTest extends AbstractIntegrationTest {
 
@@ -106,7 +106,7 @@ class CertificateServiceTest extends AbstractIntegrationTest {
         Long requestId = result.request().getId();
 
         // Approve
-        IssuedCertificate cert = certificateService.approve(requestId, reviewerUserId);
+        IssuedCertificate cert = certificateService.approve(requestId, orgId, reviewerUserId);
         assertThat(cert).isNotNull();
         assertThat(cert.getCertPem()).contains("BEGIN CERTIFICATE");
         assertThat(cert.getDeviceId()).isEqualTo(DEVICE_ID);
@@ -123,7 +123,7 @@ class CertificateServiceTest extends AbstractIntegrationTest {
                 DEVICE_ID, orgId, "test-cert", "test.local",
                 List.of(), generateTestCsr(), CertRequestType.INITIAL, null);
 
-        certificateService.reject(result.request().getId(), reviewerUserId, "Not authorized");
+        certificateService.reject(result.request().getId(), orgId, reviewerUserId, "Not authorized");
 
         CertificateRequest updated = requestRepository.findById(result.request().getId()).orElseThrow();
         assertThat(updated.getState()).isEqualTo(CertRequestState.REJECTED);
@@ -206,7 +206,7 @@ class CertificateServiceTest extends AbstractIntegrationTest {
                 DEVICE_ID, orgId, "test-cert", "test.local",
                 List.of(), generateTestCsr(), CertRequestType.MANIFEST, null);
 
-        certificateService.revoke(result.certificate().getId(), reviewerUserId);
+        certificateService.revoke(result.certificate().getId(), orgId, reviewerUserId);
 
         IssuedCertificate revoked = certRepository.findById(result.certificate().getId()).orElseThrow();
         assertThat(revoked.isRevoked()).isTrue();
@@ -218,9 +218,9 @@ class CertificateServiceTest extends AbstractIntegrationTest {
         var result = certificateService.processRequest(
                 DEVICE_ID, orgId, "test-cert", "test.local",
                 List.of(), generateTestCsr(), CertRequestType.MANIFEST, null);
-        certificateService.revoke(result.certificate().getId(), reviewerUserId);
+        certificateService.revoke(result.certificate().getId(), orgId, reviewerUserId);
 
-        assertThatThrownBy(() -> certificateService.revoke(result.certificate().getId(), reviewerUserId))
+        assertThatThrownBy(() -> certificateService.revoke(result.certificate().getId(), orgId, reviewerUserId))
                 .isInstanceOf(ResponseStatusException.class);
     }
 

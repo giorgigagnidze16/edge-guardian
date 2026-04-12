@@ -1,8 +1,8 @@
 package com.edgeguardian.controller.mqtt;
 
 import com.edgeguardian.controller.model.CommandExecution;
+import com.edgeguardian.controller.mqtt.payload.CommandResultPayload;
 import com.edgeguardian.controller.repository.CommandExecutionRepository;
-import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
@@ -14,8 +14,6 @@ import org.eclipse.paho.mqttv5.common.MqttMessage;
 import org.eclipse.paho.mqttv5.common.MqttSubscription;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
-
-import java.time.Instant;
 
 /**
  * Handles command execution results from devices over MQTT.
@@ -77,17 +75,4 @@ public class CommandResultListener {
         }
     }
 
-    @JsonIgnoreProperties(ignoreUnknown = true)
-    record CommandResultPayload(
-            String commandId,
-            String deviceId,
-            String phase,
-            String status,
-            int exitCode,
-            String stdout,
-            String stderr,
-            String errorMessage,
-            long durationMs,
-            Instant timestamp
-    ) {}
 }

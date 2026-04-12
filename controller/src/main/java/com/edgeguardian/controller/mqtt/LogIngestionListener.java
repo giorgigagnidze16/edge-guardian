@@ -58,12 +58,11 @@ public class LogIngestionListener {
     private void onLogMessage(String topic, MqttMessage message) {
         try {
             // Extract device ID from topic: edgeguardian/device/{deviceId}/logs
-            String[] parts = topic.split("/");
-            if (parts.length < 4) {
+            String deviceId = MqttTopics.extractDeviceId(topic);
+            if (deviceId == null || deviceId.isEmpty()) {
                 log.warn("Invalid log topic format: {}", topic);
                 return;
             }
-            String deviceId = parts[parts.length - 2];
 
             JsonNode entries = objectMapper.readTree(message.getPayload());
             if (entries.isArray()) {

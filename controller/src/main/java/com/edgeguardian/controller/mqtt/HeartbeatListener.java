@@ -2,9 +2,9 @@ package com.edgeguardian.controller.mqtt;
 
 import com.edgeguardian.controller.model.DeviceManifestEntity;
 import com.edgeguardian.controller.model.DeviceStatus;
+import com.edgeguardian.controller.mqtt.payload.HeartbeatPayload;
 import com.edgeguardian.controller.service.DeviceRegistry;
 import com.edgeguardian.controller.service.OTAService;
-import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
@@ -17,7 +17,6 @@ import org.eclipse.paho.mqttv5.common.MqttSubscription;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
-import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Optional;
@@ -125,41 +124,4 @@ public class HeartbeatListener {
         }
     }
 
-    @JsonIgnoreProperties(ignoreUnknown = true)
-    record HeartbeatPayload(
-            String deviceId,
-            String agentVersion,
-            DeviceStatusPayload status,
-            long manifestVersion,
-            Instant timestamp
-    ) {}
-
-    @JsonIgnoreProperties(ignoreUnknown = true)
-    record DeviceStatusPayload(
-            double cpuUsagePercent,
-            long memoryUsedBytes,
-            long memoryTotalBytes,
-            long diskUsedBytes,
-            long diskTotalBytes,
-            double temperatureCelsius,
-            long uptimeSeconds,
-            String lastReconcile,
-            String reconcileStatus
-    ) {
-        DeviceStatus toEntity() {
-            var s = new DeviceStatus();
-            s.setCpuUsagePercent(cpuUsagePercent);
-            s.setMemoryUsedBytes(memoryUsedBytes);
-            s.setMemoryTotalBytes(memoryTotalBytes);
-            s.setDiskUsedBytes(diskUsedBytes);
-            s.setDiskTotalBytes(diskTotalBytes);
-            s.setTemperatureCelsius(temperatureCelsius);
-            s.setUptimeSeconds(uptimeSeconds);
-            if (lastReconcile != null && !lastReconcile.isEmpty()) {
-                try { s.setLastReconcile(Instant.parse(lastReconcile)); } catch (Exception ignored) {}
-            }
-            s.setReconcileStatus(reconcileStatus != null ? reconcileStatus : "unknown");
-            return s;
-        }
-    }
 }

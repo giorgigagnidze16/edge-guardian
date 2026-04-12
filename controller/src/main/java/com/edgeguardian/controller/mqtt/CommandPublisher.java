@@ -1,5 +1,7 @@
 package com.edgeguardian.controller.mqtt;
 
+import com.edgeguardian.controller.mqtt.payload.CommandEnvelope;
+import com.edgeguardian.controller.mqtt.payload.CommandPayload;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
@@ -67,12 +69,4 @@ public class CommandPublisher {
         }
     }
 
-    record CommandEnvelope(CommandPayload command) {}
-
-    record CommandPayload(
-            String id,
-            String type,
-            Map<String, String> params,
-            Instant createdAt
-    ) {}
 }

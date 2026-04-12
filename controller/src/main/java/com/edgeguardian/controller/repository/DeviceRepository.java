@@ -20,4 +20,10 @@ public interface DeviceRepository extends JpaRepository<Device, Long> {
     void deleteByDeviceId(String deviceId);
 
     List<Device> findByState(Device.DeviceState state);
+
+    List<Device> findByOrganizationId(Long organizationId);
+
+    long countByOrganizationId(Long organizationId);
+
+    Optional<Device> findByDeviceIdAndOrganizationId(String deviceId, Long organizationId);
 }

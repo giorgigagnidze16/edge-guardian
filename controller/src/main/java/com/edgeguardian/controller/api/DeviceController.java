@@ -35,10 +35,6 @@ import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ResponseStatusException;
 import lombok.RequiredArgsConstructor;
 
-/**
- * REST API for device management.
- * Provides CRUD operations over registered devices.
- */
 @RestController
 @RequestMapping("/api/v1/devices")
 @RequiredArgsConstructor
@@ -52,19 +48,21 @@ public class DeviceController {
     private final DeviceLifecycleService deviceLifecycleService;
 
     @GetMapping
-    public List<DeviceDto> listDevices() {
-        List<Device> devices = registry.findAll();
-        Map<String, DeviceStatus> statusMap = registry.getLatestStatusForAllDevices();
+    @PreAuthorize("@orgSecurity.hasMinRole(authentication, 'VIEWER')")
+    public List<DeviceDto> listDevices(@AuthenticationPrincipal TenantPrincipal principal) {
+        List<Device> devices = registry.findByOrganizationId(principal.organizationId());
+        Map<String, DeviceStatus> statusMap =
+                registry.getLatestStatusForOrganization(principal.organizationId());
         return devices.stream()
             .map(d -> DeviceDto.from(d, statusMap.get(d.getDeviceId())))
             .toList();
     }
 
     @GetMapping("/{deviceId}")
-    public DeviceDto getDevice(@PathVariable String deviceId) {
-        Device device = registry.findById(deviceId)
-            .orElseThrow(() -> new ResponseStatusException(
-                HttpStatus.NOT_FOUND, "Device not found: " + deviceId));
+    @PreAuthorize("@orgSecurity.hasMinRole(authentication, 'VIEWER')")
+    public DeviceDto getDevice(@PathVariable String deviceId,
+                               @AuthenticationPrincipal TenantPrincipal principal) {
+        Device device = loadForTenant(deviceId, principal);
         DeviceStatus status = registry.getLatestStatus(deviceId).orElse(null);
         return DeviceDto.from(device, status);
     }
@@ -74,22 +72,27 @@ public class DeviceController {
     @PreAuthorize("@orgSecurity.hasMinRole(authentication, 'ADMIN')")
     public void removeDevice(@PathVariable String deviceId,
                              @AuthenticationPrincipal TenantPrincipal principal) {
+        loadForTenant(deviceId, principal);
         deviceLifecycleService.deleteDevice(deviceId, principal.userId());
     }
 
     @GetMapping("/count")
-    public long countDevices() {
-        return registry.count();
+    @PreAuthorize("@orgSecurity.hasMinRole(authentication, 'VIEWER')")
+    public long countDevices(@AuthenticationPrincipal TenantPrincipal principal) {
+        return registry.countByOrganizationId(principal.organizationId());
     }
 
     @GetMapping("/{deviceId}/logs")
+    @PreAuthorize("@orgSecurity.hasMinRole(authentication, 'VIEWER')")
     public JsonNode getDeviceLogs(
         @PathVariable String deviceId,
         @RequestParam(defaultValue = "") String start,
         @RequestParam(defaultValue = "") String end,
         @RequestParam(defaultValue = "100") int limit,
         @RequestParam(required = false) String level,
-        @RequestParam(required = false) String search) {
+        @RequestParam(required = false) String search,
+        @AuthenticationPrincipal TenantPrincipal principal) {
+        loadForTenant(deviceId, principal);
         if (start.isEmpty()) {
             start = Instant.now().minus(1, ChronoUnit.HOURS).toString();
         }
@@ -101,11 +104,11 @@ public class DeviceController {
 
     @PostMapping("/{deviceId}/commands")
     @ResponseStatus(HttpStatus.CREATED)
+    @PreAuthorize("@orgSecurity.hasMinRole(authentication, 'OPERATOR')")
     public DeviceCommand sendCommand(@PathVariable String deviceId,
                                      @RequestBody CreateCommandRequest request,
                                      @AuthenticationPrincipal TenantPrincipal principal) {
-        Device device = registry.findById(deviceId)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Device not found"));
+        Device device = loadForTenant(deviceId, principal);
 
         String commandId = UUID.randomUUID().toString();
 
@@ -136,13 +139,25 @@ public class DeviceController {
     }
 
     @GetMapping("/{deviceId}/commands")
-    public List<DeviceCommand> listCommands(@PathVariable String deviceId) {
+    @PreAuthorize("@orgSecurity.hasMinRole(authentication, 'VIEWER')")
+    public List<DeviceCommand> listCommands(@PathVariable String deviceId,
+                                            @AuthenticationPrincipal TenantPrincipal principal) {
+        loadForTenant(deviceId, principal);
         return commandRepository.findByDeviceIdOrderByCreatedAtDesc(deviceId);
     }
 
     @GetMapping("/{deviceId}/commands/{commandId}/results")
+    @PreAuthorize("@orgSecurity.hasMinRole(authentication, 'VIEWER')")
     public List<CommandExecution> getCommandResults(@PathVariable String deviceId,
-                                                     @PathVariable String commandId) {
+                                                     @PathVariable String commandId,
+                                                     @AuthenticationPrincipal TenantPrincipal principal) {
+        loadForTenant(deviceId, principal);
         return executionRepository.findByCommandIdOrderByReceivedAtAsc(commandId);
+    }
+
+    private Device loadForTenant(String deviceId, TenantPrincipal principal) {
+        return registry.findByIdForOrganization(deviceId, principal.organizationId())
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND, "Device not found: " + deviceId));
     }
 }

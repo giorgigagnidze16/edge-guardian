@@ -23,7 +23,7 @@ go test ./...
 go test ./internal/config
 go test ./internal/reconciler -run TestReconcilerDiff
 
-# Integration tests (require Docker — Linux, systemd, Mosquitto inside container)
+# Integration tests (require Docker — Linux, systemd + MQTT broker inside container)
 docker build -f Dockerfile.test -t eg-agent-test .
 docker run --privileged eg-agent-test
 ```
@@ -47,11 +47,16 @@ npm run build    # Production build
 npm run lint     # ESLint
 ```
 
-### Infrastructure (local dev)
+### Infrastructure (Kubernetes)
 ```bash
-docker compose -f deployments/docker-compose.yml up -d
-# Starts: PostgreSQL (5432), Keycloak (9090), EMQX (1883), Loki (3100), Grafana (3000)
+# Prereqs: cert-manager + trust-manager installed in the cluster.
+cd controller && ./gradlew bootBuildImage     # produces edgeguardian/controller:latest
+kubectl apply -k deployments/k8s/overlays/dev
 ```
+
+See `deployments/k8s/README.md` for the full bring-up sequence, first-org bootstrap,
+and NodePort mapping for edge devices. docker-compose was removed — K8s is the only
+supported deployment path.
 
 ## Architecture
 
@@ -67,11 +72,16 @@ docker compose -f deployments/docker-compose.yml up -d
 - **Agent binary size**: Must stay under 5MB. gRPC was removed for this reason (ADR-001). UPX compression used (ADR-002).
 - **Agent OTA flow**: Controller stores artifacts → agent polls via heartbeat → downloads binary → watchdog swaps on exit code 42 → rollback on repeated crashes.
 - **Controller DTOs**: Separate DTO classes in `dto/` package for all API request/response types. Entities in `model/` are JPA-annotated.
-- **Controller security**: `SecurityConfig.java` defines two auth paths — agent endpoints (permitAll) and org-scoped endpoints (JWT + API key filter).
-- **Database migrations**: Flyway in `controller/src/main/resources/db/migration/` (V1 devices, V2 auth/tenancy, V3 OTA).
+- **Controller security**: `SecurityConfig.java` — PKI endpoints (`/api/v1/pki/crl/**`, `/api/v1/pki/ca-bundle`, `/api/v1/pki/broker-ca`) and agent enroll are `permitAll`; everything under `/api/v1/**` requires JWT or API key; anyRequest is `denyAll`. Device/telemetry endpoints are org-scoped via `@PreAuthorize("@orgSecurity.hasMinRole(...)")` + `findByIdForOrganization` — cross-tenant access returns 404.
+- **Database migrations**: Flyway in `controller/src/main/resources/db/migration/` (V1-V8: devices, auth/tenancy, OTA, telemetry hypertable, commands, certificates, CRL, FK/indexes).
+- **PKI / mTLS**: agents bootstrap on tcp/1883 with shared `bootstrap` credentials + CSR in enroll request; receive signed identity cert; reconnect on ssl/8883 with mTLS. cert-manager issues the broker server cert; trust-manager distributes its CA. Revocation: `CrlService.rebuild` + `EmqxAdminClient.kickout` fire on every revoke. Leaf certs carry a CDP extension pointing to `/api/v1/pki/crl/{orgId}.crl`.
 - **Integration tests**: Agent uses Docker container with systemd + Mosquitto (`//go:build integration`). Controller uses Testcontainers with PostgreSQL.
 - **UI API layer**: `lib/api-client.ts` wraps fetch with auth token injection. Domain-specific functions in `lib/api/`.
 
-## Dev Credentials (docker-compose)
+## Dev Credentials (K8s dev overlay)
 
-PostgreSQL `edgeguardian:edgeguardian-dev`, Keycloak admin `admin:admin`, EMQX `admin:public`, Grafana `admin:admin`.
+Defined in `deployments/k8s/base/*/secrets.yaml`. Postgres `edgeguardian:edgeguardian-dev`,
+Keycloak admin `admin:admin`, EMQX dashboard `admin:admin-secret`, MQTT users
+`controller:controller-secret` + `bootstrap:bootstrap-secret`, MinIO
+`edgeguardian:edgeguardian-dev`, Grafana `admin:admin`. Override in prod overlays via
+SealedSecrets / ExternalSecrets.

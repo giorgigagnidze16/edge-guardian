@@ -5,6 +5,7 @@ package service
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"os/exec"
 	"strconv"
@@ -12,9 +13,11 @@ import (
 	"syscall"
 )
 
+// ErrAndroidPersistenceUnsupported is returned by Enable when boot-time persistence is requested.
+var ErrAndroidPersistenceUnsupported = errors.New(
+	"enable/disable not supported on android — service will not auto-start at boot")
+
 // AndroidExecutor manages processes on Android using direct process control.
-// Android lacks systemd, so service management uses pidof for status checks
-// and direct process execution for start/stop.
 type AndroidExecutor struct{}
 
 func newPlatformExecutor() ServiceExecutor {
@@ -26,30 +29,28 @@ func (a *AndroidExecutor) IsActive(ctx context.Context, name string) (bool, erro
 	cmd := exec.CommandContext(ctx, "pidof", name)
 	output, err := cmd.Output()
 	if err != nil {
-		// pidof exits non-zero when process is not found — not an error.
 		return false, nil
 	}
 	return strings.TrimSpace(string(output)) != "", nil
 }
 
-// IsEnabled is a no-op on Android. There is no systemd-like enable/disable concept.
+// IsEnabled is a no-op on Android.
 func (a *AndroidExecutor) IsEnabled(_ context.Context, _ string) (bool, error) {
 	return false, nil
 }
 
-// Start launches a process by name using direct execution.
+// Start launches a process by name.
 func (a *AndroidExecutor) Start(ctx context.Context, name string) error {
 	cmd := exec.CommandContext(ctx, name)
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 	if err := cmd.Start(); err != nil {
 		return fmt.Errorf("start process %s: %w", name, err)
 	}
-	// Detach — don't wait for the process.
 	go cmd.Wait()
 	return nil
 }
 
-// Stop finds a process by name via pidof and sends SIGTERM.
+// Stop finds processes matching name via pidof and sends SIGTERM.
 func (a *AndroidExecutor) Stop(ctx context.Context, name string) error {
 	cmd := exec.CommandContext(ctx, "pidof", name)
 	var out bytes.Buffer
@@ -63,7 +64,6 @@ func (a *AndroidExecutor) Stop(ctx context.Context, name string) error {
 		return fmt.Errorf("process %s not found", name)
 	}
 
-	// pidof may return multiple PIDs separated by spaces; signal each.
 	for _, p := range strings.Fields(pidStr) {
 		pid, err := strconv.Atoi(p)
 		if err != nil {
@@ -76,12 +76,12 @@ func (a *AndroidExecutor) Stop(ctx context.Context, name string) error {
 	return nil
 }
 
-// Enable is a no-op on Android.
+// Enable returns ErrAndroidPersistenceUnsupported.
 func (a *AndroidExecutor) Enable(_ context.Context, _ string) error {
-	return nil
+	return ErrAndroidPersistenceUnsupported
 }
 
-// Disable is a no-op on Android.
+// Disable is a no-op.
 func (a *AndroidExecutor) Disable(_ context.Context, _ string) error {
 	return nil
 }

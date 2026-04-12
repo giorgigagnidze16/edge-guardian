@@ -2,10 +2,11 @@ package com.edgeguardian.controller.mqtt;
 
 import com.edgeguardian.controller.model.CertRequestType;
 import com.edgeguardian.controller.model.IssuedCertificate;
+import com.edgeguardian.controller.mqtt.payload.CertRequestPayload;
+import com.edgeguardian.controller.mqtt.payload.CertResponsePayload;
 import com.edgeguardian.controller.repository.DeviceRepository;
 import com.edgeguardian.controller.service.CertificateAuthorityService;
 import com.edgeguardian.controller.service.CertificateService;
-import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
@@ -144,22 +145,4 @@ public class CertRequestListener {
         };
     }
 
-    @JsonIgnoreProperties(ignoreUnknown = true)
-    record CertRequestPayload(
-            String deviceId,
-            String name,
-            String commonName,
-            List<String> sans,
-            String csrPem,
-            String type,
-            String currentSerial
-    ) {}
-
-    record CertResponsePayload(
-            String name,
-            boolean accepted,
-            String message,
-            String certPem,
-            String caCertPem
-    ) {}
 }

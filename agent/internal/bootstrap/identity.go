@@ -1,11 +1,4 @@
-// Package bootstrap owns the agent's mTLS identity lifecycle:
-//   - one-time enrollment (exchange an enrollment token for a signed leaf cert)
-//   - on-disk persistence of the cert, private key, and trust anchor
-//   - loading persisted material on subsequent starts so enrollment only runs once
-//   - expiry inspection for the renewal path
-//
-// It is deliberately decoupled from the MQTT client — the caller passes in a small
-// Enroller interface so the same logic works over any request/response transport.
+// Package bootstrap owns the agent's mTLS identity lifecycle.
 package bootstrap
 
 import (
@@ -20,14 +13,12 @@ import (
 )
 
 const (
-	// Subdirectory under DataDir where identity material is stored.
 	identityDir = "identity"
 
 	identityKeyFile  = "identity.key"
 	identityCertFile = "identity.crt"
 	caCertFile       = "ca.crt"
 
-	// ownerRWOnly (0600) for private key; others are world-readable but owner-writable.
 	ownerRWOnly        = 0600
 	ownerRWOthersRead  = 0644
 	ownerRWXOthersRead = 0755
@@ -39,20 +30,19 @@ type Identity struct {
 	KeyPath      string
 	CertPath     string
 	CaPath       string
-	Certificate  *x509.Certificate // parsed leaf
-	SerialHex    string            // cert.SerialNumber in lowercase hex, used for RENEWAL requests
+	Certificate  *x509.Certificate
+	SerialHex    string
 	NotAfter     time.Time
 	Fingerprints Fingerprints
 }
 
-// Fingerprints of the on-disk cert files — exposed for logs/telemetry.
+// Fingerprints of the on-disk cert files.
 type Fingerprints struct {
 	CertSHA256 string
 	CaSHA256   string
 }
 
 // Enroller abstracts the transport used to exchange an EnrollRequest for a RegisterResponse.
-// Today this is an MQTT client, but tests and future transports can implement it independently.
 type Enroller interface {
 	Enroll(req *model.EnrollRequest) (*model.RegisterResponse, error)
 }
@@ -62,8 +52,7 @@ type Manager struct {
 	dataDir string
 }
 
-// NewManager constructs an identity manager rooted at the given DataDir. The
-// {DataDir}/identity/ directory is created if missing.
+// NewManager constructs an identity manager rooted at the given DataDir.
 func NewManager(dataDir string) (*Manager, error) {
 	dir := filepath.Join(dataDir, identityDir)
 	if err := os.MkdirAll(dir, ownerRWXOthersRead); err != nil {
@@ -72,10 +61,7 @@ func NewManager(dataDir string) (*Manager, error) {
 	return &Manager{dataDir: dir}, nil
 }
 
-// Load reads the persisted identity. Returns (nil, nil) if no identity exists yet
-// (the caller should then run Enroll). Any parsing/IO failure that indicates
-// corruption is returned as an error so the caller doesn't silently re-enroll and
-// mask a misconfigured device.
+// Load reads the persisted identity. Returns (nil, nil) if no identity exists yet.
 func (m *Manager) Load() (*Identity, error) {
 	keyPath := m.keyPath()
 	certPath := m.certPath()
@@ -121,11 +107,7 @@ func (m *Manager) Load() (*Identity, error) {
 	}, nil
 }
 
-// Enroll runs the first-time bootstrap: generate a local keypair + CSR, send the
-// EnrollRequest via the transport, and persist the returned cert/key/CA atomically.
-//
-// baseReq is the caller-populated enrollment payload (device id, hostname, etc);
-// the CsrPem/CommonName/Sans fields are filled in here.
+// Enroll runs the first-time bootstrap and persists the returned cert/key/CA.
 func (m *Manager) Enroll(enroller Enroller, baseReq *model.EnrollRequest, commonName string, sans []string) (*Identity, error) {
 	if baseReq.EnrollmentToken == "" {
 		return nil, fmt.Errorf("enrollment token required for first-time bootstrap")
@@ -140,7 +122,7 @@ func (m *Manager) Enroll(enroller Enroller, baseReq *model.EnrollRequest, common
 		return nil, fmt.Errorf("create CSR: %w", err)
 	}
 
-	req := *baseReq // copy so we don't mutate caller's struct
+	req := *baseReq
 	req.CsrPem = string(csrPEM)
 	req.CommonName = commonName
 	req.Sans = sans
@@ -169,8 +151,7 @@ func (m *Manager) Enroll(enroller Enroller, baseReq *model.EnrollRequest, common
 	return m.Load()
 }
 
-// Replace atomically swaps the cert + key (and optionally CA) on disk. Used by the
-// renewal path once the controller returns a new signed cert.
+// Replace atomically swaps the cert + key (and optionally CA) on disk.
 func (m *Manager) Replace(keyPEM, certPEM, caPEM []byte) error {
 	return m.persist(keyPEM, certPEM, caPEM)
 }
@@ -191,7 +172,7 @@ func (m *Manager) persist(keyPEM, certPEM, caPEM []byte) error {
 	return nil
 }
 
-// Paths returns the on-disk locations for cert/key/CA. Handy when wiring the MQTT TLS config.
+// Paths returns the on-disk locations for cert/key/CA.
 func (m *Manager) Paths() (certPath, keyPath, caPath string) {
 	return m.certPath(), m.keyPath(), m.caPath()
 }

@@ -35,7 +35,7 @@ import org.springframework.web.server.ResponseStatusException;
  * and writes an audit entry — all in one transaction.
  */
 @Import({DeviceLifecycleService.class, DeviceRegistry.class, CertificateService.class,
-        CertificateAuthorityService.class, CaKeyEncryption.class, AuditService.class,
+        CertificateAuthorityService.class, com.edgeguardian.controller.service.pki.OrganizationCaStore.class, CaKeyEncryption.class, AuditService.class,
         CrlService.class, DeviceLifecycleServiceIT.MockEmqxConfig.class})
 class DeviceLifecycleServiceIT extends AbstractIntegrationTest {
 

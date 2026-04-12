@@ -98,9 +98,15 @@ public class OrganizationService {
         return memberRepository.save(member);
     }
 
+    // Returns 404 on cross-tenant access to avoid leaking member existence.
     @Transactional
-    public void removeMember(Long orgId, Long userId) {
-        memberRepository.deleteByOrganizationIdAndUserId(orgId, userId);
+    public void removeMemberById(Long memberId, Long expectedOrgId) {
+        OrganizationMember member = memberRepository.findById(memberId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Member not found"));
+        if (!expectedOrgId.equals(member.getOrganizationId())) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Member not found");
+        }
+        memberRepository.delete(member);
     }
 
     @Transactional

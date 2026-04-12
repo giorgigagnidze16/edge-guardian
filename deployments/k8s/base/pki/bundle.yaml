@@ -1,0 +1,15 @@
+apiVersion: trust.cert-manager.io/v1alpha1
+kind: Bundle
+metadata:
+  name: broker-ca
+spec:
+  sources:
+    - secret:
+        name: edgeguardian-broker-ca-secret
+        key: ca.crt
+  target:
+    configMap:
+      key: broker-ca.pem
+    namespaceSelector:
+      matchLabels:
+        app.kubernetes.io/part-of: edgeguardian

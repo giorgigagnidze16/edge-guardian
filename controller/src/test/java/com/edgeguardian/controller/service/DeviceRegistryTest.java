@@ -60,7 +60,7 @@ class DeviceRegistryTest extends AbstractIntegrationTest {
         assertThat(device.getArchitecture()).isEqualTo("arm64");
         assertThat(device.getOs()).isEqualTo("linux");
         assertThat(device.getState()).isEqualTo(Device.DeviceState.ONLINE);
-        assertThat(registry.count()).isEqualTo(1);
+        assertThat(registry.countByOrganizationId(orgId)).isEqualTo(1);
     }
 
     @Test
@@ -70,7 +70,7 @@ class DeviceRegistryTest extends AbstractIntegrationTest {
 
         assertThat(updated.getHostname()).isEqualTo("new-host");
         assertThat(updated.getAgentVersion()).isEqualTo("0.2.0");
-        assertThat(registry.count()).isEqualTo(1);
+        assertThat(registry.countByOrganizationId(orgId)).isEqualTo(1);
     }
 
     @Test
@@ -144,7 +144,7 @@ class DeviceRegistryTest extends AbstractIntegrationTest {
         assertThat(registry.remove("rpi-001")).isTrue();
         assertThat(registry.findById("rpi-001")).isEmpty();
         assertThat(registry.getManifest("rpi-001")).isEmpty();
-        assertThat(registry.count()).isEqualTo(0);
+        assertThat(registry.countByOrganizationId(orgId)).isEqualTo(0);
     }
 
     @Test
@@ -180,12 +180,12 @@ class DeviceRegistryTest extends AbstractIntegrationTest {
     }
 
     @Test
-    void findAllReturnsAllDevices() {
+    void findByOrganizationIdReturnsAllDevices() {
         registry.register(orgId, "rpi-001", "host1", "arm64", "linux", "0.2.0");
         registry.register(orgId, "rpi-002", "host2", "arm", "linux", "0.2.0");
         registry.register(orgId, "rpi-003", "host3", "amd64", "linux", "0.2.0");
 
-        assertThat(registry.findAll()).hasSize(3);
-        assertThat(registry.count()).isEqualTo(3);
+        assertThat(registry.findByOrganizationId(orgId)).hasSize(3);
+        assertThat(registry.countByOrganizationId(orgId)).isEqualTo(3);
     }
 }

@@ -1,6 +1,7 @@
 package com.edgeguardian.controller.service;
 
 import com.edgeguardian.controller.config.MinioProperties;
+import com.edgeguardian.controller.service.result.StorageResult;
 import io.minio.GetObjectArgs;
 import io.minio.GetPresignedObjectUrlArgs;
 import io.minio.Http;
@@ -35,9 +36,6 @@ public class ArtifactStorageService {
     public ArtifactStorageService(MinioClient minioClient, MinioProperties props) {
         this.minioClient = minioClient;
         this.bucket = props.bucket();
-    }
-
-    public record StorageResult(String storagePath, long size, String sha256) {
     }
 
     /**

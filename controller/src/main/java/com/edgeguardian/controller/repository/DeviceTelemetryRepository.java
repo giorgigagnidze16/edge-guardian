@@ -22,11 +22,14 @@ public interface DeviceTelemetryRepository extends JpaRepository<DeviceTelemetry
     Optional<DeviceTelemetry> findLatestByDeviceId(@Param("deviceId") String deviceId);
 
     /**
-     * Latest telemetry row per device (for fleet overview).
+     * Latest telemetry row per device within one organization. Used by the fleet view
+     * to avoid leaking status from other tenants.
      */
-    @Query(value = "SELECT DISTINCT ON (device_id) * FROM device_telemetry ORDER BY device_id, time DESC",
+    @Query(value = "SELECT DISTINCT ON (device_id) * FROM device_telemetry " +
+            "WHERE organization_id = :organizationId " +
+            "ORDER BY device_id, time DESC",
             nativeQuery = true)
-    List<DeviceTelemetry> findLatestForAllDevices();
+    List<DeviceTelemetry> findLatestForOrganization(@Param("organizationId") Long organizationId);
 
     /**
      * Raw telemetry rows in a time range for a device.

@@ -16,8 +16,7 @@ import (
 	"os"
 )
 
-// Fingerprint returns the SHA-256 hex digest of the raw PEM bytes. Used for logs and
-// telemetry so operators can tell whether an agent is actually running the cert they expect.
+// Fingerprint returns the SHA-256 hex digest of the PEM bytes.
 func Fingerprint(pemBytes []byte) string {
 	sum := sha256.Sum256(pemBytes)
 	return hex.EncodeToString(sum[:])

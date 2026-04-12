@@ -1,7 +1,7 @@
 package com.edgeguardian.controller.mqtt;
 
+import com.edgeguardian.controller.mqtt.payload.OtaStatusPayload;
 import com.edgeguardian.controller.service.OTAService;
-import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
@@ -65,12 +65,4 @@ public class OtaStatusListener {
         }
     }
 
-    @JsonIgnoreProperties(ignoreUnknown = true)
-    record OtaStatusPayload(
-            long deploymentId,
-            String deviceId,
-            String state,
-            int progress,
-            String errorMessage
-    ) {}
 }

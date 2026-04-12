@@ -12,17 +12,6 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.stereotype.Service;
 
-/**
- * Thin wrapper around the EMQX v5 dashboard REST API for live session management.
- *
- * <p>Currently used for one thing: force-disconnecting a client after its device token or
- * certificate has been revoked. Without this call, the agent's existing MQTT session would
- * survive until the next TCP reset since CRL refresh only affects *new* TLS handshakes.
- *
- * <p>Failure is logged and swallowed — if the broker is temporarily unreachable, the DB
- * revocation is still the source of truth and the kickout will simply not happen. The next
- * CRL refresh will reject any reconnect attempt anyway.
- */
 @Slf4j
 @Service
 @EnableConfigurationProperties(EmqxProperties.class)
@@ -40,10 +29,9 @@ public class EmqxAdminClient {
         this.basicAuthHeader = buildBasicAuth(properties.username(), properties.password());
     }
 
-    /**
-     * Force-disconnect the MQTT client identified by {@code clientId} (typically the device ID).
-     * No-op if EMQX admin integration is not configured. Never throws.
-     */
+    private static final int MAX_ATTEMPTS = 2;
+    private static final Duration RETRY_DELAY = Duration.ofMillis(500);
+
     public void kickout(String clientId) {
         if (!properties.isConfigured()) {
             log.debug("EMQX admin not configured — skipping kickout for {}", clientId);
@@ -58,20 +46,51 @@ public class EmqxAdminClient {
                 .POST(HttpRequest.BodyPublishers.noBody())
                 .build();
 
-        try {
-            HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
-            int status = response.statusCode();
-            if (status == 204 || status == 200) {
-                log.info("EMQX kickout OK for client {}", clientId);
-            } else if (status == 404) {
-                log.debug("EMQX kickout: no active session for client {}", clientId);
-            } else {
-                log.warn("EMQX kickout for {} returned HTTP {} — body: {}",
-                        clientId, status, response.body());
+        Exception lastErr = null;
+        for (int attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+            try {
+                HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+                int status = response.statusCode();
+                if (status == 204 || status == 200) {
+                    log.info("EMQX kickout OK for client {} (attempt {})", clientId, attempt);
+                    return;
+                }
+                if (status == 404) {
+                    log.debug("EMQX kickout: no active session for client {}", clientId);
+                    return;
+                }
+                // 400/401/403 indicate config problems that retrying won't fix.
+                if (status == 400 || status == 401 || status == 403) {
+                    log.error("EMQX kickout for {} returned HTTP {} (non-retryable) — body: {}",
+                            clientId, status, truncate(response.body()));
+                    return;
+                }
+                lastErr = new RuntimeException("HTTP " + status + " — " + truncate(response.body()));
+            } catch (InterruptedException ie) {
+                Thread.currentThread().interrupt();
+                log.warn("EMQX kickout interrupted for {}", clientId);
+                return;
+            } catch (Exception e) {
+                lastErr = e;
             }
-        } catch (Exception e) {
-            log.warn("EMQX kickout failed for {} ({}): {}", clientId, uri, e.getMessage());
+
+            if (attempt < MAX_ATTEMPTS) {
+                try {
+                    Thread.sleep(RETRY_DELAY.toMillis());
+                } catch (InterruptedException ie) {
+                    Thread.currentThread().interrupt();
+                    return;
+                }
+            }
         }
+        log.error("EMQX kickout failed for {} after {} attempts ({}): {}",
+                clientId, MAX_ATTEMPTS, uri,
+                lastErr != null ? lastErr.getMessage() : "unknown");
+    }
+
+    private static String truncate(String s) {
+        if (s == null) return "";
+        return s.length() > 200 ? s.substring(0, 200) + "…" : s;
     }
 
     private static String buildBasicAuth(String user, String pass) {

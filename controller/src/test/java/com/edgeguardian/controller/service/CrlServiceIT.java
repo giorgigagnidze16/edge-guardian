@@ -35,7 +35,7 @@ import org.springframework.context.annotation.Import;
  * the CRL rebuild is signed by the org CA and the revoked cert's serial appears
  * in the parsed CRL when validated against the CA.
  */
-@Import({CrlService.class, CertificateService.class, CertificateAuthorityService.class,
+@Import({CrlService.class, CertificateService.class, CertificateAuthorityService.class, com.edgeguardian.controller.service.pki.OrganizationCaStore.class,
         CaKeyEncryption.class, AuditService.class, CrlServiceIT.MockEmqxConfig.class})
 class CrlServiceIT extends AbstractIntegrationTest {
 
@@ -107,7 +107,7 @@ class CrlServiceIT extends AbstractIntegrationTest {
         String hexSerial = result.certificate().getSerialNumber();
         BigInteger expectedSerial = new BigInteger(hexSerial, 16);
 
-        certificateService.revoke(result.certificate().getId(), reviewerId);
+        certificateService.revoke(result.certificate().getId(), orgId, reviewerId);
 
         CertificateRevocationList crl = crlRepository.findByOrganizationId(orgId).orElseThrow();
         X509CRL parsed = parseCrl(crl.getCrlDer());

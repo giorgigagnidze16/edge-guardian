@@ -14,8 +14,6 @@ public interface CertificateRequestRepository extends JpaRepository<CertificateR
     List<CertificateRequest> findByOrganizationIdAndStateOrderByCreatedAtDesc(
             Long organizationId, CertRequestState state);
 
-    List<CertificateRequest> findByDeviceIdOrderByCreatedAtDesc(String deviceId);
-
     List<CertificateRequest> findByDeviceIdAndStateIn(
             String deviceId, Collection<CertRequestState> states);
 }

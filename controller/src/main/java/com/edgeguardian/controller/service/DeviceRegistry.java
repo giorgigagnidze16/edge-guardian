@@ -107,12 +107,12 @@ public class DeviceRegistry {
     }
 
     /**
-     * Get latest telemetry status for all devices, keyed by deviceId.
+     * Get latest telemetry status for all devices in one organization.
      */
     @Transactional(readOnly = true)
-    public Map<String, DeviceStatus> getLatestStatusForAllDevices() {
+    public Map<String, DeviceStatus> getLatestStatusForOrganization(Long organizationId) {
         Map<String, DeviceStatus> result = new HashMap<>();
-        for (DeviceTelemetry t : telemetryRepository.findLatestForAllDevices()) {
+        for (DeviceTelemetry t : telemetryRepository.findLatestForOrganization(organizationId)) {
             result.put(t.getDeviceId(), t.toDeviceStatus());
         }
         return result;
@@ -127,11 +127,29 @@ public class DeviceRegistry {
     }
 
     /**
-     * List all registered devices.
+     * Find a device by its logical device ID, scoped to one organization.
+     * Returns empty if the device exists but belongs to a different org — callers
+     * should surface this as 404 (not 403) to avoid leaking existence across tenants.
      */
     @Transactional(readOnly = true)
-    public List<Device> findAll() {
-        return deviceRepository.findAll();
+    public Optional<Device> findByIdForOrganization(String deviceId, Long organizationId) {
+        return deviceRepository.findByDeviceIdAndOrganizationId(deviceId, organizationId);
+    }
+
+    /**
+     * List devices belonging to one organization.
+     */
+    @Transactional(readOnly = true)
+    public List<Device> findByOrganizationId(Long organizationId) {
+        return deviceRepository.findByOrganizationId(organizationId);
+    }
+
+    /**
+     * Count devices for a single organization. Used by dashboard fleet widgets.
+     */
+    @Transactional(readOnly = true)
+    public long countByOrganizationId(Long organizationId) {
+        return deviceRepository.countByOrganizationId(organizationId);
     }
 
     /**
@@ -146,14 +164,6 @@ public class DeviceRegistry {
         deviceRepository.deleteByDeviceId(deviceId);
         log.info("Device removed: {}", deviceId);
         return true;
-    }
-
-    /**
-     * Return the total number of registered devices.
-     */
-    @Transactional(readOnly = true)
-    public long count() {
-        return deviceRepository.count();
     }
 
     // --- Manifest operations ---

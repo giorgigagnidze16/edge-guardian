@@ -13,6 +13,8 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
+
+import com.edgeguardian.controller.service.pki.OrganizationCaStore;
 import org.bouncycastle.asn1.x500.X500Name;
 import org.bouncycastle.openssl.jcajce.JcaPEMWriter;
 import org.bouncycastle.operator.jcajce.JcaContentSignerBuilder;
@@ -33,7 +35,7 @@ import org.springframework.context.annotation.Import;
  * MANIFEST request, and the resulting IssuedCertificate carries a valid serial + PEM.
  */
 @Import({EnrollmentService.class, DeviceRegistry.class, CertificateService.class,
-        CertificateAuthorityService.class, CaKeyEncryption.class, AuditService.class,
+        CertificateAuthorityService.class, OrganizationCaStore.class, CaKeyEncryption.class, AuditService.class,
         CrlService.class, EnrollmentWithCsrIT.MockEmqxConfig.class})
 class EnrollmentWithCsrIT extends AbstractIntegrationTest {
 

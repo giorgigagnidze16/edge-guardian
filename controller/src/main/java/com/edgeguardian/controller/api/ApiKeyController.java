@@ -5,6 +5,7 @@ import com.edgeguardian.controller.dto.ApiKeyDto;
 import com.edgeguardian.controller.dto.CreateApiKeyRequest;
 import com.edgeguardian.controller.security.TenantPrincipal;
 import com.edgeguardian.controller.service.ApiKeyService;
+import com.edgeguardian.controller.service.result.ApiKeyCreateResult;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -33,7 +34,7 @@ public class ApiKeyController {
     @ResponseStatus(HttpStatus.CREATED)
     public ApiKeyCreateResponse create(@RequestBody CreateApiKeyRequest request,
                                        @AuthenticationPrincipal TenantPrincipal principal) {
-        ApiKeyService.ApiKeyCreateResult result = apiKeyService.create(
+        ApiKeyCreateResult result = apiKeyService.create(
                 principal.organizationId(), request.name(), request.scopes(),
                 request.expiresAt(), principal.userId());
         return new ApiKeyCreateResponse(ApiKeyDto.from(result.apiKey()), result.rawKey());
@@ -42,7 +43,8 @@ public class ApiKeyController {
     @DeleteMapping("/{keyId}")
     @PreAuthorize("@orgSecurity.hasMinRole(authentication, 'ADMIN')")
     @ResponseStatus(HttpStatus.NO_CONTENT)
-    public void revoke(@PathVariable Long keyId) {
-        apiKeyService.revoke(keyId);
+    public void revoke(@PathVariable Long keyId,
+                       @AuthenticationPrincipal TenantPrincipal principal) {
+        apiKeyService.revoke(keyId, principal.organizationId());
     }
 }

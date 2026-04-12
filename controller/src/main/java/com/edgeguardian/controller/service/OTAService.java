@@ -47,22 +47,28 @@ public class OTAService {
     }
 
     @Transactional(readOnly = true)
-    public OtaArtifact getArtifact(Long artifactId) {
+    public OtaArtifact getArtifact(Long artifactId, Long expectedOrgId) {
         return artifactRepository.findById(artifactId)
+                .filter(a -> expectedOrgId.equals(a.getOrganizationId()))
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Artifact not found"));
     }
 
     @Transactional
-    public void deleteArtifact(Long artifactId) {
+    public void deleteArtifact(Long artifactId, Long expectedOrgId) {
+        getArtifact(artifactId, expectedOrgId);
         artifactRepository.deleteById(artifactId);
     }
 
     // --- Deployments ---
 
+    // NOTE: The `strategy` parameter (rolling/canary/immediate) is descriptive-only and
+    // NOT YET IMPLEMENTED. This method always performs an immediate fan-out — every matching
+    // device receives the OTA command in the same transaction. The value is stored on the
+    // deployment row so a future staged-rollout implementation can hook in without API changes.
     @Transactional
     public OtaDeployment createDeployment(Long orgId, Long artifactId, String strategy,
                                            Map<String, String> labelSelector, Long createdBy) {
-        var artifact = getArtifact(artifactId);
+        var artifact = getArtifact(artifactId, orgId);
 
         var deployment = deploymentRepository.save(OtaDeployment.builder()
                 .organizationId(orgId)
@@ -72,8 +78,10 @@ public class OTAService {
                 .createdBy(createdBy)
                 .build());
 
-        var targetDevices = deviceRepository.findAll().stream()
-                .filter(d -> orgId.equals(d.getOrganizationId()))
+        // Org-scoped lookup at the repository layer — was previously findAll() + in-memory
+        // filter which (a) leaks bytes proportional to total fleet size and (b) risked
+        // cross-tenant deployment if the filter clause ever got dropped in a refactor.
+        var targetDevices = deviceRepository.findByOrganizationId(orgId).stream()
                 .filter(d -> matchesLabels(d, labelSelector))
                 .toList();
 
@@ -105,13 +113,15 @@ public class OTAService {
     }
 
     @Transactional(readOnly = true)
-    public OtaDeployment getDeployment(Long deploymentId) {
+    public OtaDeployment getDeployment(Long deploymentId, Long expectedOrgId) {
         return deploymentRepository.findById(deploymentId)
+                .filter(d -> expectedOrgId.equals(d.getOrganizationId()))
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Deployment not found"));
     }
 
     @Transactional(readOnly = true)
-    public List<DeploymentDeviceStatus> getDeploymentDeviceStatuses(Long deploymentId) {
+    public List<DeploymentDeviceStatus> getDeploymentDeviceStatuses(Long deploymentId, Long expectedOrgId) {
+        getDeployment(deploymentId, expectedOrgId);
         return deviceStatusRepository.findByDeploymentId(deploymentId);
     }
 

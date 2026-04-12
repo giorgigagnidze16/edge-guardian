@@ -26,6 +26,10 @@ public class OtaDeployment {
     @Column(name = "artifact_id", nullable = false)
     private Long artifactId;
 
+    // NOTE: Rollout strategy (rolling/canary/immediate) is descriptive-only — NOT YET IMPLEMENTED.
+    // OTAService.createDeployment currently fans out commands to every matching device at once
+    // regardless of this value, so the effective behavior is always "immediate". The field is
+    // retained in the DB schema and API surface for forward-compatibility with staged rollouts.
     @Column(nullable = false)
     @Builder.Default
     private String strategy = "rolling";

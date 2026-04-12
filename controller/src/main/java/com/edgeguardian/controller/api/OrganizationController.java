@@ -85,20 +85,10 @@ public class OrganizationController {
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void removeMember(@PathVariable Long memberId,
                              @AuthenticationPrincipal TenantPrincipal principal) {
-        organizationService.removeMember(principal.organizationId(), memberId);
+        organizationService.removeMemberById(memberId, principal.organizationId());
     }
 
     // --- Audit Log ---
-
-    public record AuditLogDto(Long id, Long userId, String userEmail, String action,
-                               String resourceType, String resourceId,
-                               Map<String, Object> details, java.time.Instant createdAt) {
-        static AuditLogDto from(AuditLog entry, String email) {
-            return new AuditLogDto(entry.getId(), entry.getUserId(), email,
-                    entry.getAction(), entry.getResourceType(), entry.getResourceId(),
-                    entry.getDetails(), entry.getCreatedAt());
-        }
-    }
 
     @GetMapping("/audit-log")
     @PreAuthorize("@orgSecurity.hasMinRole(authentication, 'VIEWER')")

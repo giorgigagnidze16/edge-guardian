@@ -16,19 +16,10 @@ type Config struct {
 	LogLevel          string            `yaml:"log_level"`
 	DataDir           string            `yaml:"data_dir"`
 
-	// MQTT configuration
-	MQTT MQTTConfig `yaml:"mqtt"`
-
-	// Health monitoring configuration
-	Health HealthConfig `yaml:"health"`
-
-	// OTA update configuration
-	OTA OTAConfig `yaml:"ota"`
-
-	// Authentication configuration
-	Auth AuthConfig `yaml:"auth"`
-
-	// Log forwarding configuration
+	MQTT          MQTTConfig          `yaml:"mqtt"`
+	Health        HealthConfig        `yaml:"health"`
+	OTA           OTAConfig           `yaml:"ota"`
+	Auth          AuthConfig          `yaml:"auth"`
 	LogForwarding LogForwardingConfig `yaml:"log_forwarding"`
 }
 
@@ -39,11 +30,10 @@ type OTAConfig struct {
 	CacheDir string `yaml:"cache_dir"` // Directory for staging downloaded artifacts
 }
 
-// AuthConfig holds authentication settings for enrolled devices.
+// AuthConfig holds authentication settings used during first-boot enrollment.
+// Post-enrollment, the agent authenticates via mTLS identity cert (see MQTTConfig.IdentityCertPath).
 type AuthConfig struct {
-	EnrollmentToken string `yaml:"enrollment_token"` // Token for initial enrollment
-	DeviceToken     string `yaml:"device_token"`     // JWT for authenticated API calls
-	TokenFile       string `yaml:"token_file"`       // Path to persist device token
+	EnrollmentToken string `yaml:"enrollment_token"` // one-time token for initial enrollment; ignored once identity cert is persisted
 }
 
 // LogForwardingConfig holds log forwarding settings.
@@ -56,17 +46,8 @@ type LogForwardingConfig struct {
 }
 
 // MQTTConfig holds MQTT broker connection settings.
-//
-// Two brokers are supported to enable the bootstrap → mTLS handover:
-//
-//   - BrokerURL is the enrollment broker (e.g. tcp://emqx:1883). Used once with
-//     Username/Password to exchange enrollment token for a signed identity cert.
-//   - MutualTLSBrokerURL is the production broker (e.g. ssl://emqx:8883). After enrollment,
-//     the agent reconnects here presenting IdentityCertPath + IdentityKeyPath and validating
-//     the broker's server cert against CACertPath.
-//
-// If MutualTLSBrokerURL is empty, the agent stays on the enrollment broker indefinitely
-// (useful for bootstrapping a first deployment without a PKI, but not recommended for prod).
+// BrokerURL is the enrollment broker (password auth); MutualTLSBrokerURL is the
+// production broker used after enrollment with the persisted identity cert.
 type MQTTConfig struct {
 	BrokerURL          string `yaml:"broker_url"`
 	Username           string `yaml:"username"`
@@ -82,13 +63,8 @@ type MQTTConfig struct {
 
 // HealthConfig holds health monitoring settings.
 type HealthConfig struct {
-	// DiskPath is the filesystem path to monitor for disk usage.
-	// Linux/macOS default: "/", Windows default: "C:\".
-	// Override to monitor a specific partition or drive.
 	DiskPath string `yaml:"disk_path"`
-
-	// Port for the local health HTTP server (used by watchdog).
-	Port int `yaml:"port"`
+	Port     int    `yaml:"port"`
 }
 
 // DefaultConfig returns a config with sensible defaults.

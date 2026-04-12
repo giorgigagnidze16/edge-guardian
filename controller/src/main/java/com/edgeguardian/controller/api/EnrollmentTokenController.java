@@ -41,7 +41,8 @@ public class EnrollmentTokenController {
     @DeleteMapping("/{tokenId}")
     @PreAuthorize("@orgSecurity.hasMinRole(authentication, 'ADMIN')")
     @ResponseStatus(HttpStatus.NO_CONTENT)
-    public void revoke(@PathVariable Long tokenId) {
-        enrollmentService.revokeToken(tokenId);
+    public void revoke(@PathVariable Long tokenId,
+                       @AuthenticationPrincipal TenantPrincipal principal) {
+        enrollmentService.revokeToken(tokenId, principal.organizationId());
     }
 }

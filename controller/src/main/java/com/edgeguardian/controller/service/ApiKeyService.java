@@ -3,6 +3,7 @@ package com.edgeguardian.controller.service;
 import com.edgeguardian.controller.model.ApiKey;
 import com.edgeguardian.controller.repository.ApiKeyRepository;
 import com.edgeguardian.controller.security.TokenHasher;
+import com.edgeguardian.controller.service.result.ApiKeyCreateResult;
 import org.springframework.http.HttpStatus;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -52,8 +53,9 @@ public class ApiKeyService {
     }
 
     @Transactional
-    public void revoke(Long keyId) {
+    public void revoke(Long keyId, Long expectedOrgId) {
         ApiKey key = apiKeyRepository.findById(keyId)
+                .filter(k -> expectedOrgId.equals(k.getOrganizationId()))
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "API key not found"));
         key.setRevoked(true);
         apiKeyRepository.save(key);
@@ -64,6 +66,4 @@ public class ApiKeyService {
         SECURE_RANDOM.nextBytes(bytes);
         return "egk_" + Base64.getUrlEncoder().withoutPadding().encodeToString(bytes);
     }
-
-    public record ApiKeyCreateResult(ApiKey apiKey, String rawKey) {}
 }

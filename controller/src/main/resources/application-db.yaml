@@ -1,8 +1,8 @@
 spring:
   datasource:
-    url: jdbc:postgresql://localhost:5432/edgeguardian
-    username: edgeguardian
-    password: edgeguardian-dev
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/edgeguardian}
+    username: ${SPRING_DATASOURCE_USERNAME:edgeguardian}
+    password: ${SPRING_DATASOURCE_PASSWORD:edgeguardian-dev}
     driver-class-name: org.postgresql.Driver
 
   jpa:

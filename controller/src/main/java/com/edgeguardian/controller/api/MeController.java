@@ -1,6 +1,7 @@
 package com.edgeguardian.controller.api;
 
 import com.edgeguardian.controller.dto.MeResponse;
+import com.edgeguardian.controller.dto.OrgMembershipDto;
 import com.edgeguardian.controller.dto.UserDto;
 import com.edgeguardian.controller.model.Organization;
 import com.edgeguardian.controller.model.OrganizationMember;
@@ -43,11 +44,11 @@ public class MeController {
         Map<Long, Organization> orgMap = orgs.stream()
                 .collect(Collectors.toMap(Organization::getId, Function.identity()));
 
-        List<MeResponse.OrgMembershipDto> orgDtos = new ArrayList<>();
+        List<OrgMembershipDto> orgDtos = new ArrayList<>();
         for (OrganizationMember m : memberships) {
             Organization org = orgMap.get(m.getOrganizationId());
             if (org != null) {
-                orgDtos.add(new MeResponse.OrgMembershipDto(
+                orgDtos.add(new OrgMembershipDto(
                         org.getId(), org.getName(), org.getSlug(), m.getOrgRole().name()));
             }
         }

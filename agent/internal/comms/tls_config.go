@@ -7,28 +7,21 @@ import (
 	"os"
 )
 
-// TLSConfig captures everything we need to build a *tls.Config for the mTLS MQTT broker.
+// TLSConfig captures everything needed to build a *tls.Config for the mTLS MQTT broker.
 type TLSConfig struct {
 	CACertPath         string
 	IdentityCertPath   string
 	IdentityKeyPath    string
-	ServerName         string // override for SNI / server-cert CN verification; empty => derived from broker URL
-	InsecureSkipVerify bool   // dev only — never set in prod
+	ServerName         string
+	InsecureSkipVerify bool
 }
 
-// IsZero reports whether any cert-related field is populated. Used to decide whether
-// to call SetTLSConfig on the paho ClientOptions.
+// IsZero reports whether any cert-related field is populated.
 func (c TLSConfig) IsZero() bool {
 	return c.CACertPath == "" && c.IdentityCertPath == "" && c.IdentityKeyPath == ""
 }
 
-// Build reads the on-disk cert material and produces a *tls.Config suitable for
-// presenting mutual-TLS credentials to the MQTT broker.
-//
-// Invariants:
-//   - CA cert is loaded into the root pool so the broker's server cert chain is validated.
-//   - Identity cert + key are loaded as a single X509KeyPair presented during the TLS handshake.
-//   - MinVersion is pinned to TLS 1.2; older versions are insecure and not supported by EMQX 5.
+// Build reads the on-disk cert material and produces a *tls.Config.
 func (c TLSConfig) Build() (*tls.Config, error) {
 	if c.CACertPath == "" {
 		return nil, fmt.Errorf("mTLS requires ca_cert_path")

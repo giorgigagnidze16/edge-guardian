@@ -5,6 +5,7 @@ import com.edgeguardian.controller.model.*;
 import com.edgeguardian.controller.repository.CertificateRequestRepository;
 import com.edgeguardian.controller.repository.DeviceRepository;
 import com.edgeguardian.controller.repository.IssuedCertificateRepository;
+import com.edgeguardian.controller.service.result.CertRequestResult;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
@@ -30,49 +31,51 @@ public class CertificateService {
     private final CrlService crlService;
     private final EmqxAdminClient emqxAdminClient;
 
-    /**
-     * Process an incoming certificate request from a device.
-     *
-     * Security model:
-     *  - RENEWAL: must prove ownership via currentSerial → auto-approved, old cert rotated.
-     *  - INITIAL / MANIFEST with existing valid cert → BLOCKED (compromise detection).
-     *  - MANIFEST without existing cert → auto-approved (desired-state driven).
-     *  - INITIAL without existing cert → PENDING (requires manual approval).
-     *
-     * After a BLOCK, admin must revoke the old certs and un-suspend the device
-     * before the device can re-request (which will then land in PENDING).
-     */
     @Transactional
     public CertRequestResult processRequest(String deviceId, Long orgId, String name,
                                             String commonName, List<String> sans,
                                             String csrPem, CertRequestType type,
                                             String currentSerial) {
-        if (type == CertRequestType.RENEWAL) {
-            return processRenewal(deviceId, orgId, name, commonName, sans, csrPem, currentSerial);
-        }
+        return switch (type) {
+            case INITIAL  -> processInitial(deviceId, orgId, name, commonName, sans, csrPem);
+            case RENEWAL  -> processRenewal(deviceId, orgId, name, commonName, sans, csrPem, currentSerial);
+            case MANIFEST -> processManifest(deviceId, orgId, name, commonName, sans, csrPem);
+        };
+    }
 
-        // Compromise detection: if device already holds a valid cert for this name,
-        // any non-renewal request is suspicious — block and suspend.
+    // Compromise check before any non-renewal issuance.
+    private CertRequestResult processNonRenewal(String deviceId, Long orgId, String name,
+                                                String commonName, List<String> sans,
+                                                String csrPem, CertRequestType type,
+                                                boolean autoApprove) {
         List<IssuedCertificate> activeCerts = certRepository
                 .findByDeviceIdAndNameAndRevokedFalseAndNotAfterAfter(deviceId, name, Instant.now());
-
         if (!activeCerts.isEmpty()) {
             return blockAsCompromised(deviceId, orgId, name, commonName, sans, csrPem, type,
                     activeCerts.size());
         }
 
-        // No existing valid cert — safe to proceed.
         CertificateRequest request = saveRequest(deviceId, orgId, name, commonName, sans,
                 csrPem, type, null);
-
-        if (type == CertRequestType.MANIFEST) {
+        if (autoApprove) {
             IssuedCertificate cert = signAndIssue(request);
-            log.info("Auto-approved manifest cert for device {} cert '{}'", deviceId, name);
+            log.info("Auto-approved {} cert for device {} cert '{}'", type, deviceId, name);
             return new CertRequestResult(request, cert, false);
         }
-
         log.info("Cert request pending approval for device {} cert '{}'", deviceId, name);
         return new CertRequestResult(request, null, false);
+    }
+
+    private CertRequestResult processInitial(String deviceId, Long orgId, String name,
+                                             String commonName, List<String> sans, String csrPem) {
+        return processNonRenewal(deviceId, orgId, name, commonName, sans, csrPem,
+                CertRequestType.INITIAL, false);
+    }
+
+    private CertRequestResult processManifest(String deviceId, Long orgId, String name,
+                                              String commonName, List<String> sans, String csrPem) {
+        return processNonRenewal(deviceId, orgId, name, commonName, sans, csrPem,
+                CertRequestType.MANIFEST, true);
     }
 
     private CertRequestResult processRenewal(String deviceId, Long orgId, String name,
@@ -109,8 +112,7 @@ public class CertificateService {
         certRepository.save(currentCert);
 
         crlService.rebuild(orgId);
-        // Intentionally no kickout here — the agent is currently presenting the OLD cert
-        // but is mid-renewal and will reconnect with the NEW cert on its own.
+        // No kickout: the agent is mid-renewal and will reconnect with the new cert.
 
         log.info("Auto-approved renewal for device {} cert '{}', old serial {} -> new serial {}",
                 deviceId, name, currentSerial, newCert.getSerialNumber());
@@ -151,9 +153,8 @@ public class CertificateService {
     }
 
     @Transactional
-    public IssuedCertificate approve(Long requestId, Long reviewerUserId) {
-        CertificateRequest request = requestRepository.findById(requestId)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Request not found"));
+    public IssuedCertificate approve(Long requestId, Long expectedOrgId, Long reviewerUserId) {
+        CertificateRequest request = loadRequestForOrg(requestId, expectedOrgId);
 
         if (request.getState() != CertRequestState.PENDING) {
             throw new ResponseStatusException(HttpStatus.CONFLICT,
@@ -175,9 +176,8 @@ public class CertificateService {
     }
 
     @Transactional
-    public void reject(Long requestId, Long reviewerUserId, String reason) {
-        CertificateRequest request = requestRepository.findById(requestId)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Request not found"));
+    public void reject(Long requestId, Long expectedOrgId, Long reviewerUserId, String reason) {
+        CertificateRequest request = loadRequestForOrg(requestId, expectedOrgId);
 
         if (request.getState() != CertRequestState.PENDING) {
             throw new ResponseStatusException(HttpStatus.CONFLICT,
@@ -196,8 +196,9 @@ public class CertificateService {
     }
 
     @Transactional
-    public void revoke(Long certificateId, Long userId) {
+    public void revoke(Long certificateId, Long expectedOrgId, Long userId) {
         IssuedCertificate cert = certRepository.findById(certificateId)
+                .filter(c -> expectedOrgId.equals(c.getOrganizationId()))
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Certificate not found"));
 
         if (cert.isRevoked()) {
@@ -217,12 +218,12 @@ public class CertificateService {
         emqxAdminClient.kickout(cert.getDeviceId());
     }
 
-    /**
-     * Revoke every active (non-revoked, non-expired) certificate issued to the given device.
-     * Emits a single audit entry listing affected serials.
-     *
-     * @return number of certificates revoked (0 if none were active)
-     */
+    private CertificateRequest loadRequestForOrg(Long requestId, Long expectedOrgId) {
+        return requestRepository.findById(requestId)
+                .filter(r -> expectedOrgId.equals(r.getOrganizationId()))
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Request not found"));
+    }
+
     @Transactional
     public int revokeAllActiveForDevice(String deviceId, Long orgId, RevokeReason reason,
                                         Long actorUserId) {
@@ -252,12 +253,6 @@ public class CertificateService {
         return active.size();
     }
 
-    /**
-     * Reject every pending certificate request for the given device. Used when the device
-     * is deleted or otherwise decommissioned so that queued approvals can never be fulfilled.
-     *
-     * @return number of requests rejected (0 if none were pending)
-     */
     @Transactional
     public int rejectPendingRequestsForDevice(String deviceId, Long orgId, String reason,
                                               Long actorUserId) {
@@ -369,6 +364,4 @@ public class CertificateService {
         });
     }
 
-    public record CertRequestResult(CertificateRequest request, IssuedCertificate certificate,
-                                    boolean blocked) {}
 }
