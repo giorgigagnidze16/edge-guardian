@@ -53,12 +53,13 @@ public class OTAController {
     @DeleteMapping("/artifacts/{artifactId}")
     @PreAuthorize("@orgSecurity.hasMinRole(authentication, 'ADMIN')")
     @ResponseStatus(HttpStatus.NO_CONTENT)
-    public void deleteArtifact(@PathVariable Long artifactId) throws IOException {
-        var artifact = otaService.getArtifact(artifactId);
+    public void deleteArtifact(@PathVariable Long artifactId,
+                               @AuthenticationPrincipal TenantPrincipal principal) throws IOException {
+        var artifact = otaService.getArtifact(artifactId, principal.organizationId());
         if (artifact.getS3Key() != null) {
             artifactStorageService.delete(artifact.getS3Key());
         }
-        otaService.deleteArtifact(artifactId);
+        otaService.deleteArtifact(artifactId, principal.organizationId());
     }
 
     @GetMapping("/deployments")
@@ -81,13 +82,15 @@ public class OTAController {
 
     @GetMapping("/deployments/{deploymentId}")
     @PreAuthorize("@orgSecurity.hasMinRole(authentication, 'VIEWER')")
-    public OtaDeploymentDto getDeployment(@PathVariable Long deploymentId) {
-        return OtaDeploymentDto.from(otaService.getDeployment(deploymentId));
+    public OtaDeploymentDto getDeployment(@PathVariable Long deploymentId,
+                                          @AuthenticationPrincipal TenantPrincipal principal) {
+        return OtaDeploymentDto.from(otaService.getDeployment(deploymentId, principal.organizationId()));
     }
 
     @GetMapping("/deployments/{deploymentId}/devices")
     @PreAuthorize("@orgSecurity.hasMinRole(authentication, 'VIEWER')")
-    public List<DeploymentDeviceStatus> getDeploymentDevices(@PathVariable Long deploymentId) {
-        return otaService.getDeploymentDeviceStatuses(deploymentId);
+    public List<DeploymentDeviceStatus> getDeploymentDevices(@PathVariable Long deploymentId,
+                                                             @AuthenticationPrincipal TenantPrincipal principal) {
+        return otaService.getDeploymentDeviceStatuses(deploymentId, principal.organizationId());
     }
 }
