@@ -13,6 +13,7 @@ import (
 	"runtime"
 	"time"
 
+	"github.com/edgeguardian/agent/internal/bootstrap"
 	"github.com/edgeguardian/agent/internal/commands"
 	"github.com/edgeguardian/agent/internal/comms"
 	"github.com/edgeguardian/agent/internal/config"
@@ -75,40 +76,31 @@ func main() {
 	sigCh := make(chan os.Signal, 1)
 	signal.Notify(sigCh, platformSignals()...)
 
-	// Initialize reconciler with plugins.
+	// Initialize reconciler with stateless plugins.
 	rec := reconciler.New(cfg.ReconcileInterval, logger)
 	rec.RegisterPlugin(filemanager.New(logger))
 	rec.RegisterPlugin(service.New(logger))
-	// Certificate plugin registered after MQTT client is created (needs requester callback).
 
-	// Load cached desired state from BoltDB (offline-first).
-	var cachedManifest model.DeviceManifest
-	found, err := store.LoadDesiredState("current", &cachedManifest)
+	loadCachedDesiredState(store, rec, logger)
+
+	// --- Identity lifecycle (mTLS bootstrap) -----------------------------------------
+	identityMgr, err := bootstrap.NewManager(cfg.DataDir)
 	if err != nil {
-		logger.Warn("failed to load cached desired state", zap.Error(err))
-	} else if found {
-		logger.Info("loaded cached desired state from BoltDB",
-			zap.Int64("version", cachedManifest.Version))
-		rec.SetDesiredState(&cachedManifest)
+		logger.Fatal("failed to initialize identity manager", zap.Error(err))
 	}
 
-	// Create and connect MQTT client (sole communication channel).
-	mqttClient := comms.NewMQTTClient(comms.MQTTConfig{
-		BrokerURL: cfg.MQTT.BrokerURL,
-		DeviceID:  cfg.DeviceID,
-		Username:  cfg.MQTT.Username,
-		Password:  cfg.MQTT.Password,
-		TopicRoot: cfg.MQTT.TopicRoot,
-		Store:     store,
-	}, logger)
+	identity, mqttClient, err := connectWithIdentity(cfg, identityMgr, store, logger)
+	if err != nil {
+		logger.Fatal("failed to establish MQTT connection", zap.Error(err))
+	}
+	defer mqttClient.Close()
 
-	// Register certificate plugin with MQTT-backed requester.
+	// Certificate plugin needs the connected MQTT client as its request transport.
 	rec.RegisterPlugin(certificate.New(logger,
 		func(name, cn string, sans []string, csrPEM []byte, reqType, serial string) error {
 			return mqttClient.PublishCertRequest(name, cn, sans, csrPEM, reqType, serial)
 		}, store))
 
-	// Wire cert response handler: stores signed certs in BoltDB for the plugin to install.
 	mqttClient.SetCertResponseHandler(func(name string, certPEM, caCertPEM []byte) {
 		logger.Info("received signed certificate", zap.String("name", name))
 		if err := store.SaveMeta("cert:"+name, string(certPEM)); err != nil {
@@ -121,7 +113,6 @@ func main() {
 		}
 	})
 
-	// Wire desired state handler: updates reconciler + persists to BoltDB.
 	mqttClient.SetDesiredStateHandler(func(manifest *model.DeviceManifest) {
 		logger.Info("received desired state update",
 			zap.Int64("version", manifest.Version))
@@ -131,19 +122,10 @@ func main() {
 		}
 	})
 
-	if err := mqttClient.Connect(10 * time.Second); err != nil {
-		logger.Warn("MQTT connection failed (will retry via auto-reconnect)", zap.Error(err))
-	}
-	defer mqttClient.Close()
-
-	// Enroll with controller via MQTT (or load existing device token).
-	enrollViaMMQTT(cfg, mqttClient, rec, store, logger)
-
-	// Create OTA updater and command dispatcher.
+	// OTA + command dispatch.
 	updater := ota.NewUpdater(cfg.DataDir, cfg.OTA.SignKey, logger)
 	dispatcher := commands.NewDispatcher(updater, mqttClient, cfg.DeviceID, agentVersion, logger)
 
-	// Set command handler on MQTT client.
 	mqttClient.SetCommandHandler(func(cmd model.Command) {
 		if err := dispatcher.Dispatch(cmd); err != nil {
 			logger.Error("command dispatch failed",
@@ -153,19 +135,14 @@ func main() {
 		}
 	})
 
-	// Check for post-update or rollback markers.
 	checkPostUpdateStatus(updater, mqttClient, cfg.DeviceID, logger)
 
-	// Start local health server for watchdog probing.
 	go startHealthServer(cfg.Health.Port, logger)
 
-	// Create health collector.
 	healthCollector := health.New(cfg.Health.DiskPath)
 
-	// Start reconciler loop.
 	go rec.Run(ctx)
 
-	// Start heartbeat loop (via MQTT).
 	go mqttClient.RunHeartbeatLoop(ctx, 30*time.Second, func() *model.HeartbeatMessage {
 		status := healthCollector.Collect()
 		status.ReconcileStatus = rec.Status()
@@ -182,7 +159,6 @@ func main() {
 		}
 	})
 
-	// Start telemetry loop (via MQTT).
 	go mqttClient.RunTelemetryLoop(ctx, 30*time.Second, func() *model.DeviceStatus {
 		status := healthCollector.Collect()
 		status.ReconcileStatus = rec.Status()
@@ -193,6 +169,19 @@ func main() {
 		return status
 	})
 
+	if identity != nil {
+		logger.Info("mTLS identity active",
+			zap.String("serial", identity.SerialHex),
+			zap.Time("not_after", identity.NotAfter),
+			zap.String("cert_fingerprint", identity.Fingerprints.CertSHA256),
+		)
+
+		// Identity cert renewal loop: check hourly; renew if within 14 days of expiry.
+		renewer := bootstrap.NewRenewer(identityMgr, mqttClient, identity,
+			14*24*time.Hour, 1*time.Hour, logger)
+		go renewer.Run(ctx)
+	}
+
 	logger.Info("agent running, waiting for shutdown signal")
 
 	sig := <-sigCh
@@ -202,16 +191,208 @@ func main() {
 	logger.Info("agent stopped")
 }
 
+// connectWithIdentity implements the two-phase connect:
+//
+//  1. If a persisted identity already exists on disk and an mTLS broker is configured,
+//     skip the bootstrap path entirely and connect directly to the mTLS broker.
+//  2. If no identity exists yet, connect to the enrollment broker with username/password,
+//     exchange a CSR for a signed leaf cert via the EnrollRequest, persist it, then
+//     reconnect to the mTLS broker presenting the new identity.
+//  3. If no mTLS broker is configured, stay on the enrollment broker with password auth
+//     (legacy path; still functional but not production-recommended).
+func connectWithIdentity(
+	cfg *config.Config,
+	mgr *bootstrap.Manager,
+	store *storage.Store,
+	logger *zap.Logger,
+) (*bootstrap.Identity, *comms.MQTTClient, error) {
+
+	identity, err := mgr.Load()
+	if err != nil {
+		return nil, nil, fmt.Errorf("load persisted identity: %w", err)
+	}
+
+	// Legacy / no-mTLS deployment: stay on password auth.
+	if cfg.MQTT.MutualTLSBrokerURL == "" {
+		logger.Warn("mtls_broker_url not configured — continuing on password-auth broker " +
+			"(not recommended for production)")
+		client, err := comms.NewMQTTClient(enrollmentClientConfig(cfg, store), logger)
+		if err != nil {
+			return nil, nil, err
+		}
+		if err := client.Connect(10 * time.Second); err != nil {
+			logger.Warn("MQTT connection failed (will retry via auto-reconnect)", zap.Error(err))
+		}
+		if identity == nil {
+			if err := enrollWithoutCSR(cfg, client, logger); err != nil {
+				client.Close()
+				return nil, nil, err
+			}
+		}
+		return identity, client, nil
+	}
+
+	// mTLS deployment — fast path: we already have a cert.
+	if identity != nil {
+		logger.Info("identity cert present, connecting directly to mTLS broker",
+			zap.String("serial", identity.SerialHex),
+			zap.Time("not_after", identity.NotAfter))
+		client, err := connectMtlsWithErr(cfg, identity, store, logger)
+		if err != nil {
+			return nil, nil, fmt.Errorf("mTLS connect: %w", err)
+		}
+		return identity, client, nil
+	}
+
+	// mTLS deployment — first boot: bootstrap via enrollment broker, then switch.
+	logger.Info("no persisted identity — running enrollment bootstrap")
+
+	bootstrapClient, err := comms.NewMQTTClient(enrollmentClientConfig(cfg, store), logger)
+	if err != nil {
+		return nil, nil, fmt.Errorf("create bootstrap MQTT client: %w", err)
+	}
+	if err := bootstrapClient.Connect(30 * time.Second); err != nil {
+		bootstrapClient.Close()
+		return nil, nil, fmt.Errorf("connect to enrollment broker: %w", err)
+	}
+
+	hostname, _ := os.Hostname()
+	baseReq := &model.EnrollRequest{
+		EnrollmentToken: cfg.Auth.EnrollmentToken,
+		DeviceID:        cfg.DeviceID,
+		Hostname:        hostname,
+		Architecture:    runtime.GOARCH,
+		OS:              runtime.GOOS,
+		AgentVersion:    agentVersion,
+		Labels:          cfg.Labels,
+	}
+
+	adapter := &mqttEnrollAdapter{client: bootstrapClient}
+	identity, err = mgr.Enroll(adapter, baseReq, cfg.DeviceID, nil)
+	if err != nil {
+		bootstrapClient.Close()
+		return nil, nil, fmt.Errorf("identity enrollment: %w", err)
+	}
+	logger.Info("identity enrollment succeeded",
+		zap.String("serial", identity.SerialHex),
+		zap.Time("not_after", identity.NotAfter))
+
+	// We don't need the bootstrap connection anymore.
+	bootstrapClient.Close()
+
+	// Second-phase: connect with mTLS.
+	mtlsClient, err := connectMtlsWithErr(cfg, identity, store, logger)
+	if err != nil {
+		return nil, nil, fmt.Errorf("mTLS reconnect after enrollment: %w", err)
+	}
+	return identity, mtlsClient, nil
+}
+
+func connectMtlsWithErr(cfg *config.Config, id *bootstrap.Identity, store *storage.Store, logger *zap.Logger) (*comms.MQTTClient, error) {
+	client, err := comms.NewMQTTClient(comms.MQTTConfig{
+		BrokerURL: cfg.MQTT.MutualTLSBrokerURL,
+		DeviceID:  cfg.DeviceID,
+		TopicRoot: cfg.MQTT.TopicRoot,
+		Store:     store,
+		TLS: comms.TLSConfig{
+			CACertPath:         id.CaPath,
+			IdentityCertPath:   id.CertPath,
+			IdentityKeyPath:    id.KeyPath,
+			ServerName:         cfg.MQTT.TLSServerName,
+			InsecureSkipVerify: cfg.MQTT.InsecureSkipVerify,
+		},
+	}, logger)
+	if err != nil {
+		return nil, err
+	}
+	if err := client.Connect(30 * time.Second); err != nil {
+		client.Close()
+		return nil, err
+	}
+	return client, nil
+}
+
+func enrollmentClientConfig(cfg *config.Config, store *storage.Store) comms.MQTTConfig {
+	return comms.MQTTConfig{
+		BrokerURL: cfg.MQTT.BrokerURL,
+		DeviceID:  cfg.DeviceID,
+		Username:  cfg.MQTT.Username,
+		Password:  cfg.MQTT.Password,
+		TopicRoot: cfg.MQTT.TopicRoot,
+		Store:     store,
+	}
+}
+
+// mqttEnrollAdapter bridges MQTTClient.PublishEnrollRequest to the bootstrap.Enroller interface.
+type mqttEnrollAdapter struct {
+	client *comms.MQTTClient
+}
+
+func (a *mqttEnrollAdapter) Enroll(req *model.EnrollRequest) (*model.RegisterResponse, error) {
+	return a.client.PublishEnrollRequest(req)
+}
+
+// enrollWithoutCSR is the legacy path for deployments that don't use mTLS. Kept so
+// existing installations don't break when upgrading the agent binary.
+func enrollWithoutCSR(cfg *config.Config, mqttClient *comms.MQTTClient, logger *zap.Logger) error {
+	tokenPath := tokenFilePath(cfg)
+	if data, err := os.ReadFile(tokenPath); err == nil && len(data) > 0 {
+		logger.Info("loaded device token from file, skipping enrollment",
+			zap.String("token_file", tokenPath))
+		return nil
+	}
+	if cfg.Auth.EnrollmentToken == "" {
+		return fmt.Errorf("no device token file and no enrollment_token configured")
+	}
+
+	hostname, _ := os.Hostname()
+	resp, err := mqttClient.PublishEnrollRequest(&model.EnrollRequest{
+		EnrollmentToken: cfg.Auth.EnrollmentToken,
+		DeviceID:        cfg.DeviceID,
+		Hostname:        hostname,
+		Architecture:    runtime.GOARCH,
+		OS:              runtime.GOOS,
+		AgentVersion:    agentVersion,
+		Labels:          cfg.Labels,
+	})
+	if err != nil {
+		return fmt.Errorf("enrollment request: %w", err)
+	}
+	if !resp.Accepted {
+		return fmt.Errorf("enrollment rejected by controller: %s", resp.Message)
+	}
+	if resp.DeviceToken != "" {
+		if err := os.WriteFile(tokenPath, []byte(resp.DeviceToken), 0600); err != nil {
+			logger.Error("failed to save device token to file", zap.Error(err))
+		} else {
+			logger.Info("device token saved", zap.String("token_file", tokenPath))
+		}
+	}
+	return nil
+}
+
+func loadCachedDesiredState(store *storage.Store, rec *reconciler.Reconciler, logger *zap.Logger) {
+	var cached model.DeviceManifest
+	found, err := store.LoadDesiredState("current", &cached)
+	if err != nil {
+		logger.Warn("failed to load cached desired state", zap.Error(err))
+		return
+	}
+	if found {
+		logger.Info("loaded cached desired state from BoltDB",
+			zap.Int64("version", cached.Version))
+		rec.SetDesiredState(&cached)
+	}
+}
+
 // checkPostUpdateStatus detects post-update or rollback markers and reports
 // the final OTA status back to the controller via MQTT.
 func checkPostUpdateStatus(updater *ota.Updater,
 	mqttClient *comms.MQTTClient, deviceID string, logger *zap.Logger) {
 
-	// Check rollback marker first (takes priority).
 	rollbackExists, _ := updater.ReadRollbackMarker()
 	if rollbackExists {
 		logger.Warn("rollback marker detected — previous OTA update was rolled back")
-
 		if marker, err := updater.ReadUpdateMarker(); err == nil {
 			_ = mqttClient.PublishOTAStatus(&model.OTAStatusReport{
 				DeploymentID: marker.DeploymentID,
@@ -226,16 +407,13 @@ func checkPostUpdateStatus(updater *ota.Updater,
 		return
 	}
 
-	// Check update marker (successful update).
 	marker, err := updater.ReadUpdateMarker()
 	if err != nil {
-		return // No marker = not a post-update restart.
+		return
 	}
-
 	logger.Info("update marker detected — OTA update completed successfully",
 		zap.Int64("deployment_id", marker.DeploymentID),
 		zap.String("previous_version", marker.PreviousVersion))
-
 	_ = mqttClient.PublishOTAStatus(&model.OTAStatusReport{
 		DeploymentID: marker.DeploymentID,
 		DeviceID:     deviceID,
@@ -271,74 +449,12 @@ func startHealthServer(port int, logger *zap.Logger) {
 	}
 }
 
-// tokenFilePath returns the path where the device token is persisted.
+// tokenFilePath returns the path where the device token is persisted (legacy path).
 func tokenFilePath(cfg *config.Config) string {
 	if cfg.Auth.TokenFile != "" {
 		return cfg.Auth.TokenFile
 	}
 	return filepath.Join(cfg.DataDir, "device-token")
-}
-
-func enrollViaMMQTT(
-	cfg *config.Config,
-	mqttClient *comms.MQTTClient,
-	rec *reconciler.Reconciler,
-	store *storage.Store,
-	logger *zap.Logger,
-) {
-	tokenPath := tokenFilePath(cfg)
-
-	// 1. Check for existing device token on disk.
-	if tokenData, err := os.ReadFile(tokenPath); err == nil && len(tokenData) > 0 {
-		logger.Info("loaded device token from file, skipping enrollment",
-			zap.String("token_file", tokenPath))
-		return
-	}
-
-	// 2. Enroll with enrollment token via MQTT.
-	if cfg.Auth.EnrollmentToken == "" {
-		logger.Fatal("no device token file and no enrollment_token configured — cannot enroll")
-	}
-
-	hostname, _ := os.Hostname()
-
-	resp, err := mqttClient.PublishEnrollRequest(&model.EnrollRequest{
-		EnrollmentToken: cfg.Auth.EnrollmentToken,
-		DeviceID:        cfg.DeviceID,
-		Hostname:        hostname,
-		Architecture:    runtime.GOARCH,
-		OS:              runtime.GOOS,
-		AgentVersion:    agentVersion,
-		Labels:          cfg.Labels,
-	})
-	if err != nil {
-		logger.Fatal("enrollment failed", zap.Error(err))
-	}
-
-	if !resp.Accepted {
-		logger.Fatal("enrollment rejected by controller", zap.String("message", resp.Message))
-	}
-
-	logger.Info("enrolled with controller via MQTT", zap.String("message", resp.Message))
-
-	// 3. Persist device token.
-	if resp.DeviceToken != "" {
-		if err := os.WriteFile(tokenPath, []byte(resp.DeviceToken), 0600); err != nil {
-			logger.Error("failed to save device token to file", zap.Error(err))
-		} else {
-			logger.Info("device token saved", zap.String("token_file", tokenPath))
-		}
-	}
-
-	// 4. Apply initial manifest if provided.
-	if resp.InitialManifest != nil {
-		logger.Info("received initial manifest from controller",
-			zap.Int64("version", resp.InitialManifest.Version))
-		rec.SetDesiredState(resp.InitialManifest)
-		if err := store.SaveDesiredState("current", resp.InitialManifest); err != nil {
-			logger.Error("failed to save initial manifest to BoltDB", zap.Error(err))
-		}
-	}
 }
 
 func initLogger(level string) *zap.Logger {

@@ -38,6 +38,10 @@ type MQTTClient struct {
 }
 
 // MQTTConfig holds MQTT connection parameters.
+//
+// TLS field is optional. When non-zero, the client is configured with mutual-TLS —
+// presenting IdentityCertPath + IdentityKeyPath and validating the broker's server cert
+// against CACertPath. The BrokerURL in that case is typically ssl://host:8883.
 type MQTTConfig struct {
 	BrokerURL string
 	DeviceID  string
@@ -45,10 +49,11 @@ type MQTTConfig struct {
 	Password  string
 	TopicRoot string
 	Store     *storage.Store
+	TLS       TLSConfig
 }
 
 // NewMQTTClient creates an MQTT client. Call Connect() to establish the connection.
-func NewMQTTClient(cfg MQTTConfig, logger *zap.Logger) *MQTTClient {
+func NewMQTTClient(cfg MQTTConfig, logger *zap.Logger) (*MQTTClient, error) {
 	mc := &MQTTClient{
 		deviceID:         cfg.DeviceID,
 		topicRoot:        cfg.TopicRoot,
@@ -72,8 +77,20 @@ func NewMQTTClient(cfg MQTTConfig, logger *zap.Logger) *MQTTClient {
 		opts.SetPassword(cfg.Password)
 	}
 
+	if !cfg.TLS.IsZero() {
+		tlsCfg, err := cfg.TLS.Build()
+		if err != nil {
+			return nil, fmt.Errorf("build TLS config: %w", err)
+		}
+		opts.SetTLSConfig(tlsCfg)
+		logger.Info("MQTT client using mutual TLS",
+			zap.String("broker", cfg.BrokerURL),
+			zap.String("ca_cert", cfg.TLS.CACertPath),
+			zap.String("identity_cert", cfg.TLS.IdentityCertPath))
+	}
+
 	mc.client = mqtt.NewClient(opts)
-	return mc
+	return mc, nil
 }
 
 // SetCommandHandler sets the callback for received commands.

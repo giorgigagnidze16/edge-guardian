@@ -1,9 +1,12 @@
 package com.edgeguardian.controller.mqtt;
 
 import com.edgeguardian.controller.dto.AgentRegisterResponse;
+import com.edgeguardian.controller.model.CertRequestType;
 import com.edgeguardian.controller.model.Device;
 import com.edgeguardian.controller.model.DeviceManifestEntity;
+import com.edgeguardian.controller.model.IssuedCertificate;
 import com.edgeguardian.controller.service.CertificateAuthorityService;
+import com.edgeguardian.controller.service.CertificateService;
 import com.edgeguardian.controller.service.DeviceRegistry;
 import com.edgeguardian.controller.service.EnrollmentService;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
@@ -20,6 +23,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -31,11 +35,15 @@ import java.util.Map;
 @RequiredArgsConstructor
 public class EnrollmentListener {
 
+    /** Fixed name for the per-device mTLS identity certificate issued during enrollment. */
+    private static final String IDENTITY_CERT_NAME = "device-identity";
+
     private final MqttClient mqttClient;
     private final ObjectMapper objectMapper;
     private final DeviceRegistry deviceRegistry;
     private final EnrollmentService enrollmentService;
     private final CertificateAuthorityService caService;
+    private final CertificateService certificateService;
 
     @Value("${edgeguardian.controller.mqtt.topic-root:edgeguardian}")
     private String topicRoot;
@@ -70,16 +78,22 @@ public class EnrollmentListener {
                     request.architecture(), request.os(), request.agentVersion(), request.labels());
 
             Device device = result.device();
+            IssuedCertificate identityCert = issueIdentityCertIfRequested(device, request);
+
             var response = new AgentRegisterResponse(
                     true,
                     "Device enrolled successfully",
                     buildManifestMap(device.getDeviceId()),
                     result.deviceToken(),
-                    caService.getCaCertPem(device.getOrganizationId())
+                    caService.getCaCertPem(device.getOrganizationId()),
+                    identityCert != null ? identityCert.getCertPem() : null,
+                    identityCert != null ? identityCert.getSerialNumber() : null
             );
 
             publish(resolvedId, response);
-            log.info("Device {} enrolled to org {}", resolvedId, device.getOrganizationId());
+            log.info("Device {} enrolled to org {} (identityCert={})",
+                    resolvedId, device.getOrganizationId(),
+                    identityCert != null ? identityCert.getSerialNumber() : "none");
 
         } catch (Exception e) {
             log.error("Enrollment failed for topic {}: {}", topic, e.getMessage(), e);
@@ -96,6 +110,42 @@ public class EnrollmentListener {
         if (request.enrollmentToken() == null || request.enrollmentToken().isBlank()) {
             throw new IllegalArgumentException("enrollmentToken is required");
         }
+    }
+
+    /**
+     * If the agent submitted a CSR as part of enrollment, sign it and return the resulting
+     * leaf certificate. The CSR is processed as type MANIFEST — auto-approved for a device
+     * with no existing identity cert, which is the normal first-enrollment path. Re-enrollments
+     * go through compromise detection exactly like any other out-of-band cert request.
+     */
+    private IssuedCertificate issueIdentityCertIfRequested(Device device, EnrollRequestPayload request) {
+        if (request.csrPem() == null || request.csrPem().isBlank()) {
+            return null;
+        }
+
+        String commonName = request.commonName() != null && !request.commonName().isBlank()
+                ? request.commonName()
+                : device.getDeviceId();
+        List<String> sans = request.sans() != null ? request.sans() : List.of();
+
+        var result = certificateService.processRequest(
+                device.getDeviceId(),
+                device.getOrganizationId(),
+                IDENTITY_CERT_NAME,
+                commonName,
+                sans,
+                request.csrPem(),
+                CertRequestType.MANIFEST,
+                null);
+
+        if (result.blocked()) {
+            // Compromise path already revoked old certs + suspended the device. Don't return a cert —
+            // the agent will see deviceToken + caCertPem only, and the admin must act before it can re-enroll.
+            log.warn("Identity cert request blocked for device {} during enrollment (possible compromise)",
+                    device.getDeviceId());
+            return null;
+        }
+        return result.certificate();
     }
 
     private Map<String, Object> buildManifestMap(String deviceId) {
@@ -133,7 +183,12 @@ public class EnrollmentListener {
             String architecture,
             String os,
             String agentVersion,
-            Map<String, String> labels
+            Map<String, String> labels,
+            // Optional mTLS bootstrap — agent generates a keypair locally and sends the CSR
+            // so the server never sees the private key.
+            String csrPem,
+            String commonName,
+            List<String> sans
     ) {
     }
 }

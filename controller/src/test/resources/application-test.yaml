@@ -7,3 +7,10 @@ spring:
     locations: classpath:db/migration
     baseline-on-migrate: true
     baseline-version: 0
+edgeguardian:
+  controller:
+    ca:
+      encryption-key: ""
+      ca-validity-days: 3650
+      cert-validity-days: 365
+      renew-before-days: 30

@@ -50,29 +50,91 @@ services:
       retries: 15
       start_period: 30s
 
+  # Bootstrap step: generates the broker's own TLS server cert and fetches the
+  # concatenated CA bundle of every EdgeGuardian organization from the controller.
+  # Must finish before the EMQX SSL listener can start.
+  emqx-tls-init:
+    image: alpine:3.20
+    container_name: edgeguardian-emqx-tls-init
+    restart: "no"
+    environment:
+      CONTROLLER_URL: ${CONTROLLER_URL:-http://host.docker.internal:8443}
+      EMQX_HOSTNAME: emqx
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - emqx_certs:/certs
+      - ./emqx/init-tls.sh:/init-tls.sh:ro
+    entrypoint: ["sh", "-c", "apk add --no-cache curl openssl && sh /init-tls.sh"]
+
   emqx:
     image: emqx/emqx:5.8
     container_name: edgeguardian-emqx
+    depends_on:
+      emqx-tls-init:
+        condition: service_completed_successfully
     environment:
       EMQX_NAME: edgeguardian
       EMQX_HOST: 127.0.0.1
       EMQX_DASHBOARD__DEFAULT_PASSWORD: "admin-secret"
-      # Auth: password-based with built-in database
+
+      # ---- Authentication -----------------------------------------------------------------
+      # Global password chain — used by the TCP listener only (enrollment + controller).
+      # The SSL listener disables this chain (enable_authn: false) because mTLS at the
+      # transport layer is the authentication — the cert IS the credential, no password.
       EMQX_AUTHENTICATION__1__MECHANISM: password_based
       EMQX_AUTHENTICATION__1__BACKEND: built_in_database
       EMQX_AUTHENTICATION__1__USER_ID_TYPE: username
-      # Authz: file ACL, deny-by-default
+
+      # ---- Authorization ------------------------------------------------------------------
       EMQX_AUTHORIZATION__NO_MATCH: deny
       EMQX_AUTHORIZATION__DENY_ACTION: disconnect
       EMQX_AUTHORIZATION__SOURCES__1__TYPE: file
       EMQX_AUTHORIZATION__SOURCES__1__PATH: "etc/acl.conf"
+
+      # ---- Enrollment listener (tcp/1883, password-based) ---------------------------------
+      # Devices without a cert connect here with username=bootstrap. ACL restricts them
+      # to the enroll/cert-request topics only.
+      EMQX_LISTENERS__TCP__DEFAULT__BIND: "0.0.0.0:1883"
+      EMQX_LISTENERS__TCP__DEFAULT__ENABLE_AUTHN: "true"
+
+      # ---- Device listener (ssl/8883, mTLS + CRL check) -----------------------------------
+      # After enrollment, devices reconnect here presenting their issued leaf cert.
+      # verify_peer + fail_if_no_peer_cert ⇒ no cert = no connection.
+      # peer_cert_as_clientid = cn ⇒ the cert's CN becomes the MQTT clientid at connect
+      #   time, which makes ACL ${clientid} equal to the deviceId.
+      # enable_authn = false ⇒ no app-level auth on this listener; mTLS at the TLS layer
+      #   is the authentication. Devices don't present a password.
+      # enable_crl_check ⇒ EMQX reads the CDP (CRL Distribution Point) extension from the
+      #   client cert — we embed http://controller:8443/api/v1/pki/crl/{orgId}.crl there —
+      #   fetches the CRL and refuses connections whose serial is listed.
+      EMQX_LISTENERS__SSL__DEFAULT__BIND: "0.0.0.0:8883"
+      EMQX_LISTENERS__SSL__DEFAULT__ENABLE_AUTHN: "false"
+      EMQX_LISTENERS__SSL__DEFAULT__SSL_OPTIONS__KEYFILE:  "/opt/emqx/etc/certs/emqx-server.key"
+      EMQX_LISTENERS__SSL__DEFAULT__SSL_OPTIONS__CERTFILE: "/opt/emqx/etc/certs/emqx-server.crt"
+      EMQX_LISTENERS__SSL__DEFAULT__SSL_OPTIONS__CACERTFILE: "/opt/emqx/etc/certs/ca-bundle.pem"
+      EMQX_LISTENERS__SSL__DEFAULT__SSL_OPTIONS__VERIFY: "verify_peer"
+      EMQX_LISTENERS__SSL__DEFAULT__SSL_OPTIONS__FAIL_IF_NO_PEER_CERT: "true"
+      EMQX_LISTENERS__SSL__DEFAULT__SSL_OPTIONS__ENABLE_CRL_CHECK: "true"
+      EMQX_LISTENERS__SSL__DEFAULT__PEER_CERT_AS_CLIENTID: "cn"
+      EMQX_LISTENERS__SSL__DEFAULT__PEER_CERT_AS_USERNAME: "cn"
+      # Periodically refresh cached CRLs (seconds).
+      EMQX_CRL_CACHE__REFRESH_INTERVAL: "300s"
+      EMQX_CRL_CACHE__HTTP_TIMEOUT: "15s"
     ports:
-      - "1883:1883"     # MQTT
+      - "1883:1883"     # MQTT (enrollment listener, password auth)
+      - "8883:8883"     # MQTT over TLS (device listener, mTLS + CRL)
       - "8083:8083"     # MQTT WebSocket
       - "18083:18083"   # EMQX Dashboard
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     volumes:
       - emqx_data:/opt/emqx/data
       - ./emqx/acl.conf:/opt/emqx/etc/acl.conf:ro
+      # Populated by emqx-tls-init — contains:
+      #   emqx-server.{crt,key}  : the broker's own server TLS identity
+      #   ca-bundle.pem          : trust anchors for validating every device's client cert
+      - emqx_certs:/opt/emqx/etc/certs:ro
     healthcheck:
       test: ["CMD", "emqx", "ping"]
       interval: 10s
@@ -150,6 +212,7 @@ services:
 volumes:
   pg_data:
   emqx_data:
+  emqx_certs:
   minio_data:
   loki_data:
   grafana_data:

@@ -1,7 +1,16 @@
-1edgeguardian:
+edgeguardian:
   controller:
     ca:
       encryption-key: ${CA_ENCRYPTION_KEY:}
       ca-validity-days: 3650
       cert-validity-days: 365
       renew-before-days: 30
+    pki:
+      crl-validity-hours: ${PKI_CRL_VALIDITY_HOURS:24}
+      crl-distribution-base-url: ${PKI_CRL_URL:http://localhost:8443/api/v1/pki/crl}
+    emqx:
+      admin:
+        admin-url: ${EMQX_ADMIN_URL:http://localhost:18083/api/v5}
+        username: ${EMQX_ADMIN_USERNAME:admin}
+        password: ${EMQX_ADMIN_PASSWORD:admin-secret}
+        timeout-ms: 3000

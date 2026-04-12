@@ -131,11 +131,18 @@ type CommandResult struct {
 }
 
 // RegisterResponse is returned by the controller after enrollment.
+//
+// When the agent submits a CSR in the EnrollRequest, IdentityCertPem + IdentityCertSerial
+// are populated with the signed mTLS bootstrap cert. CaCertPem is always populated so the
+// agent can verify the broker's server certificate on the subsequent mTLS connection.
 type RegisterResponse struct {
-	Accepted        bool            `json:"accepted"`
-	Message         string          `json:"message"`
-	InitialManifest *DeviceManifest `json:"initialManifest,omitempty"`
-	DeviceToken     string          `json:"deviceToken,omitempty"`
+	Accepted           bool            `json:"accepted"`
+	Message            string          `json:"message"`
+	InitialManifest    *DeviceManifest `json:"initialManifest,omitempty"`
+	DeviceToken        string          `json:"deviceToken,omitempty"`
+	CaCertPem          string          `json:"caCertPem,omitempty"`
+	IdentityCertPem    string          `json:"identityCertPem,omitempty"`
+	IdentityCertSerial string          `json:"identityCertSerial,omitempty"`
 }
 
 // HeartbeatMessage is published via MQTT to report agent liveness and status.
@@ -160,6 +167,9 @@ type CommandMessage struct {
 }
 
 // EnrollRequest is sent by the agent to enroll with an enrollment token.
+//
+// If CsrPem is provided, the controller will issue a leaf mTLS identity cert for the
+// device in the same exchange — avoiding a second round-trip over the bootstrap listener.
 type EnrollRequest struct {
 	EnrollmentToken string            `json:"enrollmentToken"`
 	DeviceID        string            `json:"deviceId"`
@@ -168,6 +178,9 @@ type EnrollRequest struct {
 	OS              string            `json:"os"`
 	AgentVersion    string            `json:"agentVersion"`
 	Labels          map[string]string `json:"labels,omitempty"`
+	CsrPem          string            `json:"csrPem,omitempty"`
+	CommonName      string            `json:"commonName,omitempty"`
+	Sans            []string          `json:"sans,omitempty"`
 }
 
 // OTAStatus is included in heartbeat to report OTA progress.

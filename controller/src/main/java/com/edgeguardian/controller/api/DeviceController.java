@@ -1,5 +1,6 @@
 package com.edgeguardian.controller.api;
 
+import com.edgeguardian.controller.dto.CreateCommandRequest;
 import com.edgeguardian.controller.dto.DeviceDto;
 import com.edgeguardian.controller.model.CommandExecution;
 import com.edgeguardian.controller.model.Device;
@@ -9,6 +10,7 @@ import com.edgeguardian.controller.mqtt.CommandPublisher;
 import com.edgeguardian.controller.repository.CommandExecutionRepository;
 import com.edgeguardian.controller.repository.DeviceCommandRepository;
 import com.edgeguardian.controller.security.TenantPrincipal;
+import com.edgeguardian.controller.service.DeviceLifecycleService;
 import com.edgeguardian.controller.service.DeviceRegistry;
 import com.edgeguardian.controller.service.LogService;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -19,6 +21,7 @@ import java.util.Map;
 import java.util.UUID;
 import org.eclipse.paho.mqttv5.common.MqttException;
 import org.springframework.http.HttpStatus;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -41,11 +44,12 @@ import lombok.RequiredArgsConstructor;
 @RequiredArgsConstructor
 public class DeviceController {
 
-    private final DeviceRegistry registry;
     private final LogService logService;
+    private final DeviceRegistry registry;
+    private final CommandPublisher commandPublisher;
     private final DeviceCommandRepository commandRepository;
     private final CommandExecutionRepository executionRepository;
-    private final CommandPublisher commandPublisher;
+    private final DeviceLifecycleService deviceLifecycleService;
 
     @GetMapping
     public List<DeviceDto> listDevices() {
@@ -67,10 +71,10 @@ public class DeviceController {
 
     @DeleteMapping("/{deviceId}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
-    public void removeDevice(@PathVariable String deviceId) {
-        if (!registry.remove(deviceId)) {
-            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Device not found: " + deviceId);
-        }
+    @PreAuthorize("@orgSecurity.hasMinRole(authentication, 'ADMIN')")
+    public void removeDevice(@PathVariable String deviceId,
+                             @AuthenticationPrincipal TenantPrincipal principal) {
+        deviceLifecycleService.deleteDevice(deviceId, principal.userId());
     }
 
     @GetMapping("/count")
@@ -94,16 +98,6 @@ public class DeviceController {
         }
         return logService.queryLogs(deviceId, start, end, limit, level, search);
     }
-
-    // --- Commands ---
-
-    record CreateCommandRequest(
-            String type,
-            Map<String, String> params,
-            Map<String, Object> script,
-            Map<String, Object> hooks,
-            int timeoutSeconds
-    ) {}
 
     @PostMapping("/{deviceId}/commands")
     @ResponseStatus(HttpStatus.CREATED)

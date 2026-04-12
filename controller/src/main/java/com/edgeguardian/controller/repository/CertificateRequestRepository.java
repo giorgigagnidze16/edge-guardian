@@ -4,6 +4,7 @@ import com.edgeguardian.controller.model.CertRequestState;
 import com.edgeguardian.controller.model.CertificateRequest;
 import org.springframework.data.jpa.repository.JpaRepository;
 
+import java.util.Collection;
 import java.util.List;
 
 public interface CertificateRequestRepository extends JpaRepository<CertificateRequest, Long> {
@@ -14,4 +15,7 @@ public interface CertificateRequestRepository extends JpaRepository<CertificateR
             Long organizationId, CertRequestState state);
 
     List<CertificateRequest> findByDeviceIdOrderByCreatedAtDesc(String deviceId);
+
+    List<CertificateRequest> findByDeviceIdAndStateIn(
+            String deviceId, Collection<CertRequestState> states);
 }

@@ -27,6 +27,8 @@ public class CertificateService {
     private final DeviceRepository deviceRepository;
     private final AuditService auditService;
     private final CaProperties caProperties;
+    private final CrlService crlService;
+    private final EmqxAdminClient emqxAdminClient;
 
     /**
      * Process an incoming certificate request from a device.
@@ -106,6 +108,10 @@ public class CertificateService {
         currentCert.setReplacedBy(newCert.getId());
         certRepository.save(currentCert);
 
+        crlService.rebuild(orgId);
+        // Intentionally no kickout here — the agent is currently presenting the OLD cert
+        // but is mid-renewal and will reconnect with the NEW cert on its own.
+
         log.info("Auto-approved renewal for device {} cert '{}', old serial {} -> new serial {}",
                 deviceId, name, currentSerial, newCert.getSerialNumber());
         return new CertRequestResult(request, newCert, false);
@@ -137,6 +143,9 @@ public class CertificateService {
                 blocked.getId().toString(),
                 Map.of("deviceId", deviceId, "name", name,
                         "type", type.name(), "reason", "duplicate_request"));
+
+        crlService.rebuild(orgId);
+        emqxAdminClient.kickout(deviceId);
 
         return new CertRequestResult(blocked, null, true);
     }
@@ -203,6 +212,77 @@ public class CertificateService {
         auditService.log(cert.getOrganizationId(), userId, "cert_revoked", "certificate",
                 certificateId.toString(),
                 Map.of("deviceId", cert.getDeviceId(), "serial", cert.getSerialNumber()));
+
+        crlService.rebuild(cert.getOrganizationId());
+        emqxAdminClient.kickout(cert.getDeviceId());
+    }
+
+    /**
+     * Revoke every active (non-revoked, non-expired) certificate issued to the given device.
+     * Emits a single audit entry listing affected serials.
+     *
+     * @return number of certificates revoked (0 if none were active)
+     */
+    @Transactional
+    public int revokeAllActiveForDevice(String deviceId, Long orgId, RevokeReason reason,
+                                        Long actorUserId) {
+        List<IssuedCertificate> active = certRepository
+                .findByDeviceIdAndRevokedFalseAndNotAfterAfter(deviceId, Instant.now());
+        if (active.isEmpty()) {
+            return 0;
+        }
+
+        Instant now = Instant.now();
+        for (IssuedCertificate cert : active) {
+            cert.setRevoked(true);
+            cert.setRevokedAt(now);
+            cert.setRevokeReason(reason);
+        }
+        certRepository.saveAll(active);
+
+        List<String> serials = active.stream().map(IssuedCertificate::getSerialNumber).toList();
+        auditService.log(orgId, actorUserId, "certs_revoked_for_device", "device", deviceId,
+                Map.of("count", active.size(), "reason", reason.name(), "serials", serials));
+
+        crlService.rebuild(orgId);
+        emqxAdminClient.kickout(deviceId);
+
+        log.info("Revoked {} certificate(s) for device {} (reason={})",
+                active.size(), deviceId, reason);
+        return active.size();
+    }
+
+    /**
+     * Reject every pending certificate request for the given device. Used when the device
+     * is deleted or otherwise decommissioned so that queued approvals can never be fulfilled.
+     *
+     * @return number of requests rejected (0 if none were pending)
+     */
+    @Transactional
+    public int rejectPendingRequestsForDevice(String deviceId, Long orgId, String reason,
+                                              Long actorUserId) {
+        List<CertificateRequest> pending = requestRepository
+                .findByDeviceIdAndStateIn(deviceId, List.of(CertRequestState.PENDING));
+        if (pending.isEmpty()) {
+            return 0;
+        }
+
+        Instant now = Instant.now();
+        for (CertificateRequest req : pending) {
+            req.setState(CertRequestState.REJECTED);
+            req.setRejectReason(reason);
+            req.setReviewedBy(actorUserId);
+            req.setReviewedAt(now);
+        }
+        requestRepository.saveAll(pending);
+
+        auditService.log(orgId, actorUserId, "cert_requests_rejected_for_device",
+                "device", deviceId,
+                Map.of("count", pending.size(), "reason", reason == null ? "" : reason));
+
+        log.info("Rejected {} pending cert request(s) for device {} (reason={})",
+                pending.size(), deviceId, reason);
+        return pending.size();
     }
 
     @Transactional(readOnly = true)

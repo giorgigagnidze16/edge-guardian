@@ -56,11 +56,28 @@ type LogForwardingConfig struct {
 }
 
 // MQTTConfig holds MQTT broker connection settings.
+//
+// Two brokers are supported to enable the bootstrap → mTLS handover:
+//
+//   - BrokerURL is the enrollment broker (e.g. tcp://emqx:1883). Used once with
+//     Username/Password to exchange enrollment token for a signed identity cert.
+//   - MutualTLSBrokerURL is the production broker (e.g. ssl://emqx:8883). After enrollment,
+//     the agent reconnects here presenting IdentityCertPath + IdentityKeyPath and validating
+//     the broker's server cert against CACertPath.
+//
+// If MutualTLSBrokerURL is empty, the agent stays on the enrollment broker indefinitely
+// (useful for bootstrapping a first deployment without a PKI, but not recommended for prod).
 type MQTTConfig struct {
-	BrokerURL string `yaml:"broker_url"`
-	Username  string `yaml:"username"`
-	Password  string `yaml:"password"`
-	TopicRoot string `yaml:"topic_root"`
+	BrokerURL          string `yaml:"broker_url"`
+	Username           string `yaml:"username"`
+	Password           string `yaml:"password"`
+	TopicRoot          string `yaml:"topic_root"`
+	MutualTLSBrokerURL string `yaml:"mtls_broker_url"`
+	CACertPath         string `yaml:"ca_cert_path"`
+	IdentityCertPath   string `yaml:"identity_cert_path"`
+	IdentityKeyPath    string `yaml:"identity_key_path"`
+	TLSServerName      string `yaml:"tls_server_name"`
+	InsecureSkipVerify bool   `yaml:"insecure_skip_verify"`
 }
 
 // HealthConfig holds health monitoring settings.

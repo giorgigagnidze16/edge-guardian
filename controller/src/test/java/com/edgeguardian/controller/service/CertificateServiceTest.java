@@ -14,11 +14,15 @@ import java.util.Map;
 import org.bouncycastle.openssl.jcajce.JcaPEMWriter;
 import org.bouncycastle.operator.jcajce.JcaContentSignerBuilder;
 import org.junit.jupiter.api.*;
+import org.mockito.Mockito;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.context.TestConfiguration;
+import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
 import org.springframework.web.server.ResponseStatusException;
 
-@Import({CertificateService.class, CertificateAuthorityService.class, AuditService.class})
+@Import({CertificateService.class, CertificateAuthorityService.class, CaKeyEncryption.class,
+        AuditService.class, CrlService.class, CertificateServiceTest.MockEmqxConfig.class})
 class CertificateServiceTest extends AbstractIntegrationTest {
 
     @Autowired private CertificateService certificateService;
@@ -28,8 +32,10 @@ class CertificateServiceTest extends AbstractIntegrationTest {
     @Autowired private OrganizationRepository organizationRepository;
     @Autowired private OrganizationCaRepository caRepository;
     @Autowired private AuditLogRepository auditLogRepository;
+    @Autowired private UserRepository userRepository;
 
     private Long orgId;
+    private Long reviewerUserId;
     private static final String DEVICE_ID = "test-rpi-001";
 
     @BeforeEach
@@ -37,6 +43,12 @@ class CertificateServiceTest extends AbstractIntegrationTest {
         Organization org = organizationRepository.save(Organization.builder()
                 .name("Test Org").slug("cert-test-org").build());
         orgId = org.getId();
+
+        reviewerUserId = userRepository.save(com.edgeguardian.controller.model.User.builder()
+                .keycloakId("kc-cert-reviewer")
+                .email("reviewer@cert.test")
+                .displayName("Cert Reviewer")
+                .build()).getId();
 
         deviceRepository.save(Device.builder()
                 .deviceId(DEVICE_ID)
@@ -56,6 +68,7 @@ class CertificateServiceTest extends AbstractIntegrationTest {
         auditLogRepository.deleteAll();
         caRepository.deleteAll();
         deviceRepository.deleteAll();
+        userRepository.deleteAll();
         organizationRepository.deleteAll();
     }
 
@@ -93,7 +106,7 @@ class CertificateServiceTest extends AbstractIntegrationTest {
         Long requestId = result.request().getId();
 
         // Approve
-        IssuedCertificate cert = certificateService.approve(requestId, 1L);
+        IssuedCertificate cert = certificateService.approve(requestId, reviewerUserId);
         assertThat(cert).isNotNull();
         assertThat(cert.getCertPem()).contains("BEGIN CERTIFICATE");
         assertThat(cert.getDeviceId()).isEqualTo(DEVICE_ID);
@@ -101,7 +114,7 @@ class CertificateServiceTest extends AbstractIntegrationTest {
         // Verify request state updated
         CertificateRequest updated = requestRepository.findById(requestId).orElseThrow();
         assertThat(updated.getState()).isEqualTo(CertRequestState.APPROVED);
-        assertThat(updated.getReviewedBy()).isEqualTo(1L);
+        assertThat(updated.getReviewedBy()).isEqualTo(reviewerUserId);
     }
 
     @Test
@@ -110,7 +123,7 @@ class CertificateServiceTest extends AbstractIntegrationTest {
                 DEVICE_ID, orgId, "test-cert", "test.local",
                 List.of(), generateTestCsr(), CertRequestType.INITIAL, null);
 
-        certificateService.reject(result.request().getId(), 1L, "Not authorized");
+        certificateService.reject(result.request().getId(), reviewerUserId, "Not authorized");
 
         CertificateRequest updated = requestRepository.findById(result.request().getId()).orElseThrow();
         assertThat(updated.getState()).isEqualTo(CertRequestState.REJECTED);
@@ -193,7 +206,7 @@ class CertificateServiceTest extends AbstractIntegrationTest {
                 DEVICE_ID, orgId, "test-cert", "test.local",
                 List.of(), generateTestCsr(), CertRequestType.MANIFEST, null);
 
-        certificateService.revoke(result.certificate().getId(), 1L);
+        certificateService.revoke(result.certificate().getId(), reviewerUserId);
 
         IssuedCertificate revoked = certRepository.findById(result.certificate().getId()).orElseThrow();
         assertThat(revoked.isRevoked()).isTrue();
@@ -205,10 +218,18 @@ class CertificateServiceTest extends AbstractIntegrationTest {
         var result = certificateService.processRequest(
                 DEVICE_ID, orgId, "test-cert", "test.local",
                 List.of(), generateTestCsr(), CertRequestType.MANIFEST, null);
-        certificateService.revoke(result.certificate().getId(), 1L);
+        certificateService.revoke(result.certificate().getId(), reviewerUserId);
 
-        assertThatThrownBy(() -> certificateService.revoke(result.certificate().getId(), 1L))
+        assertThatThrownBy(() -> certificateService.revoke(result.certificate().getId(), reviewerUserId))
                 .isInstanceOf(ResponseStatusException.class);
+    }
+
+    @TestConfiguration
+    static class MockEmqxConfig {
+        @Bean
+        EmqxAdminClient emqxAdminClient() {
+            return Mockito.mock(EmqxAdminClient.class);
+        }
     }
 
     // --- Helper: generate a real ECDSA CSR for testing ---

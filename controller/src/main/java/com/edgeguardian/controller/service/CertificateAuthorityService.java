@@ -1,13 +1,16 @@
 package com.edgeguardian.controller.service;
 
 import com.edgeguardian.controller.config.CaProperties;
+import com.edgeguardian.controller.config.PkiProperties;
 import com.edgeguardian.controller.model.OrganizationCa;
 import com.edgeguardian.controller.repository.OrganizationCaRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.bouncycastle.asn1.x500.X500Name;
 import org.bouncycastle.asn1.x509.*;
+import org.bouncycastle.cert.X509CRLHolder;
 import org.bouncycastle.cert.X509CertificateHolder;
+import org.bouncycastle.cert.X509v2CRLBuilder;
 import org.bouncycastle.cert.X509v3CertificateBuilder;
 import org.bouncycastle.cert.jcajce.JcaX509CertificateConverter;
 import org.bouncycastle.openssl.PEMParser;
@@ -27,6 +30,7 @@ import java.security.cert.X509Certificate;
 import java.security.spec.ECGenParameterSpec;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.Collection;
 import java.util.Date;
 import java.util.List;
 import java.util.Map;
@@ -49,6 +53,7 @@ public class CertificateAuthorityService {
     private static final SecureRandom SECURE_RANDOM = new SecureRandom();
 
     private final CaProperties caProperties;
+    private final PkiProperties pkiProperties;
     private final CaKeyEncryption keyEncryption;
     private final OrganizationCaRepository caRepository;
 
@@ -95,6 +100,43 @@ public class CertificateAuthorityService {
         return certPem;
     }
 
+    /**
+     * Build and sign an X.509 v2 CRL for the organization, listing every revoked cert.
+     * Returns the DER-encoded CRL bytes, signed with the org CA private key.
+     *
+     * @param entries    one entry per revoked cert — (serial, revokedAt, reasonCode)
+     * @param thisUpdate when this CRL was produced
+     * @param nextUpdate when verifiers should fetch the next one
+     * @param crlNumber  monotonically increasing per org (RFC 5280 §5.2.3)
+     */
+    public byte[] signCrl(Long orgId, Collection<CrlEntry> entries,
+                          Instant thisUpdate, Instant nextUpdate, long crlNumber) {
+        OrganizationCa orgCa = getOrCreateCa(orgId);
+        PrivateKey caKey = keyEncryption.decrypt(orgCa.getCaKeyEncrypted(),
+                orgCa.getCaKeyIv(), KEY_ALGORITHM);
+        X509Certificate caCert = parseCertPem(orgCa.getCaCertPem());
+
+        try {
+            X500Name issuer = new X500Name(caCert.getSubjectX500Principal().getName());
+            X509v2CRLBuilder builder = new X509v2CRLBuilder(issuer, Date.from(thisUpdate));
+            builder.setNextUpdate(Date.from(nextUpdate));
+
+            for (CrlEntry entry : entries) {
+                builder.addCRLEntry(entry.serialNumber(),
+                        Date.from(entry.revokedAt()),
+                        entry.reasonCode());
+            }
+
+            builder.addExtension(Extension.cRLNumber, false, new CRLNumber(BigInteger.valueOf(crlNumber)));
+
+            var signer = new JcaContentSignerBuilder(SIGNATURE_ALGORITHM).build(caKey);
+            X509CRLHolder holder = builder.build(signer);
+            return holder.getEncoded();
+        } catch (Exception e) {
+            throw new IllegalStateException("Failed to sign CRL for org " + orgId, e);
+        }
+    }
+
     public SignedCertResult signCsr(Long orgId, String csrPem, int validityDays, List<String> sans) {
         OrganizationCa orgCa = getOrCreateCa(orgId);
         PrivateKey caKey = keyEncryption.decrypt(orgCa.getCaKeyEncrypted(), orgCa.getCaKeyIv(), KEY_ALGORITHM);
@@ -105,7 +147,8 @@ public class CertificateAuthorityService {
         Instant expiry = now.plus(Duration.ofDays(validityDays));
         BigInteger serial = newSerial();
 
-        X509Certificate signed = buildAndSign(caCert, caKey, csr, serial, now, expiry, sans);
+        X509Certificate signed = buildAndSign(caCert, caKey, csr, serial, now, expiry, sans,
+                pkiProperties.crlUrlFor(orgId));
         return new SignedCertResult(toPem(signed), serial.toString(16), now, expiry);
     }
 
@@ -159,7 +202,8 @@ public class CertificateAuthorityService {
 
     private X509Certificate buildAndSign(X509Certificate issuer, PrivateKey issuerKey,
                                          PKCS10CertificationRequest csr, BigInteger serial,
-                                         Instant notBefore, Instant notAfter, List<String> sans) {
+                                         Instant notBefore, Instant notAfter, List<String> sans,
+                                         String crlUrl) {
         try {
             var builder = new X509v3CertificateBuilder(
                     new X500Name(issuer.getSubjectX500Principal().getName()),
@@ -174,6 +218,14 @@ public class CertificateAuthorityService {
                         .toArray(GeneralName[]::new);
                 builder.addExtension(Extension.subjectAlternativeName, false, new GeneralNames(names));
             }
+
+            // CRL Distribution Point — tells TLS verifiers where to fetch revocation info.
+            // Without this, EMQX's enable_crl_check has no URL to hit per-cert.
+            GeneralName crlName = new GeneralName(GeneralName.uniformResourceIdentifier, crlUrl);
+            DistributionPointName dpName = new DistributionPointName(new GeneralNames(crlName));
+            DistributionPoint dp = new DistributionPoint(dpName, null, null);
+            builder.addExtension(Extension.cRLDistributionPoints, false,
+                    new CRLDistPoint(new DistributionPoint[]{dp}));
 
             var signer = new JcaContentSignerBuilder(SIGNATURE_ALGORITHM).build(issuerKey);
             return new JcaX509CertificateConverter().getCertificate(builder.build(signer));
@@ -194,5 +246,9 @@ public class CertificateAuthorityService {
 
     public record SignedCertResult(String certPem, String serialNumber,
                                    Instant notBefore, Instant notAfter) {
+    }
+
+    /** A single entry in the signed CRL. {@code reasonCode} uses RFC 5280 §5.3.1 values. */
+    public record CrlEntry(BigInteger serialNumber, Instant revokedAt, int reasonCode) {
     }
 }

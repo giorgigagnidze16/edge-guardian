@@ -13,16 +13,42 @@ reconcile_interval_seconds: 30
 log_level: info
 data_dir: /var/lib/edgeguardian
 
-# Authentication — set enrollment_token to enroll with an organization.
-# After enrollment, the agent receives a device token and saves it to token_file.
-# On subsequent startups the agent loads the device token from token_file.
+# Authentication.
+#
+# On first boot, the agent uses enrollment_token to register with the controller and
+# receives a signed mTLS identity certificate (see `mqtt.mtls_broker_url` below).
+# After that, the agent no longer needs the enrollment token — the cert on disk is
+# the long-lived credential. The token_file field is retained for deployments that
+# run the agent without mTLS.
 auth:
   enrollment_token: ""        # e.g. egt_xxxxx (get from dashboard)
   token_file: ""              # default: {data_dir}/device-token
 
-# MQTT broker configuration for telemetry and commands.
+# MQTT broker configuration.
+#
+# The agent uses a two-phase connection model in production:
+#
+#   1. Bootstrap: connects to broker_url (typically tcp://<broker>:1883) with the shared
+#      'bootstrap' username+password. ACL restricts this listener to the enrollment and
+#      cert-request topics only. Used once, until the agent has its own cert.
+#
+#   2. mTLS: reconnects to mtls_broker_url (ssl://<broker>:8883) presenting its leaf cert.
+#      EMQX validates the cert against the org CA bundle + CRL, and binds ${clientid} to
+#      the cert's CN. The ACL then scopes the device to its own topic tree.
+#
+# In development you can omit mtls_broker_url to stay on password auth (the old path).
+# Not recommended for production — revocation has no wire-level effect without mTLS.
 mqtt:
   broker_url: tcp://192.168.1.100:1883
-  username: ""
-  password: ""
+  username: bootstrap
+  password: bootstrap-secret
   topic_root: edgeguardian
+
+  # Production mTLS settings — populated by the agent on first successful enrollment.
+  # The paths are written by the bootstrap flow; operators don't create them manually.
+  mtls_broker_url: ssl://192.168.1.100:8883
+  ca_cert_path: /var/lib/edgeguardian/identity/ca.crt
+  identity_cert_path: /var/lib/edgeguardian/identity/identity.crt
+  identity_key_path: /var/lib/edgeguardian/identity/identity.key
+  tls_server_name: ""            # SNI override; blank = derived from broker URL
+  insecure_skip_verify: false    # NEVER set to true in production

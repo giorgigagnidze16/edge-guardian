@@ -34,6 +34,9 @@ create_user() {
 }
 
 echo "Provisioning EMQX MQTT users..."
+# The controller connects on the internal password listener with full ACL.
 create_user "controller"  "controller-secret"
-create_user "test-device" "test-device-secret"
+# 'bootstrap' is the single shared identity used by un-enrolled devices on the
+# enrollment listener. ACL restricts it to enrollment and cert-request topics only.
+create_user "bootstrap"   "bootstrap-secret"
 echo "Done."

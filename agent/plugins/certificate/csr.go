@@ -6,13 +6,22 @@ import (
 	"crypto/elliptic"
 	"crypto/rand"
 	"crypto/rsa"
+	"crypto/sha256"
 	"crypto/x509"
 	"crypto/x509/pkix"
+	"encoding/hex"
 	"encoding/pem"
 	"fmt"
 	"net"
 	"os"
 )
+
+// Fingerprint returns the SHA-256 hex digest of the raw PEM bytes. Used for logs and
+// telemetry so operators can tell whether an agent is actually running the cert they expect.
+func Fingerprint(pemBytes []byte) string {
+	sum := sha256.Sum256(pemBytes)
+	return hex.EncodeToString(sum[:])
+}
 
 // GenerateKeyPair creates a new private key. Supported algorithms: "ecdsa-p256" (default), "rsa-2048".
 func GenerateKeyPair(algo string) (crypto.PrivateKey, error) {
