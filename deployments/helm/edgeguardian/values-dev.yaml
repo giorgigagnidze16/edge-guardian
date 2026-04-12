@@ -28,7 +28,7 @@ controller:
     limits:   { memory: 1Gi }
   crlUrl: http://edgeguardian-controller:8443/api/v1/pki/crl
   keycloakIssuerUri: http://keycloak:9090/kc/realms/edgeguardian
-  caEncryptionKey: ZGV2LW9ubHktY2Eta2V5LWFkbWluLWFkbWluLTMyYnl0ZXMtcA==
+  caEncryptionKey: nPdWJaI6QlJ899m5lSvYmWY7UnO175V1FnGqZRL+tgc=
 
 postgres:
   image: timescale/timescaledb:2.17.2-pg16

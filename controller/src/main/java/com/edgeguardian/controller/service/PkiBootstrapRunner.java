@@ -3,21 +3,22 @@ package com.edgeguardian.controller.service;
 import com.edgeguardian.controller.model.Organization;
 import com.edgeguardian.controller.repository.OrganizationCaRepository;
 import com.edgeguardian.controller.repository.OrganizationRepository;
-import java.util.List;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
 import org.springframework.stereotype.Component;
 
+import java.util.List;
+
 @Slf4j
 @Component
 @RequiredArgsConstructor
 public class PkiBootstrapRunner implements ApplicationRunner {
 
-    private final OrganizationRepository organizationRepository;
     private final OrganizationCaRepository caRepository;
     private final CertificateAuthorityService caService;
+    private final OrganizationRepository organizationRepository;
 
     @Override
     public void run(ApplicationArguments args) {

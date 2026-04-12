@@ -4,16 +4,6 @@ import com.edgeguardian.controller.config.CaProperties;
 import com.edgeguardian.controller.model.OrganizationCa;
 import com.edgeguardian.controller.repository.OrganizationCaRepository;
 import com.edgeguardian.controller.service.CaKeyEncryption;
-import java.security.GeneralSecurityException;
-import java.security.KeyPair;
-import java.security.KeyPairGenerator;
-import java.security.cert.X509Certificate;
-import java.security.spec.ECGenParameterSpec;
-import java.time.Duration;
-import java.time.Instant;
-import java.util.Date;
-import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.bouncycastle.asn1.x500.X500Name;
@@ -25,6 +15,17 @@ import org.bouncycastle.cert.jcajce.JcaX509CertificateConverter;
 import org.bouncycastle.operator.jcajce.JcaContentSignerBuilder;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Component;
+
+import java.security.GeneralSecurityException;
+import java.security.KeyPair;
+import java.security.KeyPairGenerator;
+import java.security.cert.X509Certificate;
+import java.security.spec.ECGenParameterSpec;
+import java.time.Duration;
+import java.time.Instant;
+import java.util.Date;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 @Slf4j
 @Component
