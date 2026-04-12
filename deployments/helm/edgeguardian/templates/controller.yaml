@@ -1,13 +1,15 @@
+{{- if .Values.secrets.controller.create }}
 apiVersion: v1
 kind: Secret
 metadata:
-  name: controller-secrets
+  name: {{ .Values.secrets.controller.existingSecret }}
   labels:
     {{- include "edgeguardian.componentLabels" (dict "ctx" . "component" "controller") | nindent 4 }}
 type: Opaque
 stringData:
-  ca_encryption_key: {{ .Values.controller.caEncryptionKey | quote }}
+  ca_encryption_key: {{ .Values.controller.caEncryptionKey | default "" | quote }}
 ---
+{{- end }}
 apiVersion: v1
 kind: Service
 metadata:

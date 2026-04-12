@@ -1,7 +1,8 @@
+{{- if .Values.secrets.emqxAdmin.create }}
 apiVersion: v1
 kind: Secret
 metadata:
-  name: emqx-admin
+  name: {{ .Values.secrets.emqxAdmin.existingSecret }}
   labels:
     {{- include "edgeguardian.componentLabels" (dict "ctx" . "component" "emqx") | nindent 4 }}
 type: Opaque
@@ -9,10 +10,12 @@ stringData:
   username: admin
   password: {{ .Values.emqx.dashboardPassword | quote }}
 ---
+{{- end }}
+{{- if .Values.secrets.emqxMqtt.create }}
 apiVersion: v1
 kind: Secret
 metadata:
-  name: emqx-mqtt-users
+  name: {{ .Values.secrets.emqxMqtt.existingSecret }}
   labels:
     {{- include "edgeguardian.componentLabels" (dict "ctx" . "component" "emqx") | nindent 4 }}
 type: Opaque
@@ -22,6 +25,7 @@ stringData:
   bootstrap_username: {{ .Values.emqx.mqttUsers.bootstrapUsername | quote }}
   bootstrap_password: {{ .Values.emqx.mqttUsers.bootstrapPassword | quote }}
 ---
+{{- end }}
 apiVersion: v1
 kind: ConfigMap
 metadata:

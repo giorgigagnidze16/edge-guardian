@@ -1,0 +1,57 @@
+{{- if .Values.ingress.enabled }}
+{{- $base := required "ingress.baseDomain is required when ingress.enabled" .Values.ingress.baseDomain }}
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: edgeguardian
+  labels:
+    {{- include "edgeguardian.labels" . | nindent 4 }}
+  annotations:
+    {{- if .Values.ingress.tls.enabled }}
+    cert-manager.io/cluster-issuer: {{ .Values.ingress.tls.clusterIssuer | quote }}
+    {{- end }}
+    {{- with .Values.ingress.annotations }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+spec:
+  ingressClassName: {{ .Values.ingress.className }}
+  {{- if .Values.ingress.tls.enabled }}
+  tls:
+    - hosts:
+        - ui.{{ $base }}
+        - keycloak.{{ $base }}
+        - controller.{{ $base }}
+      secretName: {{ .Values.ingress.tls.secretName }}
+  {{- end }}
+  rules:
+    - host: ui.{{ $base }}
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: ui
+                port:
+                  number: 3000
+    - host: keycloak.{{ $base }}
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: keycloak
+                port:
+                  number: 9090
+    - host: controller.{{ $base }}
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: controller
+                port:
+                  number: 8443
+{{- end }}

@@ -1,0 +1,86 @@
+image:
+  tag: latest
+
+ui:
+  image:
+    tag: latest
+  keycloakIssuerUrl: http://localhost:30090/realms/edgeguardian
+  nextAuthUrl: http://localhost:30080
+  nextAuthSecret: ZGV2LW9ubHktbmV4dGF1dGgtc2VjcmV0LWFkbWluLWFkbWluLS0=
+  keycloakClientSecret: edgeguardian-ui-secret
+
+externalAccess:
+  mode: loadBalancer
+  nodePorts:
+    controller: 30443
+    emqxMtls: 30883
+    emqxBootstrap: 31883
+    ui: 30080
+    keycloak: 30090
+
+ingress:
+  enabled: false
+
+controller:
+  replicas: 1
+  resources:
+    requests: { cpu: 200m, memory: 512Mi }
+    limits:   { memory: 1Gi }
+  crlUrl: http://edgeguardian-controller:8443/api/v1/pki/crl
+  keycloakIssuerUri: http://keycloak:9090/kc/realms/edgeguardian
+  caEncryptionKey: ZGV2LW9ubHktY2Eta2V5LWFkbWluLWFkbWluLTMyYnl0ZXMtcA==
+
+postgres:
+  image: timescale/timescaledb:2.17.2-pg16
+  storage: 10Gi
+  credentials:
+    database: edgeguardian
+    username: admin
+    password: admin
+
+keycloak:
+  image: quay.io/keycloak/keycloak:26.0
+  admin:
+    username: admin
+    password: admin
+
+minio:
+  image: minio/minio:RELEASE.2024-12-18T13-15-44Z
+  storage: 20Gi
+  credentials:
+    username: admin
+    password: adminadmin
+
+loki:
+  image: grafana/loki:3.3.0
+  storage: 10Gi
+
+grafana:
+  image: grafana/grafana:11.4.0
+  storage: 5Gi
+  admin:
+    username: admin
+    password: admin
+
+emqx:
+  image: emqx/emqx:5.8
+  storage: 5Gi
+  dashboardPassword: admin
+  mqttUsers:
+    controllerUsername: controller
+    controllerPassword: admin
+    bootstrapUsername: bootstrap
+    bootstrapPassword: admin
+
+pkiBootstrap:
+  image: alpine/k8s:1.31.1
+
+secrets:
+  postgres:    { create: true, existingSecret: postgres-credentials }
+  keycloak:    { create: true, existingSecret: keycloak-admin }
+  emqxAdmin:   { create: true, existingSecret: emqx-admin }
+  emqxMqtt:    { create: true, existingSecret: emqx-mqtt-users }
+  minio:       { create: true, existingSecret: minio-credentials }
+  grafana:     { create: true, existingSecret: grafana-admin }
+  ui:          { create: true, existingSecret: ui-secrets }
+  controller:  { create: true, existingSecret: controller-secrets }

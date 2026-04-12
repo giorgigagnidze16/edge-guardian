@@ -1,7 +1,8 @@
+{{- if .Values.secrets.postgres.create }}
 apiVersion: v1
 kind: Secret
 metadata:
-  name: postgres-credentials
+  name: {{ .Values.secrets.postgres.existingSecret }}
   labels:
     {{- include "edgeguardian.componentLabels" (dict "ctx" . "component" "postgres") | nindent 4 }}
 type: Opaque
@@ -10,6 +11,7 @@ stringData:
   username: {{ .Values.postgres.credentials.username | quote }}
   password: {{ .Values.postgres.credentials.password | quote }}
 ---
+{{- end }}
 apiVersion: v1
 kind: Service
 metadata:

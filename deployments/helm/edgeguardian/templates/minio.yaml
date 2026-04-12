@@ -1,7 +1,8 @@
+{{- if .Values.secrets.minio.create }}
 apiVersion: v1
 kind: Secret
 metadata:
-  name: minio-credentials
+  name: {{ .Values.secrets.minio.existingSecret }}
   labels:
     {{- include "edgeguardian.componentLabels" (dict "ctx" . "component" "minio") | nindent 4 }}
 type: Opaque
@@ -9,6 +10,7 @@ stringData:
   username: {{ .Values.minio.credentials.username | quote }}
   password: {{ .Values.minio.credentials.password | quote }}
 ---
+{{- end }}
 apiVersion: v1
 kind: Service
 metadata:

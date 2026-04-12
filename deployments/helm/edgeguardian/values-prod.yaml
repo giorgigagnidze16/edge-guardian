@@ -1,0 +1,77 @@
+image:
+  tag: 0.2.0
+
+ui:
+  image:
+    tag: 0.2.0
+  keycloakIssuerUrl: ""
+  nextAuthUrl: ""
+
+externalAccess:
+  mode: clusterIP
+
+ingress:
+  enabled: true
+  className: nginx
+  annotations:
+    nginx.ingress.kubernetes.io/proxy-body-size: "16m"
+    nginx.ingress.kubernetes.io/backend-protocol: "HTTP"
+  baseDomain: ""
+  tls:
+    enabled: true
+    secretName: edgeguardian-tls
+    clusterIssuer: letsencrypt-prod
+
+controller:
+  replicas: 2
+  resources:
+    requests: { cpu: 500m, memory: 1Gi }
+    limits:   { memory: 2Gi }
+  crlUrl: ""
+  keycloakIssuerUri: ""
+
+postgres:
+  image: timescale/timescaledb:2.17.2-pg16
+  storage: 100Gi
+  credentials:
+    database: edgeguardian
+    username: edgeguardian
+
+keycloak:
+  image: quay.io/keycloak/keycloak:26.0
+
+minio:
+  image: minio/minio:RELEASE.2024-12-18T13-15-44Z
+  storage: 500Gi
+  credentials:
+    username: edgeguardian
+
+loki:
+  image: grafana/loki:3.3.0
+  storage: 100Gi
+
+grafana:
+  image: grafana/grafana:11.4.0
+  storage: 10Gi
+  admin:
+    username: admin
+
+emqx:
+  image: emqx/emqx:5.8
+  storage: 20Gi
+  mqttUsers:
+    controllerUsername: controller
+    bootstrapUsername: bootstrap
+
+pkiBootstrap:
+  image: alpine/k8s:1.31.1
+
+secrets:
+  postgres:    { create: true, existingSecret: postgres-credentials }
+  keycloak:    { create: true, existingSecret: keycloak-admin }
+  emqxAdmin:   { create: true, existingSecret: emqx-admin }
+  emqxMqtt:    { create: true, existingSecret: emqx-mqtt-users }
+  minio:       { create: true, existingSecret: minio-credentials }
+  grafana:     { create: true, existingSecret: grafana-admin }
+  ui:          { create: true, existingSecret: ui-secrets }
+  controller:  { create: true, existingSecret: controller-secrets }

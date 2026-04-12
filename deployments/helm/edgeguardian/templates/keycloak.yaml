@@ -1,7 +1,8 @@
+{{- if .Values.secrets.keycloak.create }}
 apiVersion: v1
 kind: Secret
 metadata:
-  name: keycloak-admin
+  name: {{ .Values.secrets.keycloak.existingSecret }}
   labels:
     {{- include "edgeguardian.componentLabels" (dict "ctx" . "component" "keycloak") | nindent 4 }}
 type: Opaque
@@ -9,6 +10,7 @@ stringData:
   username: {{ .Values.keycloak.admin.username | quote }}
   password: {{ .Values.keycloak.admin.password | quote }}
 ---
+{{- end }}
 apiVersion: v1
 kind: ConfigMap
 metadata:

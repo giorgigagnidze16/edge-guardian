@@ -1,7 +1,8 @@
+{{- if .Values.secrets.ui.create }}
 apiVersion: v1
 kind: Secret
 metadata:
-  name: ui-secrets
+  name: {{ .Values.secrets.ui.existingSecret }}
   labels:
     {{- include "edgeguardian.componentLabels" (dict "ctx" . "component" "ui") | nindent 4 }}
 type: Opaque
@@ -9,6 +10,7 @@ stringData:
   nextauth_secret: {{ .Values.ui.nextAuthSecret | quote }}
   keycloak_client_secret: {{ .Values.ui.keycloakClientSecret | quote }}
 ---
+{{- end }}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
