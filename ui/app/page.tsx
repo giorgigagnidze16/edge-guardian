@@ -78,7 +78,7 @@ export default function LandingPage() {
               </p>
               <div className="mt-10 flex flex-wrap gap-4">
                 <SignInButton size="lg" className="px-10 text-base font-bold h-13">
-                  Get Started Free
+                  Get Started
                 </SignInButton>
                 <a
                   href="#terminal"
@@ -396,7 +396,7 @@ export default function LandingPage() {
                 size="lg"
                 className="mt-10 px-12 h-13 text-base font-bold shadow-lg shadow-primary/25 hover:shadow-xl hover:shadow-primary/30"
               >
-                Get Started Free
+                Get Started
               </SignInButton>
               <p className="mt-5 text-sm text-muted-foreground">
                 Google &amp; GitHub SSO available

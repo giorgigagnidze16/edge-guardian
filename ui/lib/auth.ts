@@ -1,8 +1,6 @@
 import NextAuth from "next-auth";
 import Keycloak from "next-auth/providers/keycloak";
 
-// Single URL for browser + server: Keycloak is proxied under /kc by the UI's
-// Next.js rewrite (see next.config.ts). No split-brain.
 const issuer =
   process.env.KEYCLOAK_ISSUER ?? "http://localhost:3000/kc/realms/edgeguardian";
 
@@ -39,13 +37,15 @@ export const { handlers, auth } = NextAuth({
         token.expiresAt = account.expires_at;
       }
 
-      // Return early if the access token has not expired
       if (typeof token.expiresAt === "number" && Date.now() < token.expiresAt * 1000) {
         return token;
       }
 
-      // Access token expired — try to refresh
-      if (!token.refreshToken) return token;
+      if (!token.refreshToken) {
+        token.error = "RefreshTokenError";
+        return token;
+      }
+
       try {
         const response = await fetch(`${issuer}/protocol/openid-connect/token`, {
           method: "POST",
@@ -58,21 +58,31 @@ export const { handlers, auth } = NextAuth({
           }),
         });
 
-        const refreshed = await response.json();
-        if (!response.ok) throw refreshed;
+        if (response.ok) {
+          const refreshed = await response.json();
+          token.accessToken = refreshed.access_token;
+          token.refreshToken = refreshed.refresh_token ?? token.refreshToken;
+          token.expiresAt = Math.floor(Date.now() / 1000) + refreshed.expires_in;
+          delete token.error;
+          return token;
+        }
 
-        token.accessToken = refreshed.access_token;
-        token.refreshToken = refreshed.refresh_token ?? token.refreshToken;
-        token.expiresAt = Math.floor(Date.now() / 1000) + refreshed.expires_in;
+        if (response.status >= 400 && response.status < 500) {
+          const body = await response.json().catch(() => ({}));
+          if (body.error === "invalid_grant") {
+            token.error = "RefreshTokenError";
+          }
+        }
+        return token;
       } catch {
-        // Refresh failed — force re-login
-        token.error = "RefreshTokenError";
+        return token;
       }
-
-      return token;
     },
     async session({ session, token }) {
       session.accessToken = token.accessToken as string;
+      if (token.error) {
+        (session as { error?: string }).error = token.error as string;
+      }
       return session;
     },
   },
