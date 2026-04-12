@@ -75,7 +75,10 @@ spec:
             - name: SPRING_DATASOURCE_PASSWORD
               valueFrom: { secretKeyRef: { name: postgres-credentials, key: password } }
             - name: KEYCLOAK_ISSUER_URI
-              value: {{ .Values.controller.keycloakIssuerUri | quote }}
+              valueFrom:
+                configMapKeyRef: { name: edgeguardian-runtime-urls, key: KEYCLOAK_ISSUER_URL }
+            - name: KEYCLOAK_JWK_SET_URI
+              value: "http://keycloak:9090/kc/realms/edgeguardian/protocol/openid-connect/certs"
             - name: EDGEGUARDIAN_CONTROLLER_MQTT_BROKER_URL
               value: tcp://emqx:1883
             - name: EDGEGUARDIAN_CONTROLLER_MQTT_USERNAME
