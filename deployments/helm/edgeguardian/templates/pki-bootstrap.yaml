@@ -21,7 +21,7 @@ metadata:
     "helm.sh/hook-delete-policy": before-hook-creation
 rules:
   - apiGroups: [""]
-    resources: [secrets]
+    resources: [secrets, configmaps]
     verbs: [get, create, patch, update]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
@@ -38,6 +38,40 @@ roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: Role
   name: pki-bootstrap
+subjects:
+  - kind: ServiceAccount
+    name: pki-bootstrap
+    namespace: {{ .Release.Namespace }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ .Release.Name }}-pki-bootstrap-nodes
+  labels:
+    {{- include "edgeguardian.componentLabels" (dict "ctx" . "component" "pki-bootstrap") | nindent 4 }}
+  annotations:
+    "helm.sh/hook": pre-install,pre-upgrade
+    "helm.sh/hook-weight": "-10"
+    "helm.sh/hook-delete-policy": before-hook-creation
+rules:
+  - apiGroups: [""]
+    resources: [nodes]
+    verbs: [get, list]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: {{ .Release.Name }}-pki-bootstrap-nodes
+  labels:
+    {{- include "edgeguardian.componentLabels" (dict "ctx" . "component" "pki-bootstrap") | nindent 4 }}
+  annotations:
+    "helm.sh/hook": pre-install,pre-upgrade
+    "helm.sh/hook-weight": "-10"
+    "helm.sh/hook-delete-policy": before-hook-creation
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: {{ .Release.Name }}-pki-bootstrap-nodes
 subjects:
   - kind: ServiceAccount
     name: pki-bootstrap
@@ -105,4 +139,26 @@ spec:
                 --from-file=ca.crt=ca.crt \
                 --dry-run=client -o yaml | kubectl apply -f -
 
-              echo "PKI bootstrap complete"
+              echo "PKI bootstrap complete — detecting node IP for runtime URLs"
+
+              NODE_IP=$(kubectl get nodes -o jsonpath='{.items[0].status.addresses[?(@.type=="ExternalIP")].address}')
+              if [ -z "$NODE_IP" ]; then
+                NODE_IP=$(kubectl get nodes -o jsonpath='{.items[0].status.addresses[?(@.type=="InternalIP")].address}')
+              fi
+              if [ -z "$NODE_IP" ]; then
+                echo "ERROR: could not detect node IP"
+                exit 1
+              fi
+
+              UI_PORT={{ .Values.externalAccess.nodePorts.ui }}
+              KC_PORT={{ .Values.externalAccess.nodePorts.keycloak }}
+              NEXTAUTH_URL="http://${NODE_IP}:${UI_PORT}"
+              KC_ISSUER="http://${NODE_IP}:${KC_PORT}/realms/edgeguardian"
+
+              kubectl -n "$NS" create configmap edgeguardian-runtime-urls \
+                --from-literal=NEXTAUTH_URL="$NEXTAUTH_URL" \
+                --from-literal=KEYCLOAK_ISSUER_URL="$KC_ISSUER" \
+                --from-literal=NODE_IP="$NODE_IP" \
+                --dry-run=client -o yaml | kubectl apply -f -
+
+              echo "Runtime URLs: UI=$NEXTAUTH_URL  Keycloak=$KC_ISSUER"

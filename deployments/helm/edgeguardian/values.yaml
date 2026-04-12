@@ -8,15 +8,33 @@ image:
   tag: latest
   pullPolicy: IfNotPresent
 
+# ---- UI ----------------------------------------------------------------------
+ui:
+  image:
+    repository: edgeguardian/ui
+    tag: latest
+    pullPolicy: IfNotPresent
+  # Browser-reachable URL of the Keycloak realm (OIDC issuer). Must match the URL
+  # the Next.js server calls too, because Keycloak validates the `iss` claim.
+  # Override per-cluster: --set ui.keycloakIssuerUrl=http://<minikube-ip>:30090/realms/edgeguardian
+  keycloakIssuerUrl: http://localhost:30090/realms/edgeguardian
+  keycloakClientId: edgeguardian-ui
+  keycloakClientSecret: ""
+  # NextAuth session cookie encryption key. Generate: openssl rand -base64 32
+  nextAuthSecret: "dev-only-not-for-production-abcdef0123456789abcdef0123456789"
+  nextAuthUrl: http://localhost:30080
+
 # ---- Service exposure --------------------------------------------------------
 # externalAccess: off ⇒ everything is ClusterIP only (prod: use Ingress separately)
-# externalAccess: nodePort ⇒ emqx-external + edgeguardian-controller exposed on fixed ports
+# externalAccess: nodePort ⇒ external services exposed on fixed ports
 externalAccess:
   mode: nodePort
   nodePorts:
     controller: 30443
     emqxMtls: 30883
     emqxBootstrap: 31883
+    ui: 30080
+    keycloak: 30090
 
 # ---- Controller --------------------------------------------------------------
 controller:

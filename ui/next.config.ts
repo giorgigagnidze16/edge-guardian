@@ -1,6 +1,14 @@
 import type { NextConfig } from "next";
 
+const apiUpstream = process.env.INTERNAL_API_URL ?? "http://controller:8443";
+
 const nextConfig: NextConfig = {
+  output: "standalone",
+  async rewrites() {
+    return [
+      { source: "/api/v1/:path*", destination: `${apiUpstream}/api/v1/:path*` },
+    ];
+  },
   experimental: {
     // Tree-shake barrel exports for heavy libraries
     optimizePackageImports: [

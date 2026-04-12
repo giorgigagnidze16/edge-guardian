@@ -1,0 +1,84 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: keycloak-init-client-script
+  labels:
+    {{- include "edgeguardian.componentLabels" (dict "ctx" . "component" "keycloak-init-client") | nindent 4 }}
+data:
+  init.sh: |
+    set -eu
+    apk add --no-cache curl >/dev/null
+    KC="http://keycloak:9090"
+    REALM="edgeguardian"
+    CLIENT_ID="edgeguardian-ui"
+
+    i=1
+    while [ $i -le 60 ]; do
+      if curl -sf -o /dev/null "$KC/realms/$REALM/.well-known/openid-configuration"; then
+        break
+      fi
+      sleep 5
+      i=$((i + 1))
+    done
+
+    TOKEN=$(curl -sf -X POST "$KC/realms/master/protocol/openid-connect/token" \
+      -d "grant_type=password" -d "client_id=admin-cli" \
+      -d "username=$KC_ADMIN" -d "password=$KC_PASS" \
+      | sed 's/.*"access_token":"\([^"]*\)".*/\1/')
+
+    if [ -z "$TOKEN" ]; then
+      echo "ERROR: failed to obtain Keycloak admin token"
+      exit 1
+    fi
+
+    CLIENT_UUID=$(curl -sf -H "Authorization: Bearer $TOKEN" \
+      "$KC/admin/realms/$REALM/clients?clientId=$CLIENT_ID" \
+      | sed 's/^\[//;s/\].*$//' | sed 's/.*"id":"\([^"]*\)".*/\1/')
+
+    if [ -z "$CLIENT_UUID" ]; then
+      echo "ERROR: client $CLIENT_ID not found in realm $REALM"
+      exit 1
+    fi
+
+    BODY="{\"redirectUris\":[\"http://localhost:3000/*\",\"$NEXTAUTH_URL/*\"],\"webOrigins\":[\"+\"]}"
+    curl -sf -X PUT -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
+      "$KC/admin/realms/$REALM/clients/$CLIENT_UUID" -d "$BODY"
+
+    echo "Keycloak client $CLIENT_ID redirect URIs set to $NEXTAUTH_URL"
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: keycloak-init-client
+  labels:
+    {{- include "edgeguardian.componentLabels" (dict "ctx" . "component" "keycloak-init-client") | nindent 4 }}
+  annotations:
+    "helm.sh/hook": post-install,post-upgrade
+    "helm.sh/hook-weight": "10"
+    "helm.sh/hook-delete-policy": before-hook-creation
+spec:
+  backoffLimit: 5
+  ttlSecondsAfterFinished: 600
+  template:
+    spec:
+      restartPolicy: OnFailure
+      containers:
+        - name: init
+          image: alpine:3.20
+          env:
+            - name: KC_ADMIN
+              valueFrom: { secretKeyRef: { name: keycloak-admin, key: username } }
+            - name: KC_PASS
+              valueFrom: { secretKeyRef: { name: keycloak-admin, key: password } }
+            - name: NEXTAUTH_URL
+              valueFrom:
+                configMapKeyRef: { name: edgeguardian-runtime-urls, key: NEXTAUTH_URL }
+          command: ["sh", "/scripts/init.sh"]
+          volumeMounts:
+            - name: script
+              mountPath: /scripts
+      volumes:
+        - name: script
+          configMap:
+            name: keycloak-init-client-script
+            defaultMode: 0755

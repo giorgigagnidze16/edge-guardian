@@ -34,6 +34,24 @@ spec:
   selector:
     {{- include "edgeguardian.componentSelector" (dict "ctx" . "component" "keycloak") | nindent 4 }}
 ---
+apiVersion: v1
+kind: Service
+metadata:
+  name: keycloak-external
+  labels:
+    {{- include "edgeguardian.componentLabels" (dict "ctx" . "component" "keycloak") | nindent 4 }}
+spec:
+  type: {{ if eq .Values.externalAccess.mode "nodePort" }}NodePort{{ else }}ClusterIP{{ end }}
+  ports:
+    - name: http
+      port: 9090
+      targetPort: http
+      {{- if eq .Values.externalAccess.mode "nodePort" }}
+      nodePort: {{ .Values.externalAccess.nodePorts.keycloak }}
+      {{- end }}
+  selector:
+    {{- include "edgeguardian.componentSelector" (dict "ctx" . "component" "keycloak") | nindent 4 }}
+---
 apiVersion: apps/v1
 kind: Deployment
 metadata:

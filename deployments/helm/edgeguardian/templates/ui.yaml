@@ -1,0 +1,100 @@
+apiVersion: v1
+kind: Secret
+metadata:
+  name: ui-secrets
+  labels:
+    {{- include "edgeguardian.componentLabels" (dict "ctx" . "component" "ui") | nindent 4 }}
+type: Opaque
+stringData:
+  nextauth_secret: {{ .Values.ui.nextAuthSecret | quote }}
+  keycloak_client_secret: {{ .Values.ui.keycloakClientSecret | quote }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ui
+  labels:
+    {{- include "edgeguardian.componentLabels" (dict "ctx" . "component" "ui") | nindent 4 }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "edgeguardian.componentSelector" (dict "ctx" . "component" "ui") | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "edgeguardian.componentLabels" (dict "ctx" . "component" "ui") | nindent 8 }}
+    spec:
+      containers:
+        - name: ui
+          image: "{{ .Values.ui.image.repository }}:{{ .Values.ui.image.tag }}"
+          imagePullPolicy: {{ .Values.ui.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: 3000
+          env:
+            - name: INTERNAL_API_URL
+              value: http://controller:8443
+            - name: KEYCLOAK_ISSUER
+              valueFrom:
+                configMapKeyRef: { name: edgeguardian-runtime-urls, key: KEYCLOAK_ISSUER_URL }
+            - name: KEYCLOAK_CLIENT_ID
+              value: {{ .Values.ui.keycloakClientId | quote }}
+            - name: KEYCLOAK_CLIENT_SECRET
+              valueFrom:
+                secretKeyRef: { name: ui-secrets, key: keycloak_client_secret }
+            - name: NEXTAUTH_URL
+              valueFrom:
+                configMapKeyRef: { name: edgeguardian-runtime-urls, key: NEXTAUTH_URL }
+            - name: NEXTAUTH_SECRET
+              valueFrom:
+                secretKeyRef: { name: ui-secrets, key: nextauth_secret }
+          readinessProbe:
+            httpGet:
+              path: /
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 5
+            failureThreshold: 12
+          livenessProbe:
+            httpGet:
+              path: /
+              port: http
+            initialDelaySeconds: 30
+            periodSeconds: 15
+          resources:
+            requests: { cpu: 50m, memory: 128Mi }
+            limits:   { memory: 512Mi }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ui
+  labels:
+    {{- include "edgeguardian.componentLabels" (dict "ctx" . "component" "ui") | nindent 4 }}
+spec:
+  type: ClusterIP
+  ports:
+    - name: http
+      port: 3000
+      targetPort: http
+  selector:
+    {{- include "edgeguardian.componentSelector" (dict "ctx" . "component" "ui") | nindent 4 }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ui-external
+  labels:
+    {{- include "edgeguardian.componentLabels" (dict "ctx" . "component" "ui") | nindent 4 }}
+spec:
+  type: {{ if eq .Values.externalAccess.mode "nodePort" }}NodePort{{ else }}ClusterIP{{ end }}
+  ports:
+    - name: http
+      port: 3000
+      targetPort: http
+      {{- if eq .Values.externalAccess.mode "nodePort" }}
+      nodePort: {{ .Values.externalAccess.nodePorts.ui }}
+      {{- end }}
+  selector:
+    {{- include "edgeguardian.componentSelector" (dict "ctx" . "component" "ui") | nindent 4 }}
