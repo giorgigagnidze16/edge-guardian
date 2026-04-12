@@ -1,14 +1,22 @@
 import NextAuth from "next-auth";
 import Keycloak from "next-auth/providers/keycloak";
 
-export const { handlers, signIn, signOut, auth } = NextAuth({
+const externalIssuer =
+  process.env.KEYCLOAK_ISSUER ?? "http://localhost:9090/realms/edgeguardian";
+const internalIssuer =
+  process.env.KEYCLOAK_INTERNAL_URL ?? externalIssuer;
+
+export const { handlers, auth } = NextAuth({
   providers: [
     Keycloak({
       clientId: process.env.KEYCLOAK_CLIENT_ID ?? "edgeguardian-ui",
       clientSecret: process.env.KEYCLOAK_CLIENT_SECRET ?? "",
-      issuer:
-        process.env.KEYCLOAK_ISSUER ??
-        "http://localhost:9090/realms/edgeguardian",
+      issuer: externalIssuer,
+      wellKnown: `${internalIssuer}/.well-known/openid-configuration`,
+      authorization: `${externalIssuer}/protocol/openid-connect/auth`,
+      token: `${internalIssuer}/protocol/openid-connect/token`,
+      userinfo: `${internalIssuer}/protocol/openid-connect/userinfo`,
+      jwks_endpoint: `${internalIssuer}/protocol/openid-connect/certs`,
     }),
   ],
   callbacks: {
@@ -30,10 +38,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       // Access token expired — try to refresh
       if (!token.refreshToken) return token;
       try {
-        const issuer =
-          process.env.KEYCLOAK_ISSUER ??
-          "http://localhost:9090/realms/edgeguardian";
-        const response = await fetch(`${issuer}/protocol/openid-connect/token`, {
+        const response = await fetch(`${internalIssuer}/protocol/openid-connect/token`, {
           method: "POST",
           headers: { "Content-Type": "application/x-www-form-urlencoded" },
           body: new URLSearchParams({

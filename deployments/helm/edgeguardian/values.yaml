@@ -28,7 +28,12 @@ ui:
 # externalAccess: off ⇒ everything is ClusterIP only (prod: use Ingress separately)
 # externalAccess: nodePort ⇒ external services exposed on fixed ports
 externalAccess:
-  mode: nodePort
+  # loadBalancer: services get an external IP (requires 'minikube tunnel' locally
+  #               or a real cloud LB in production). Works on Windows+Docker.
+  # nodePort:     services pinned to static NodePorts (only reachable when node
+  #               IP is routable from the client, e.g. Linux/macOS minikube).
+  # clusterIP:    internal only; use with an Ingress in front.
+  mode: loadBalancer
   nodePorts:
     controller: 30443
     emqxMtls: 30883

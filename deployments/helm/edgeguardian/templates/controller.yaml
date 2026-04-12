@@ -31,7 +31,7 @@ metadata:
     {{- include "edgeguardian.componentLabels" (dict "ctx" . "component" "controller") | nindent 4 }}
     app.kubernetes.io/exposure: external
 spec:
-  type: {{ if eq .Values.externalAccess.mode "nodePort" }}NodePort{{ else }}ClusterIP{{ end }}
+  type: {{ include "edgeguardian.externalServiceType" . }}
   ports:
     - name: http
       port: 8443

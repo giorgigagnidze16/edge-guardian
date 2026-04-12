@@ -1,0 +1,121 @@
+{{- if eq .Values.externalAccess.mode "loadBalancer" }}
+# For LoadBalancer mode the external IP is only known after the Service is
+# created. This post-install Job waits for the LB ingress IPs, overrides the
+# runtime-URLs ConfigMap (seeded at pre-install with the node IP, wrong for LB
+# mode) and rolls the UI so it picks up the correct NEXTAUTH_URL /
+# KEYCLOAK_ISSUER_URL.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: runtime-urls
+  labels:
+    {{- include "edgeguardian.componentLabels" (dict "ctx" . "component" "runtime-urls") | nindent 4 }}
+  annotations:
+    "helm.sh/hook": post-install,post-upgrade
+    "helm.sh/hook-weight": "0"
+    "helm.sh/hook-delete-policy": before-hook-creation
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: runtime-urls
+  labels:
+    {{- include "edgeguardian.componentLabels" (dict "ctx" . "component" "runtime-urls") | nindent 4 }}
+  annotations:
+    "helm.sh/hook": post-install,post-upgrade
+    "helm.sh/hook-weight": "0"
+    "helm.sh/hook-delete-policy": before-hook-creation
+rules:
+  - apiGroups: [""]
+    resources: [services, configmaps]
+    verbs: [get, list, watch, create, patch, update]
+  - apiGroups: [apps]
+    resources: [deployments]
+    verbs: [get, patch]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: runtime-urls
+  labels:
+    {{- include "edgeguardian.componentLabels" (dict "ctx" . "component" "runtime-urls") | nindent 4 }}
+  annotations:
+    "helm.sh/hook": post-install,post-upgrade
+    "helm.sh/hook-weight": "0"
+    "helm.sh/hook-delete-policy": before-hook-creation
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: runtime-urls
+subjects:
+  - kind: ServiceAccount
+    name: runtime-urls
+    namespace: {{ .Release.Namespace }}
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: runtime-urls
+  labels:
+    {{- include "edgeguardian.componentLabels" (dict "ctx" . "component" "runtime-urls") | nindent 4 }}
+  annotations:
+    "helm.sh/hook": post-install,post-upgrade
+    "helm.sh/hook-weight": "5"
+    "helm.sh/hook-delete-policy": before-hook-creation
+spec:
+  backoffLimit: 2
+  ttlSecondsAfterFinished: 600
+  template:
+    metadata:
+      labels:
+        {{- include "edgeguardian.componentLabels" (dict "ctx" . "component" "runtime-urls") | nindent 8 }}
+    spec:
+      serviceAccountName: runtime-urls
+      restartPolicy: OnFailure
+      containers:
+        - name: runtime-urls
+          image: {{ .Values.pkiBootstrap.image | quote }}
+          command:
+            - sh
+            - -c
+            - |
+              set -eux
+              NS="{{ .Release.Namespace }}"
+
+              get_lb_ip() {
+                kubectl -n "$NS" get svc "$1" \
+                  -o jsonpath='{.status.loadBalancer.ingress[0].ip}'
+              }
+
+              i=1
+              while [ $i -le 60 ]; do
+                UI_IP=$(get_lb_ip ui-external || true)
+                KC_IP=$(get_lb_ip keycloak-external || true)
+                if [ -n "$UI_IP" ] && [ -n "$KC_IP" ]; then
+                  break
+                fi
+                echo "Waiting for LoadBalancer IPs (ui=$UI_IP keycloak=$KC_IP) — requires 'minikube tunnel' running"
+                sleep 5
+                i=$((i + 1))
+              done
+
+              if [ -z "$UI_IP" ] || [ -z "$KC_IP" ]; then
+                echo "ERROR: LoadBalancer IPs not assigned after 5 min — run 'minikube tunnel' (admin)"
+                exit 1
+              fi
+
+              NEXTAUTH_URL="http://${UI_IP}:3000"
+              KC_HOSTNAME="http://${KC_IP}:9090"
+              KC_ISSUER="${KC_HOSTNAME}/realms/edgeguardian"
+              echo "LB IPs: UI=$NEXTAUTH_URL  Keycloak=$KC_ISSUER"
+
+              kubectl -n "$NS" create configmap edgeguardian-runtime-urls \
+                --from-literal=NEXTAUTH_URL="$NEXTAUTH_URL" \
+                --from-literal=KEYCLOAK_ISSUER_URL="$KC_ISSUER" \
+                --from-literal=KEYCLOAK_HOSTNAME_URL="$KC_HOSTNAME" \
+                --from-literal=NODE_IP="$UI_IP" \
+                --dry-run=client -o yaml | kubectl apply -f -
+
+              kubectl -n "$NS" rollout restart deployment/ui
+              kubectl -n "$NS" rollout restart deployment/keycloak
+{{- end }}

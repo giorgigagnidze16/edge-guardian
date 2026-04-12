@@ -38,3 +38,10 @@ app.kubernetes.io/name: {{ include "edgeguardian.name" .ctx }}
 app.kubernetes.io/instance: {{ .ctx.Release.Name }}
 app.kubernetes.io/component: {{ .component }}
 {{- end -}}
+
+{{- define "edgeguardian.externalServiceType" -}}
+{{- if eq .Values.externalAccess.mode "nodePort" -}}NodePort
+{{- else if eq .Values.externalAccess.mode "loadBalancer" -}}LoadBalancer
+{{- else -}}ClusterIP
+{{- end -}}
+{{- end -}}

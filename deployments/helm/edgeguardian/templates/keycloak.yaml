@@ -41,7 +41,7 @@ metadata:
   labels:
     {{- include "edgeguardian.componentLabels" (dict "ctx" . "component" "keycloak") | nindent 4 }}
 spec:
-  type: {{ if eq .Values.externalAccess.mode "nodePort" }}NodePort{{ else }}ClusterIP{{ end }}
+  type: {{ include "edgeguardian.externalServiceType" . }}
   ports:
     - name: http
       port: 9090
@@ -102,9 +102,21 @@ spec:
                 secretKeyRef: { name: keycloak-admin, key: password }
             - name: KC_HOSTNAME_STRICT
               value: "false"
+            - name: KC_HOSTNAME
+              valueFrom:
+                configMapKeyRef:
+                  name: edgeguardian-runtime-urls
+                  key: KEYCLOAK_HOSTNAME_URL
+                  optional: true
+            - name: KC_PROXY_HEADERS
+              value: xforwarded
           volumeMounts:
             - name: realm-import
               mountPath: /opt/keycloak/data/import
+            - name: theme
+              mountPath: /opt/keycloak/themes/edgeguardian/login
+            - name: theme-css
+              mountPath: /opt/keycloak/themes/edgeguardian/login/resources/css
           readinessProbe:
             httpGet:
               path: /health/ready
@@ -126,3 +138,9 @@ spec:
           configMap:
             name: keycloak-realm
             optional: true
+        - name: theme
+          configMap:
+            name: keycloak-theme-edgeguardian
+        - name: theme-css
+          configMap:
+            name: keycloak-theme-edgeguardian-css

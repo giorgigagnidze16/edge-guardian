@@ -38,6 +38,8 @@ spec:
             - name: KEYCLOAK_ISSUER
               valueFrom:
                 configMapKeyRef: { name: edgeguardian-runtime-urls, key: KEYCLOAK_ISSUER_URL }
+            - name: KEYCLOAK_INTERNAL_URL
+              value: "http://keycloak:9090/realms/edgeguardian"
             - name: KEYCLOAK_CLIENT_ID
               value: {{ .Values.ui.keycloakClientId | quote }}
             - name: KEYCLOAK_CLIENT_SECRET
@@ -49,6 +51,8 @@ spec:
             - name: NEXTAUTH_SECRET
               valueFrom:
                 secretKeyRef: { name: ui-secrets, key: nextauth_secret }
+            - name: AUTH_TRUST_HOST
+              value: "true"
           readinessProbe:
             httpGet:
               path: /
@@ -88,7 +92,7 @@ metadata:
   labels:
     {{- include "edgeguardian.componentLabels" (dict "ctx" . "component" "ui") | nindent 4 }}
 spec:
-  type: {{ if eq .Values.externalAccess.mode "nodePort" }}NodePort{{ else }}ClusterIP{{ end }}
+  type: {{ include "edgeguardian.externalServiceType" . }}
   ports:
     - name: http
       port: 3000

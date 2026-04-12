@@ -81,7 +81,7 @@ metadata:
     {{- include "edgeguardian.componentLabels" (dict "ctx" . "component" "emqx") | nindent 4 }}
     app.kubernetes.io/exposure: external
 spec:
-  type: {{ if eq .Values.externalAccess.mode "nodePort" }}NodePort{{ else }}ClusterIP{{ end }}
+  type: {{ include "edgeguardian.externalServiceType" . }}
   ports:
     - name: mqtts
       port: 8883
