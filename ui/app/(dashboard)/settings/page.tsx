@@ -410,17 +410,17 @@ export default function SettingsPage() {
                           <TableCell>
                             <div className="flex items-center justify-end gap-1">
                               <Button asChild variant="ghost" size="sm" className="h-8 gap-1">
-                                <a href={buildInstallerUrl("windows", "amd64", t.id)} download>
+                                <a href={buildInstallerUrl("windows", "amd64", t.token)} download>
                                   <Download className="h-3.5 w-3.5" /> Windows
                                 </a>
                               </Button>
                               <Button asChild variant="ghost" size="sm" className="h-8 gap-1">
-                                <a href={buildInstallerUrl("linux", "amd64", t.id)} download>
+                                <a href={buildInstallerUrl("linux", "amd64", t.token)} download>
                                   <Download className="h-3.5 w-3.5" /> Linux x64
                                 </a>
                               </Button>
                               <Button asChild variant="ghost" size="sm" className="h-8 gap-1">
-                                <a href={buildInstallerUrl("linux", "arm64", t.id)} download>
+                                <a href={buildInstallerUrl("linux", "arm64", t.token)} download>
                                   <Download className="h-3.5 w-3.5" /> Linux arm64
                                 </a>
                               </Button>

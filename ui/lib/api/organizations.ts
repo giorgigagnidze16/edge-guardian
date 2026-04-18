@@ -114,10 +114,10 @@ export async function deleteEnrollmentToken(token: string, tokenId: number): Pro
 export function buildInstallerUrl(
   os: "windows" | "linux",
   arch: "amd64" | "arm64",
-  tokenId: number,
+  tokenSecret: string,
 ): string {
   const base = process.env.NEXT_PUBLIC_API_URL ?? "";
-  const params = new URLSearchParams({ os, arch, tokenId: String(tokenId) });
+  const params = new URLSearchParams({ os, arch, token: tokenSecret });
   return `${base}/api/v1/agent/installer?${params.toString()}`;
 }
 

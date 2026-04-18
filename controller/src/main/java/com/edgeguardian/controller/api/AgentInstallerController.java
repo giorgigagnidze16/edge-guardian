@@ -24,9 +24,9 @@ public class AgentInstallerController {
 
     @GetMapping("/installer")
     public ResponseEntity<String> installer(@RequestParam String os,
-                                            @RequestParam Long tokenId) throws IOException {
+                                            @RequestParam String token) throws IOException {
         Os target = Os.of(os);
-        String body = installers.renderInstaller(target, tokenId);
+        String body = installers.renderInstaller(target, token);
         String filename = target == Os.WINDOWS ? "install.ps1" : "install.sh";
         return ResponseEntity.ok()
                 .header(HttpHeaders.CONTENT_TYPE, "text/plain; charset=utf-8")

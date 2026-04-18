@@ -28,12 +28,10 @@ public class AgentInstallerService {
     private final ArtifactStorageService storage;
     private final AgentInstallerProperties props;
 
-    public String renderInstaller(Os os, Long tokenId) throws IOException {
-        EnrollmentToken token = tokenRepository.findById(tokenId)
+    public String renderInstaller(Os os, String tokenSecret) throws IOException {
+        EnrollmentToken token = tokenRepository.findByToken(tokenSecret)
+                .filter(EnrollmentToken::isValid)
                 .orElseThrow(() -> new NotFoundException("Enrollment token not found"));
-        if (!token.isValid()) {
-            throw new NotFoundException("Enrollment token not found");
-        }
 
         String binaryUrl = props.controllerUrl() + "/api/v1/agent/binary?os=" + os.slug + "&arch=amd64";
         String systemdUnit = os == Os.LINUX ? loadResource("installers/edgeguardian-agent.service.tmpl") : "";

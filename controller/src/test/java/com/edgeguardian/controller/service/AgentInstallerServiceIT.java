@@ -41,31 +41,31 @@ class AgentInstallerServiceIT extends AbstractIntegrationTest {
     @Test
     void renderInstaller_revokedToken_throwsNotFound() {
         EnrollmentToken token = tokenRepository.save(freshToken().revoked(true).build());
-        assertRejected(token.getId());
+        assertRejected(token.getToken());
     }
 
     @Test
     void renderInstaller_expiredToken_throwsNotFound() {
         EnrollmentToken token = tokenRepository.save(freshToken()
                 .expiresAt(Instant.now().minusSeconds(60)).build());
-        assertRejected(token.getId());
+        assertRejected(token.getToken());
     }
 
     @Test
     void renderInstaller_exhaustedMaxUses_throwsNotFound() {
         EnrollmentToken token = tokenRepository.save(freshToken().maxUses(1).useCount(1).build());
-        assertRejected(token.getId());
+        assertRejected(token.getToken());
     }
 
     @Test
-    void renderInstaller_unknownTokenId_throwsNotFound() {
-        assertRejected(99_999L);
+    void renderInstaller_unknownToken_throwsNotFound() {
+        assertRejected("egt_does_not_exist");
     }
 
     @Test
     void renderInstaller_validToken_substitutesPlaceholders() throws Exception {
         EnrollmentToken token = tokenRepository.save(freshToken().build());
-        String script = installers.renderInstaller(Os.WINDOWS, token.getId());
+        String script = installers.renderInstaller(Os.WINDOWS, token.getToken());
 
         assertThat(script)
                 .doesNotContain("{{CONTROLLER_URL}}")
@@ -75,8 +75,8 @@ class AgentInstallerServiceIT extends AbstractIntegrationTest {
                 .contains("os=windows&arch=amd64");
     }
 
-    private void assertRejected(Long tokenId) {
-        assertThatThrownBy(() -> installers.renderInstaller(Os.WINDOWS, tokenId))
+    private void assertRejected(String tokenSecret) {
+        assertThatThrownBy(() -> installers.renderInstaller(Os.WINDOWS, tokenSecret))
                 .isInstanceOf(NotFoundException.class)
                 .hasMessageContaining("Enrollment token not found");
     }
