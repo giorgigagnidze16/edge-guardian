@@ -80,8 +80,18 @@ export async function addMember(token: string, data: { email: string; role: stri
   });
 }
 
-export async function removeMember(token: string, userId: number): Promise<void> {
-  return apiFetch(`/api/v1/organization/members/${userId}`, { method: "DELETE", token });
+export async function removeMember(token: string, memberId: number): Promise<void> {
+  return apiFetch(`/api/v1/organization/members/${memberId}`, { method: "DELETE", token });
+}
+
+export async function updateMemberRole(
+  token: string,
+  memberId: number,
+  role: string,
+): Promise<OrgMember> {
+  return apiFetch<OrgMember>(`/api/v1/organization/members/${memberId}`, {
+    method: "PATCH", token, body: JSON.stringify({ role }),
+  });
 }
 
 export async function listEnrollmentTokens(token: string): Promise<EnrollmentToken[]> {

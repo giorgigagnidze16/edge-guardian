@@ -134,7 +134,7 @@ export default function SettingsPage() {
   });
 
   const removeMemberMutation = useMutation({
-    mutationFn: (userId: number) => removeMember(token, userId),
+    mutationFn: (memberId: number) => removeMember(token, memberId),
     onSuccess: () => {
       toast.success("Member removed");
       queryClient.invalidateQueries({ queryKey: ["org-members", orgId] });
@@ -326,7 +326,7 @@ export default function SettingsPage() {
                               </div>
                             </TableCell>
                             <TableCell>
-                              <Badge variant={m.role === "owner" ? "default" : "secondary"}>
+                              <Badge variant={m.role === "OWNER" ? "default" : "secondary"}>
                                 {m.role}
                               </Badge>
                             </TableCell>
@@ -615,7 +615,7 @@ export default function SettingsPage() {
         description={`Remove ${removeMemberTarget?.displayName ?? removeMemberTarget?.email?.split("@")[0] ?? "this member"} from the organization?`}
         confirmLabel="Remove"
         variant="destructive"
-        onConfirm={() => { if (removeMemberTarget) removeMemberMutation.mutate(removeMemberTarget.userId); }}
+        onConfirm={() => { if (removeMemberTarget) removeMemberMutation.mutate(removeMemberTarget.id); }}
         loading={removeMemberMutation.isPending}
       />
       <ConfirmDialog

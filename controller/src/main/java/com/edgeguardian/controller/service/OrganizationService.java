@@ -1,5 +1,7 @@
 package com.edgeguardian.controller.service;
 
+import com.edgeguardian.controller.exception.ConflictException;
+import com.edgeguardian.controller.exception.NotFoundException;
 import com.edgeguardian.controller.model.OrgRole;
 import com.edgeguardian.controller.model.Organization;
 import com.edgeguardian.controller.model.OrganizationMember;
@@ -8,14 +10,19 @@ import com.edgeguardian.controller.repository.OrganizationMemberRepository;
 import com.edgeguardian.controller.repository.OrganizationRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.web.server.ResponseStatusException;
 
 import java.util.List;
 import java.util.Optional;
 
+/**
+ * Owns organizations and their membership graph.
+ *
+ * <p>Invariant: the OWNER is assigned at org creation and never changes. To remove the
+ * owner, delete the whole organization. Role mutations on other members cannot produce
+ * or remove an OWNER.
+ */
 @Slf4j
 @Service
 @RequiredArgsConstructor
@@ -27,22 +34,14 @@ public class OrganizationService {
     @Transactional
     public Organization create(String name, String slug, String description, Long ownerUserId) {
         if (organizationRepository.existsBySlug(slug)) {
-            throw new ResponseStatusException(HttpStatus.CONFLICT, "Organization slug already exists");
+            throw new ConflictException("Organization slug already exists");
         }
-        Organization org = Organization.builder()
-                .name(name)
-                .slug(slug)
-                .description(description)
-                .build();
-        org = organizationRepository.save(org);
-
-        OrganizationMember membership = OrganizationMember.builder()
-                .organizationId(org.getId())
-                .userId(ownerUserId)
-                .orgRole(OrgRole.OWNER)
-                .build();
-        memberRepository.save(membership);
-
+        Organization org = organizationRepository.save(Organization.builder()
+                .name(name).slug(slug).description(description)
+                .build());
+        memberRepository.save(OrganizationMember.builder()
+                .organizationId(org.getId()).userId(ownerUserId).orgRole(OrgRole.OWNER)
+                .build());
         return org;
     }
 
@@ -53,15 +52,14 @@ public class OrganizationService {
 
     @Transactional(readOnly = true)
     public List<Organization> findByUser(Long userId) {
-        List<OrganizationMember> memberships = memberRepository.findByUserId(userId);
-        List<Long> orgIds = memberships.stream().map(OrganizationMember::getOrganizationId).toList();
+        List<Long> orgIds = memberRepository.findByUserId(userId).stream()
+                .map(OrganizationMember::getOrganizationId).toList();
         return organizationRepository.findAllById(orgIds);
     }
 
     @Transactional
     public Organization update(Long orgId, String name, String description) {
-        Organization org = organizationRepository.findById(orgId)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Organization not found"));
+        Organization org = requireOrg(orgId);
         org.setName(name);
         if (description != null) org.setDescription(description);
         return organizationRepository.save(org);
@@ -72,52 +70,80 @@ public class OrganizationService {
         organizationRepository.deleteById(orgId);
     }
 
+    @Transactional
+    public void createPersonalOrganization(User user) {
+        String slug = generateUniqueSlug(user.getEmail());
+        create(user.getDisplayName() + "'s Organization", slug, "Personal organization", user.getId());
+        log.info("Personal org created for user {}: {}", user.getEmail(), slug);
+    }
+
     @Transactional(readOnly = true)
     public List<OrganizationMember> getMembers(Long orgId) {
         return memberRepository.findByOrganizationId(orgId);
     }
 
+    /**
+     * Adds a non-OWNER member. Ownership is fixed at org creation.
+     */
     @Transactional
     public OrganizationMember addMember(Long orgId, Long userId, OrgRole role) {
+        rejectOwnerRole(role);
         if (memberRepository.existsByOrganizationIdAndUserId(orgId, userId)) {
-            throw new ResponseStatusException(HttpStatus.CONFLICT, "User is already a member");
+            throw new ConflictException("User is already a member");
         }
-        OrganizationMember member = OrganizationMember.builder()
-                .organizationId(orgId)
-                .userId(userId)
-                .orgRole(role)
-                .build();
-        return memberRepository.save(member);
+        return memberRepository.save(OrganizationMember.builder()
+                .organizationId(orgId).userId(userId).orgRole(role)
+                .build());
     }
 
+    /**
+     * Updates a member's role. Cannot target the OWNER or promote anyone <em>to</em> OWNER.
+     */
     @Transactional
-    public OrganizationMember updateMemberRole(Long orgId, Long userId, OrgRole role) {
-        OrganizationMember member = memberRepository.findByOrganizationIdAndUserId(orgId, userId)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Member not found"));
+    public OrganizationMember updateMemberRole(Long memberId, Long orgId, OrgRole role) {
+        rejectOwnerRole(role);
+        OrganizationMember member = requireMemberInOrg(memberId, orgId);
+        if (member.getOrgRole() == OrgRole.OWNER) {
+            throw new ConflictException("The organization owner's role cannot be changed");
+        }
         member.setOrgRole(role);
         return memberRepository.save(member);
     }
 
-    // Returns 404 on cross-tenant access to avoid leaking member existence.
+    /**
+     * Removes a member. OWNER cannot be removed — to leave, delete the whole organization.
+     */
     @Transactional
-    public void removeMemberById(Long memberId, Long expectedOrgId) {
-        OrganizationMember member = memberRepository.findById(memberId)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Member not found"));
-        if (!expectedOrgId.equals(member.getOrganizationId())) {
-            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Member not found");
+    public void removeMemberById(Long memberId, Long orgId) {
+        OrganizationMember member = requireMemberInOrg(memberId, orgId);
+        if (member.getOrgRole() == OrgRole.OWNER) {
+            throw new ConflictException(
+                    "The organization owner cannot be removed — delete the organization instead");
         }
         memberRepository.delete(member);
     }
 
-    @Transactional
-    public void createPersonalOrganization(User user) {
-        String slug = generateUniqueSlug(user.getEmail());
-        Organization org = create(
-                user.getDisplayName() + "'s Organization",
-                slug,
-                "Personal organization",
-                user.getId());
-        log.info("Personal org created for user {}: {}", user.getEmail(), slug);
+    private Organization requireOrg(Long orgId) {
+        return organizationRepository.findById(orgId)
+                .orElseThrow(() -> new NotFoundException("Organization not found"));
+    }
+
+    /**
+     * Cross-tenant lookups return "not found" to avoid leaking member existence.
+     */
+    private OrganizationMember requireMemberInOrg(Long memberId, Long orgId) {
+        OrganizationMember member = memberRepository.findById(memberId)
+                .orElseThrow(() -> new NotFoundException("Member not found"));
+        if (!orgId.equals(member.getOrganizationId())) {
+            throw new NotFoundException("Member not found");
+        }
+        return member;
+    }
+
+    private void rejectOwnerRole(OrgRole role) {
+        if (role == OrgRole.OWNER) {
+            throw new ConflictException("OWNER role cannot be assigned — it is fixed at org creation");
+        }
     }
 
     private String generateUniqueSlug(String email) {

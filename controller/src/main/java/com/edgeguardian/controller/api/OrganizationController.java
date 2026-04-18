@@ -27,9 +27,9 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class OrganizationController {
 
-    private final OrganizationService organizationService;
-    private final UserRepository userRepository;
     private final AuditService auditService;
+    private final UserRepository userRepository;
+    private final OrganizationService organizationService;
 
     @GetMapping
     @PreAuthorize("@orgSecurity.hasMinRole(authentication, 'VIEWER')")
@@ -53,8 +53,6 @@ public class OrganizationController {
     public void delete(@AuthenticationPrincipal TenantPrincipal principal) {
         organizationService.delete(principal.organizationId());
     }
-
-    // --- Members ---
 
     @GetMapping("/members")
     @PreAuthorize("@orgSecurity.hasMinRole(authentication, 'VIEWER')")
@@ -80,6 +78,18 @@ public class OrganizationController {
         return MemberDto.from(member, user);
     }
 
+    @PatchMapping("/members/{memberId}")
+    @PreAuthorize("@orgSecurity.hasMinRole(authentication, 'ADMIN')")
+    public MemberDto updateMemberRole(@PathVariable Long memberId,
+                                      @RequestBody UpdateMemberRoleRequest request,
+                                      @AuthenticationPrincipal TenantPrincipal principal) {
+        OrganizationMember updated = organizationService.updateMemberRole(
+                memberId, principal.organizationId(), OrgRole.valueOf(request.role()));
+        User user = userRepository.findById(updated.getUserId())
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "User not found"));
+        return MemberDto.from(updated, user);
+    }
+
     @DeleteMapping("/members/{memberId}")
     @PreAuthorize("@orgSecurity.hasMinRole(authentication, 'ADMIN')")
     @ResponseStatus(HttpStatus.NO_CONTENT)
@@ -87,8 +97,6 @@ public class OrganizationController {
                              @AuthenticationPrincipal TenantPrincipal principal) {
         organizationService.removeMemberById(memberId, principal.organizationId());
     }
-
-    // --- Audit Log ---
 
     @GetMapping("/audit-log")
     @PreAuthorize("@orgSecurity.hasMinRole(authentication, 'VIEWER')")
