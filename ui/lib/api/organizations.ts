@@ -111,6 +111,16 @@ export async function deleteEnrollmentToken(token: string, tokenId: number): Pro
   return apiFetch(`/api/v1/enrollment-tokens/${tokenId}`, { method: "DELETE", token });
 }
 
+export function buildInstallerUrl(
+  os: "windows" | "linux",
+  arch: "amd64" | "arm64",
+  tokenId: number,
+): string {
+  const base = process.env.NEXT_PUBLIC_API_URL ?? "";
+  const params = new URLSearchParams({ os, arch, tokenId: String(tokenId) });
+  return `${base}/api/v1/agent/installer?${params.toString()}`;
+}
+
 export async function listApiKeys(token: string): Promise<ApiKeyEntry[]> {
   return apiFetch<ApiKeyEntry[]>("/api/v1/api-keys", { token });
 }

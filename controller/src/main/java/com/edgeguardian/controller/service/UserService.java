@@ -4,7 +4,6 @@ import com.edgeguardian.controller.model.User;
 import com.edgeguardian.controller.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -19,11 +18,37 @@ public class UserService {
     private final UserRepository userRepository;
     private final OrganizationService organizationService;
 
+    /**
+     * Resolves or creates the local {@link User} mirror for a Keycloak JWT.
+     *
+     * <p>Lookup order:
+     * <ol>
+     *   <li>by Keycloak subject — normal sign-in;
+     *   <li>by email — rebinds the Keycloak id when the IdP was reset (same human, new
+     *       {@code sub}) so the unique-email constraint doesn't collide;
+     *   <li>otherwise register a new user and bootstrap their personal org.
+     * </ol>
+     */
     @Transactional
     public User syncFromJwt(Jwt jwt) {
-        return userRepository.findByKeycloakId(jwt.getSubject())
-                .map(existing -> updateProfile(existing, jwt))
-                .orElseGet(() -> registerNewUser(jwt));
+        String keycloakId = jwt.getSubject();
+        String email = jwt.getClaimAsString("email");
+
+        Optional<User> byKeycloak = userRepository.findByKeycloakId(keycloakId);
+        if (byKeycloak.isPresent()) {
+            return updateProfile(byKeycloak.get(), jwt);
+        }
+
+        Optional<User> byEmail = email != null ? userRepository.findByEmail(email) : Optional.empty();
+        if (byEmail.isPresent()) {
+            User existing = byEmail.get();
+            log.info("Rebinding Keycloak id for {}: {} -> {}",
+                    email, existing.getKeycloakId(), keycloakId);
+            existing.setKeycloakId(keycloakId);
+            return updateProfile(existing, jwt);
+        }
+
+        return registerNewUser(jwt);
     }
 
     @Transactional(readOnly = true)
@@ -56,25 +81,15 @@ public class UserService {
     }
 
     private User registerNewUser(Jwt jwt) {
-        String keycloakId = jwt.getSubject();
         String email = jwt.getClaimAsString("email");
         String name = jwt.getClaimAsString("name");
-
-        User user;
-        try {
-            user = userRepository.save(User.builder()
-                    .keycloakId(keycloakId)
-                    .email(email)
-                    .displayName(name != null ? name : email)
-                    .avatarUrl(jwt.getClaimAsString("picture"))
-                    .build());
-        } catch (DataIntegrityViolationException e) {
-            return userRepository.findByKeycloakId(keycloakId)
-                    .orElseThrow(() -> new IllegalStateException(
-                            "User not found after concurrent insert", e));
-        }
-
-        log.info("New user synced from Keycloak: {} ({})", email, keycloakId);
+        User user = userRepository.save(User.builder()
+                .keycloakId(jwt.getSubject())
+                .email(email)
+                .displayName(name != null ? name : email)
+                .avatarUrl(jwt.getClaimAsString("picture"))
+                .build());
+        log.info("New user synced from Keycloak: {} ({})", email, user.getKeycloakId());
         organizationService.createPersonalOrganization(user);
         return user;
     }

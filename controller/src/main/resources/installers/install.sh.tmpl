@@ -1,0 +1,66 @@
+#!/usr/bin/env bash
+# EdgeGuardian agent installer (Linux). Generated per-token.
+set -euo pipefail
+
+CONTROLLER_URL="{{CONTROLLER_URL}}"
+BROKER_URL="{{BROKER_URL}}"
+MTLS_BROKER_URL="{{MTLS_BROKER_URL}}"
+BOOTSTRAP_PASSWORD="{{BOOTSTRAP_PASSWORD}}"
+ENROLLMENT_TOKEN="{{ENROLLMENT_TOKEN}}"
+BINARY_URL="{{BINARY_URL}}"
+
+INSTALL_DIR="/usr/local/bin"
+CONFIG_DIR="/etc/edgeguardian"
+DATA_DIR="/var/lib/edgeguardian"
+SERVICE_NAME="edgeguardian-agent"
+
+if [[ $EUID -ne 0 ]]; then
+  echo "This installer must run as root (sudo)." >&2
+  exit 1
+fi
+
+echo "[1/5] Downloading agent binary..."
+curl -fsSL "$BINARY_URL" -o "$INSTALL_DIR/edgeguardian-agent"
+chmod 0755 "$INSTALL_DIR/edgeguardian-agent"
+
+echo "[2/5] Writing config..."
+mkdir -p "$CONFIG_DIR" "$DATA_DIR"
+DEVICE_ID="$(hostname)-$(date +%s)"
+CONTROLLER_HOST="$(echo "$CONTROLLER_URL" | sed -E 's#https?://##; s#:[0-9]+$##; s#/.*$##')"
+CONTROLLER_PORT="$(echo "$CONTROLLER_URL" | sed -nE 's#.*:([0-9]+).*#\1#p')"
+CONTROLLER_PORT="${CONTROLLER_PORT:-443}"
+
+cat > "$CONFIG_DIR/agent.yaml" <<EOF
+device_id: ${DEVICE_ID}
+controller_address: ${CONTROLLER_HOST}
+controller_port: ${CONTROLLER_PORT}
+data_dir: ${DATA_DIR}
+reconcile_interval_seconds: 30
+log_level: info
+auth:
+  enrollment_token: ${ENROLLMENT_TOKEN}
+mqtt:
+  broker_url: ${BROKER_URL}
+  username: bootstrap
+  password: ${BOOTSTRAP_PASSWORD}
+  topic_root: edgeguardian
+  mtls_broker_url: ${MTLS_BROKER_URL}
+  ca_cert_path: ${DATA_DIR}/identity/ca.crt
+  identity_cert_path: ${DATA_DIR}/identity/identity.crt
+  identity_key_path: ${DATA_DIR}/identity/identity.key
+EOF
+chmod 0600 "$CONFIG_DIR/agent.yaml"
+
+echo "[3/5] Installing systemd unit..."
+cat > "/etc/systemd/system/${SERVICE_NAME}.service" <<'EOF'
+{{SYSTEMD_UNIT}}
+EOF
+
+echo "[4/5] Enabling + starting service..."
+systemctl daemon-reload
+systemctl enable "$SERVICE_NAME"
+systemctl restart "$SERVICE_NAME"
+
+echo "[5/5] Done. Status:"
+sleep 2
+systemctl --no-pager status "$SERVICE_NAME" | head -n 15 || true

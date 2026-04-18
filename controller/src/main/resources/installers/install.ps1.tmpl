@@ -1,0 +1,101 @@
+# EdgeGuardian agent installer (Windows). Generated per-token.
+#
+# Run from an Administrator PowerShell:
+#   Set-ExecutionPolicy Bypass -Scope Process -Force
+#   iwr "http://<controller>/api/v1/agent/installer?os=windows&tokenId=<id>" -UseBasicParsing | iex
+#
+# Or, if you downloaded install.ps1:
+#   Unblock-File .\install.ps1
+#   .\install.ps1
+$ErrorActionPreference = 'Stop'
+
+$ControllerUrl     = '{{CONTROLLER_URL}}'
+$BrokerUrl         = '{{BROKER_URL}}'
+$MtlsBrokerUrl     = '{{MTLS_BROKER_URL}}'
+$BootstrapPassword = '{{BOOTSTRAP_PASSWORD}}'
+$EnrollmentToken   = '{{ENROLLMENT_TOKEN}}'
+$BinaryUrl         = '{{BINARY_URL}}'
+
+$InstallDir  = 'C:\Program Files\EdgeGuardian'
+$ConfigDir   = 'C:\ProgramData\EdgeGuardian'
+$DataDir     = Join-Path $ConfigDir 'data'
+$ServiceName = 'EdgeGuardianAgent'
+$BinaryPath  = Join-Path $InstallDir 'edgeguardian-agent.exe'
+$ConfigPath  = Join-Path $ConfigDir 'agent.yaml'
+
+try {
+    if (-not ([Security.Principal.WindowsPrincipal] `
+              [Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole(
+              [Security.Principal.WindowsBuiltInRole] 'Administrator')) {
+        throw "This script must run from an Administrator PowerShell (Start menu -> PowerShell -> Run as administrator)."
+    }
+
+    Write-Host "[1/5] Downloading agent binary from $BinaryUrl ..."
+    New-Item -ItemType Directory -Force -Path $InstallDir | Out-Null
+    New-Item -ItemType Directory -Force -Path $ConfigDir  | Out-Null
+    New-Item -ItemType Directory -Force -Path $DataDir    | Out-Null
+    Invoke-WebRequest -Uri $BinaryUrl -OutFile $BinaryPath -UseBasicParsing
+
+    Write-Host "[2/5] Writing config to $ConfigPath ..."
+    $uri = [Uri]$ControllerUrl
+    $controllerHost = $uri.Host
+    $controllerPort = $uri.Port
+    if ($controllerPort -le 0) { $controllerPort = if ($uri.Scheme -eq 'https') { 443 } else { 80 } }
+    $deviceId = "$env:COMPUTERNAME-$(Get-Date -Format 'yyyyMMddHHmmss')"
+    $dataDirYaml = $DataDir -replace '\\','/'
+    $yaml = @"
+device_id: $deviceId
+controller_address: $controllerHost
+controller_port: $controllerPort
+data_dir: $dataDirYaml
+reconcile_interval_seconds: 30
+log_level: info
+auth:
+  enrollment_token: $EnrollmentToken
+mqtt:
+  broker_url: $BrokerUrl
+  username: bootstrap
+  password: $BootstrapPassword
+  topic_root: edgeguardian
+  mtls_broker_url: $MtlsBrokerUrl
+  ca_cert_path: $dataDirYaml/identity/ca.crt
+  identity_cert_path: $dataDirYaml/identity/identity.crt
+  identity_key_path: $dataDirYaml/identity/identity.key
+"@
+    Set-Content -Path $ConfigPath -Value $yaml -Encoding UTF8
+
+    Write-Host "[3/5] Registering Windows service..."
+    if (Get-Service -Name $ServiceName -ErrorAction SilentlyContinue) {
+        Stop-Service $ServiceName -Force -ErrorAction SilentlyContinue
+        $scDelete = Start-Process sc.exe -ArgumentList 'delete', $ServiceName `
+            -NoNewWindow -Wait -PassThru
+        if ($scDelete.ExitCode -ne 0) { throw "sc.exe delete failed with code $($scDelete.ExitCode)" }
+        Start-Sleep -Seconds 1
+    }
+    $binaryPathName = "`"$BinaryPath`" -config `"$ConfigPath`""
+    New-Service -Name $ServiceName `
+                -BinaryPathName $binaryPathName `
+                -DisplayName 'EdgeGuardian Agent' `
+                -Description 'EdgeGuardian edge device agent' `
+                -StartupType Automatic | Out-Null
+
+    Write-Host "[4/5] Starting service..."
+    Start-Service $ServiceName
+
+    Write-Host "[5/5] Done. Status:"
+    Start-Sleep -Seconds 2
+    Get-Service $ServiceName | Format-Table -AutoSize
+    Write-Host "Install succeeded."
+}
+catch {
+    Write-Host ""
+    Write-Host "*** INSTALL FAILED ***" -ForegroundColor Red
+    Write-Host "Error: $($_.Exception.Message)" -ForegroundColor Red
+    Write-Host ""
+    Write-Host "Stack trace:" -ForegroundColor Yellow
+    Write-Host $_.ScriptStackTrace
+}
+finally {
+    Write-Host ""
+    Read-Host "Press Enter to close"
+}

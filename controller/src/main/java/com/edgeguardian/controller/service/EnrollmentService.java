@@ -49,7 +49,7 @@ public class EnrollmentService {
 
     @Transactional(readOnly = true)
     public List<EnrollmentToken> findByOrganization(Long orgId) {
-        return tokenRepository.findByOrganizationId(orgId);
+        return tokenRepository.findByOrganizationIdAndRevokedFalse(orgId);
     }
 
     @Transactional

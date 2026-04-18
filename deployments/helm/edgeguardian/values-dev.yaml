@@ -29,6 +29,14 @@ controller:
   crlUrl: http://edgeguardian-controller:8443/api/v1/pki/crl
   keycloakIssuerUri: http://keycloak:9090/kc/realms/edgeguardian
   caEncryptionKey: nPdWJaI6QlJ899m5lSvYmWY7UnO175V1FnGqZRL+tgc=
+  agentInstaller:
+    # URLs baked into the installer script; must be reachable from the host where
+    # the agent will run. For minikube + docker driver on Windows/Mac the minikube
+    # IP isn't routable, so we use localhost and require the operator to run
+    # `scripts/dev-tunnel.ps1` (or `dev-tunnel.sh`) to forward NodePorts.
+    controllerUrl: http://localhost:30443
+    brokerUrl:     tcp://localhost:31883
+    mtlsBrokerUrl: ssl://localhost:30883
 
 postgres:
   image: timescale/timescaledb:2.17.2-pg16

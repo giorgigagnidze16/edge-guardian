@@ -11,6 +11,7 @@ import {
   listEnrollmentTokens,
   createEnrollmentToken,
   deleteEnrollmentToken,
+  buildInstallerUrl,
   listApiKeys,
   createApiKey,
   deleteApiKey,
@@ -55,7 +56,7 @@ import {
 } from "@/components/ui/table";
 import { Skeleton } from "@/components/ui/skeleton";
 import { EmptyState } from "@/components/empty-state";
-import { Users, Key, KeyRound, Plus, Copy, Trash2, Check } from "lucide-react";
+import { Users, Key, KeyRound, Plus, Copy, Trash2, Check, Download } from "lucide-react";
 import { useState } from "react";
 import { formatDistanceToNow } from "date-fns";
 import { toast } from "sonner";
@@ -407,9 +408,26 @@ export default function SettingsPage() {
                           <TableCell>{t.useCount} / {t.maxUses}</TableCell>
                           <TableCell>{t.expiresAt ? formatDistanceToNow(new Date(t.expiresAt), { addSuffix: true }) : "Never"}</TableCell>
                           <TableCell>
-                            <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={() => setDeleteTokenTarget(t)}>
-                              <Trash2 className="h-4 w-4" />
-                            </Button>
+                            <div className="flex items-center justify-end gap-1">
+                              <Button asChild variant="ghost" size="sm" className="h-8 gap-1">
+                                <a href={buildInstallerUrl("windows", "amd64", t.id)} download>
+                                  <Download className="h-3.5 w-3.5" /> Windows
+                                </a>
+                              </Button>
+                              <Button asChild variant="ghost" size="sm" className="h-8 gap-1">
+                                <a href={buildInstallerUrl("linux", "amd64", t.id)} download>
+                                  <Download className="h-3.5 w-3.5" /> Linux x64
+                                </a>
+                              </Button>
+                              <Button asChild variant="ghost" size="sm" className="h-8 gap-1">
+                                <a href={buildInstallerUrl("linux", "arm64", t.id)} download>
+                                  <Download className="h-3.5 w-3.5" /> Linux arm64
+                                </a>
+                              </Button>
+                              <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={() => setDeleteTokenTarget(t)}>
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            </div>
                           </TableCell>
                         </TableRow>
                       ))

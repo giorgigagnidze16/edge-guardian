@@ -19,6 +19,7 @@ import org.springframework.web.filter.OncePerRequestFilter;
 import java.io.IOException;
 import java.time.Instant;
 import java.util.List;
+import java.util.Set;
 
 /**
  * Authenticates agent requests via the X-Device-Token header (tokens issued during enrollment).
@@ -29,6 +30,11 @@ import java.util.List;
 public class DeviceTokenAuthFilter extends OncePerRequestFilter {
 
     private static final String DEVICE_TOKEN_HEADER = "X-Device-Token";
+    private static final Set<String> PUBLIC_AGENT_PATHS = Set.of(
+            "/api/v1/agent/enroll",
+            "/api/v1/agent/installer",
+            "/api/v1/agent/binary"
+    );
 
     private final DeviceTokenRepository deviceTokenRepository;
     private final DeviceRepository deviceRepository;
@@ -39,7 +45,7 @@ public class DeviceTokenAuthFilter extends OncePerRequestFilter {
         if (!path.startsWith("/api/v1/agent/")) {
             return true;
         }
-        return path.equals("/api/v1/agent/enroll");
+        return PUBLIC_AGENT_PATHS.contains(path);
     }
 
     @Override

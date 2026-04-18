@@ -5,3 +5,8 @@ edgeguardian:
       access-key: edgeguardian
       secret-key: edgeguardian-dev
       bucket: ota-artifacts
+    agent-installer:
+      controller-url: ${EDGEGUARDIAN_AGENT_INSTALLER_CONTROLLER_URL:http://localhost:30443}
+      broker-url: ${EDGEGUARDIAN_AGENT_INSTALLER_BROKER_URL:tcp://localhost:31883}
+      mtls-broker-url: ${EDGEGUARDIAN_AGENT_INSTALLER_MTLS_BROKER_URL:ssl://localhost:30883}
+      bootstrap-password: ${EDGEGUARDIAN_AGENT_INSTALLER_BOOTSTRAP_PASSWORD:admin}

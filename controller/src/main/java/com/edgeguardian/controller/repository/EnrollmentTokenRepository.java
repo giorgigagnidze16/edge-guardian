@@ -13,4 +13,6 @@ public interface EnrollmentTokenRepository extends JpaRepository<EnrollmentToken
     Optional<EnrollmentToken> findByToken(String token);
 
     List<EnrollmentToken> findByOrganizationId(Long organizationId);
+
+    List<EnrollmentToken> findByOrganizationIdAndRevokedFalse(Long organizationId);
 }

@@ -1,0 +1,16 @@
+[Unit]
+Description=EdgeGuardian Agent
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/edgeguardian-agent -config /etc/edgeguardian/agent.yaml
+Restart=on-failure
+RestartSec=5
+User=root
+StateDirectory=edgeguardian
+WorkingDirectory=/var/lib/edgeguardian
+
+[Install]
+WantedBy=multi-user.target

@@ -35,7 +35,9 @@ public class SecurityConfig {
                 .addFilterBefore(deviceTokenAuthFilter, BearerTokenAuthenticationFilter.class)
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/actuator/health/**", "/actuator/info").permitAll()
-                        .requestMatchers("/api/v1/agent/enroll").permitAll()
+                        .requestMatchers("/api/v1/agent/enroll",
+                                "/api/v1/agent/installer",
+                                "/api/v1/agent/binary").permitAll()
                         .requestMatchers("/api/v1/pki/crl/**", "/api/v1/pki/ca-bundle",
                                 "/api/v1/pki/broker-ca").permitAll()
                         .requestMatchers("/api/v1/**").authenticated()
