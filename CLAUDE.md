@@ -48,24 +48,34 @@ npm run lint     # ESLint
 ```
 
 ### Infrastructure (Kubernetes via Helm)
-```bash
-# On minikube: eval $(minikube docker-env) first
-cd controller && ./gradlew bootBuildImage
 
-cd deployments/helm/edgeguardian
-helm dependency update                 # pulls cert-manager + trust-manager subcharts
-helm install edgeguardian . --namespace edgeguardian --create-namespace --wait --timeout 10m
+Canonical dev bring-up (minikube) — one command:
+
+```bash
+./scripts/install.sh                   # builds controller + UI images into minikube's docker, helm upgrade --install with values-dev.yaml
 ```
 
-See `deployments/helm/edgeguardian/README.md` for the full bring-up sequence,
-first-org bootstrap, and NodePort mapping for edge devices. `helm install` is the
-only supported deployment path — docker-compose and Kustomize were removed.
+Manual equivalent:
+
+```bash
+eval $(minikube docker-env)
+cd controller && ./gradlew bootBuildImage
+cd ../ui && docker build -t edgeguardian/ui:latest .
+helm upgrade --install edgeguardian deployments/helm/edgeguardian \
+  -n edgeguardian --create-namespace \
+  -f deployments/helm/edgeguardian/values-dev.yaml
+```
+
+See `deployments/helm/edgeguardian/README.md` for prod setup (cert-manager + Let's Encrypt
+ClusterIssuer, `values-prod-secrets.yaml`), first-org bootstrap, and NodePort mapping for
+edge devices. `helm install` is the only supported deployment path — docker-compose and
+Kustomize were removed.
 
 ## Architecture
 
 **Go Agent** (<5MB binary, CGO_ENABLED=0): Runs on edge devices (RPi, Android, Windows, macOS). Reconciliation loop polls controller for desired state, diffs against actual, applies changes via plugins. Offline-first with BoltDB persistence and MQTT command channel. Watchdog binary supervises agent with crash recovery and OTA binary swap (exit code 42).
 
-**Spring Boot Controller** (Java 21, virtual threads): REST API for agent communication and dashboard. PostgreSQL with Flyway migrations. Keycloak OAuth2 for dashboard auth. Agent endpoints (`/api/v1/agent/*`) are unauthenticated; dashboard endpoints require JWT or API key. MQTT 5 via Eclipse Paho for telemetry ingestion and command publishing. Multi-tenant with organization-scoped resources.
+**Spring Boot Controller** (Java 21, virtual threads): REST API for dashboard + agent enrollment. PostgreSQL with Flyway migrations. Keycloak OAuth2 for dashboard auth. Only `/api/v1/agent/enroll` and the public PKI endpoints are unauthenticated — all other `/api/v1/**` paths require JWT or API key. Agent data-plane comms (heartbeat, telemetry, commands, logs, cert signing, OTA status) are MQTT 5 via Eclipse Paho, not HTTP. Multi-tenant with organization-scoped resources.
 
 **Next.js Dashboard**: 11-page app with Keycloak SSO via NextAuth. TanStack Query for server state. shadcn/ui components. Monaco editor for device manifests. API calls go to controller at `NEXT_PUBLIC_API_URL` (default `http://localhost:8443`).
 
@@ -76,15 +86,15 @@ only supported deployment path — docker-compose and Kustomize were removed.
 - **Agent OTA flow**: Controller stores artifacts → agent polls via heartbeat → downloads binary → watchdog swaps on exit code 42 → rollback on repeated crashes.
 - **Controller DTOs**: Separate DTO classes in `dto/` package for all API request/response types. Entities in `model/` are JPA-annotated.
 - **Controller security**: `SecurityConfig.java` — PKI endpoints (`/api/v1/pki/crl/**`, `/api/v1/pki/ca-bundle`, `/api/v1/pki/broker-ca`) and agent enroll are `permitAll`; everything under `/api/v1/**` requires JWT or API key; anyRequest is `denyAll`. Device/telemetry endpoints are org-scoped via `@PreAuthorize("@orgSecurity.hasMinRole(...)")` + `findByIdForOrganization` — cross-tenant access returns 404.
-- **Database migrations**: Flyway in `controller/src/main/resources/db/migration/` (V1-V8: devices, auth/tenancy, OTA, telemetry hypertable, commands, certificates, CRL, FK/indexes).
+- **Database migrations**: Flyway in `controller/src/main/resources/db/migration/` — `V1__core` (devices, users, orgs, API keys, enrollment tokens), `V2__ota`, `V3__commands`, `V4__pki` (cert requests, issued certs, CRL, org CAs), `V5__telemetry` (TimescaleDB hypertable + compression + retention), `V6__seed_default_org`.
 - **PKI / mTLS**: agents bootstrap on tcp/1883 with shared `bootstrap` credentials + CSR in enroll request; receive signed identity cert; reconnect on ssl/8883 with mTLS. cert-manager issues the broker server cert; trust-manager distributes its CA. Revocation: `CrlService.rebuild` + `EmqxAdminClient.kickout` fire on every revoke. Leaf certs carry a CDP extension pointing to `/api/v1/pki/crl/{orgId}.crl`.
 - **Integration tests**: Agent uses Docker container with systemd + Mosquitto (`//go:build integration`). Controller uses Testcontainers with PostgreSQL.
 - **UI API layer**: `lib/api-client.ts` wraps fetch with auth token injection. Domain-specific functions in `lib/api/`.
 
-## Dev Credentials (K8s dev overlay)
+## Dev Credentials
 
-Defined in `deployments/k8s/base/*/secrets.yaml`. Postgres `edgeguardian:edgeguardian-dev`,
-Keycloak admin `admin:admin`, EMQX dashboard `admin:admin-secret`, MQTT users
-`controller:controller-secret` + `bootstrap:bootstrap-secret`, MinIO
-`edgeguardian:edgeguardian-dev`, Grafana `admin:admin`. Override in prod overlays via
-SealedSecrets / ExternalSecrets.
+Defined in `deployments/helm/edgeguardian/values-dev.yaml`. Postgres `admin:admin`,
+Keycloak admin `admin:admin`, EMQX dashboard `admin:admin`, MQTT users
+`controller:admin` + `bootstrap:admin`, MinIO `admin:adminadmin`, Grafana `admin:admin`.
+For prod, copy `values-prod-secrets.yaml.example` to `values-prod-secrets.yaml` (gitignored)
+and pass it as a second `-f` to `helm upgrade --install`.

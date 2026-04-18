@@ -8,35 +8,44 @@ Instructions for Claude Code when working in the `controller/` directory.
 ./gradlew build            # Full build + tests (requires Docker)
 ./gradlew test             # Tests only (Testcontainers → real PostgreSQL)
 ./gradlew compileJava      # Fast compile check
-./gradlew bootRun          # Run locally (needs infra from deployments/docker-compose.yml)
+./gradlew bootRun          # Run locally (needs infra in a minikube cluster — see ../scripts/install.sh)
 ```
 
-Infrastructure must be running for `bootRun`: `docker compose -f ../deployments/docker-compose.yml up -d`
+Infrastructure runs in Kubernetes via Helm. For iterative backend work, bring up the full stack once
+with `../scripts/install.sh`, then either port-forward the dependencies you need
+(`kubectl -n edgeguardian port-forward svc/postgres 5432:5432`, etc.) or re-deploy the controller
+image into minikube by rebuilding with `./gradlew bootBuildImage` and rolling the deployment.
 
 ## Project Structure
 
 ```
 src/main/java/com/edgeguardian/controller/
-├── api/              # REST controllers (9 classes)
-├── config/           # Spring @Configuration + @ConfigurationProperties
+├── api/              # REST controllers (10 classes)
+├── config/           # Spring @Configuration + @ConfigurationProperties (incl. SecurityConfig)
 ├── dto/              # Request/response records — never expose entities directly
 ├── model/            # JPA @Entity classes + enums
 ├── mqtt/             # MQTT listeners (7) + CommandPublisher + MqttTopics utility
-├── repository/       # Spring Data JPA interfaces (18)
-├── security/         # Auth filters (JWT, API key, device token), OrgSecurity, TenantPrincipal
-├── service/          # Business logic (13 services)
+├── repository/       # Spring Data JPA interfaces (19)
+├── security/         # Auth filters (API key, device token, JWT converter), OrgSecurity, TenantPrincipal
+├── service/          # Business logic (19 top-level services + pki/ + result/ subpackages)
 └── EdgeGuardianControllerApplication.java
 
 src/main/resources/
 ├── application.yaml                  # Base config (port 8443, virtual threads)
 ├── application-{profile}.yaml        # Per-concern configs (db, mqtt, security, ca, storage, logging, monitoring, local)
-└── db/migration/V{1-6}__*.sql        # Flyway migrations
+└── db/migration/V{1-6}__*.sql        # Flyway migrations (core, ota, commands, pki, telemetry, seed_default_org)
 
-src/test/java/
+src/test/java/com/edgeguardian/controller/
 ├── AbstractIntegrationTest.java      # Testcontainers base (TimescaleDB)
 └── service/
-    ├── CertificateServiceTest.java   # Cert lifecycle: approval, rejection, compromise detection, renewal
-    └── DeviceRegistryTest.java       # Device registration and re-registration
+    ├── CertificateServiceTest.java       # Cert lifecycle: approval, rejection, compromise detection, renewal
+    ├── CrlServiceIT.java                 # CRL publication + EMQX kickout on revocation
+    ├── CrossTenantAccessTest.java        # Org-scoped isolation (findByIdForOrganization returns 404 cross-tenant)
+    ├── DeviceLifecycleServiceIT.java     # Lifecycle transitions against real DB
+    ├── DeviceLifecycleServiceTest.java   # Lifecycle unit tests
+    ├── DeviceRegistryTenancyTest.java    # Tenancy enforcement on registration
+    ├── DeviceRegistryTest.java           # Device registration and re-registration
+    └── EnrollmentWithCsrIT.java          # Agent enroll flow: bootstrap → CSR → signed cert
 ```
 
 ## Key Conventions
@@ -48,10 +57,11 @@ Controller -> Service -> Repository. Controllers never touch repositories direct
 All API responses use records from the `dto/` package. Entities in `model/` are JPA-annotated and must not leak into API responses. Each DTO has a `static from(Entity)` factory method.
 
 ### Security
-`SecurityConfig.java` defines two auth paths:
-- **Agent endpoints** (`/api/v1/agent/**`) — authenticated via `X-Device-Token` header (DeviceTokenAuthFilter)
-- **Dashboard endpoints** — JWT (Keycloak OAuth2) or `X-API-Key` header (ApiKeyAuthenticationFilter)
-- Authorization uses `@PreAuthorize("@orgSecurity.hasMinRole(authentication, 'ROLE')")` with hierarchy: VIEWER < OPERATOR < ADMIN < OWNER
+`config/SecurityConfig.java` defines the HTTP auth model (agent data-plane comms are MQTT-only):
+- **`permitAll`** — `/actuator/health/**`, `/actuator/info`, `/api/v1/agent/enroll` (bootstrap-credentials auth happens at the broker), and the public PKI endpoints: `/api/v1/pki/crl/**`, `/api/v1/pki/ca-bundle`, `/api/v1/pki/broker-ca`
+- **Authenticated** — everything else under `/api/v1/**` via JWT (Keycloak OAuth2) or `X-API-Key` header (ApiKeyAuthenticationFilter). `DeviceTokenAuthFilter` is registered but used only by legacy callers.
+- **`denyAll`** — any other path. Intentional backstop: new routes outside `/api/v1/` must opt in to a rule.
+- Authorization uses `@PreAuthorize("@orgSecurity.hasMinRole(authentication, 'ROLE')")` with hierarchy: VIEWER < OPERATOR < ADMIN < OWNER. Org-scoped repositories expose `findByIdForOrganization(...)` — cross-tenant access returns 404 rather than 403.
 
 ### MQTT
 - All listeners are in the `mqtt/` package, subscribe in `@PostConstruct`
@@ -73,9 +83,8 @@ Admin must revoke old certs and un-suspend the device before it can re-request.
 Every resource is scoped to an `organizationId`. The `TenantPrincipal` record carries `(organizationId, userId, identity, orgRole)` through the security context. Auto-created personal org on first Keycloak login.
 
 ### Database
-- PostgreSQL 16 with TimescaleDB extension for telemetry hypertable
-- Flyway migrations in `db/migration/` (V1 through V6)
-- Device telemetry uses time-series compression and retention policies
+- PostgreSQL 16 with TimescaleDB extension for the telemetry hypertable
+- Flyway migrations in `db/migration/`: `V1__core` (devices, auth/tenancy, API keys, enrollment tokens), `V2__ota`, `V3__commands`, `V4__pki`, `V5__telemetry` (hypertable + compression + retention), `V6__seed_default_org`
 - Unique constraints: `devices.device_id`, `users.keycloak_id`, `users.email`, `organizations.slug`, `device_tokens.device_id`
 
 ## What NOT to Do

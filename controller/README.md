@@ -18,18 +18,26 @@ Spring Boot backend for EdgeGuardian — fleet management, certificate authority
 
 ## Quick Start
 
+The full stack (controller + UI + PostgreSQL + Keycloak + EMQX + MinIO + Loki + Grafana) is deployed
+to a local minikube cluster via Helm. From the repo root:
+
 ```bash
-# 1. Start infrastructure (PostgreSQL, Keycloak, EMQX, MinIO, Loki, Grafana)
-docker compose -f ../deployments/docker-compose.yml up -d
-
-# 2. Provision EMQX MQTT users (run once after fresh start)
-docker compose -f ../deployments/docker-compose.yml run --rm emqx-init
-
-# 3. Run the controller
-./gradlew bootRun
+./scripts/install.sh          # builds controller image, UI image, helm install
 ```
 
-The controller starts on **port 8443**. Health check: `http://localhost:8443/actuator/health`
+The controller listens on **port 8443** inside the pod and is exposed at
+`http://<minikube-ip>:30443` for edge devices. Dashboard traffic goes through the UI at
+`http://<minikube-ip>:30080`. Health check: `GET /actuator/health`.
+
+For tight inner-loop iteration, rebuild the image and roll the deployment:
+
+```bash
+eval $(minikube docker-env)
+./gradlew bootBuildImage
+kubectl -n edgeguardian rollout restart deploy/controller
+```
+
+See `../deployments/helm/edgeguardian/README.md` for prod install and secrets management.
 
 ## Build & Test
 
@@ -82,7 +90,10 @@ Artifacts are uploaded to MinIO. Deployments target devices via label selectors.
 
 ## REST API
 
-All endpoints under `/api/v1/`. Dashboard endpoints require JWT or API key. Agent endpoints use device tokens.
+All endpoints under `/api/v1/`. Dashboard endpoints require JWT or API key. The only agent-facing
+HTTP endpoints are `/api/v1/agent/enroll` (bootstrap enrollment) and the public PKI endpoints
+(`/api/v1/pki/crl/**`, `/api/v1/pki/ca-bundle`, `/api/v1/pki/broker-ca`) — everything else an agent
+does flows over MQTT.
 
 | Path | Auth | Description |
 |------|------|-------------|
@@ -124,12 +135,15 @@ Managed via Spring profiles (`application-{profile}.yaml`):
 
 ## Dev Credentials
 
+Sourced from `../deployments/helm/edgeguardian/values-dev.yaml`. Override in prod via
+`values-prod-secrets.yaml`.
+
 | Service | Credentials |
 |---------|-------------|
-| PostgreSQL | `edgeguardian` / `edgeguardian-dev` |
+| PostgreSQL | `admin` / `admin` |
 | Keycloak admin | `admin` / `admin` |
-| EMQX dashboard | `admin` / `admin-secret` |
-| EMQX (controller) | `controller` / `controller-secret` |
-| EMQX (test device) | `test-device` / `test-device-secret` |
-| MinIO | `edgeguardian` / `edgeguardian-dev` |
+| EMQX dashboard | `admin` / `admin` |
+| EMQX MQTT (controller) | `controller` / `admin` |
+| EMQX MQTT (bootstrap) | `bootstrap` / `admin` |
+| MinIO | `admin` / `adminadmin` |
 | Grafana | `admin` / `admin` |
