@@ -78,6 +78,8 @@ spec:
               value: postgres
             - name: KC_DB_URL
               value: jdbc:postgresql://postgres:5432/edgeguardian
+            - name: KC_DB_SCHEMA
+              value: keycloak
             - name: KC_DB_USERNAME
               valueFrom:
                 secretKeyRef: { name: postgres-credentials, key: username }

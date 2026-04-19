@@ -38,7 +38,7 @@ src/main/resources/
 src/test/java/com/edgeguardian/controller/
 ├── AbstractIntegrationTest.java      # Testcontainers base (TimescaleDB)
 └── service/
-    ├── CertificateServiceTest.java       # Cert lifecycle: approval, rejection, compromise detection, renewal
+    ├── CertificateServiceTest.java       # Cert lifecycle: approval, rejection, re-enrollment supersede, renewal
     ├── CrlServiceIT.java                 # CRL publication + EMQX kickout on revocation
     ├── CrossTenantAccessTest.java        # Org-scoped isolation (findByIdForOrganization returns 404 cross-tenant)
     ├── DeviceLifecycleServiceIT.java     # Lifecycle transitions against real DB
@@ -71,13 +71,19 @@ All API responses use records from the `dto/` package. Entities in `model/` are 
 - The controller connects as MQTT user `controller` with full `edgeguardian/#` ACL access
 
 ### Certificate Security Model
-Compromise detection applies to ALL non-renewal cert requests (INITIAL and MANIFEST):
-- Device has valid cert + non-renewal request → BLOCKED, all certs revoked, device SUSPENDED
-- No valid cert + MANIFEST → auto-approved
-- No valid cert + INITIAL → PENDING (manual approval)
-- RENEWAL with valid currentSerial → auto-approved (old cert rotated)
+Re-enrollment is a first-class flow, not a compromise signal. Any still-valid
+cert for the same `(deviceId, name)` is auto-revoked with reason `SUPERSEDED`
+before a new one is issued; the event is audit-logged as `cert_superseded`
+with the superseded serials. Decision table:
 
-Admin must revoke old certs and un-suspend the device before it can re-request.
+- MANIFEST (agent-side re-enrollment) → supersede prior cert, auto-approve new cert
+- INITIAL (admin-mediated flow) → supersede prior cert, create PENDING request (manual approval)
+- RENEWAL with valid `currentSerial` → auto-approve, old cert rotated with reason `RENEWED` + `replacedBy` set
+
+Security is enforced upstream by the enrollment token (single-use or
+revocable); cross-device replay is caught there, not via heuristics on the
+cert-request side. For confirmed compromise, admin issues `revokeAllActiveForDevice`
++ rejects pending requests.
 
 ### Multi-Tenancy
 Every resource is scoped to an `organizationId`. The `TenantPrincipal` record carries `(organizationId, userId, identity, orgRole)` through the security context. Auto-created personal org on first Keycloak login.
@@ -94,4 +100,4 @@ Every resource is scoped to an `organizationId`. The `TenantPrincipal` record ca
 - Do not bypass the service layer from MQTT listeners
 - Do not hardcode topic strings - use `topicRoot` + `MqttTopics` utility
 - Do not add new Spring profiles without a corresponding `application-{name}.yaml`
-- Do not use `CertRequestType.MANIFEST` to skip security checks - compromise detection is intentionally applied to all non-renewal types
+- Do not bypass `CertificateService.processRequest` — the supersede-old-cert-on-reenroll behaviour lives there and is required for correctness of the CRL + broker kickout chain

@@ -1,6 +1,11 @@
 spring:
   datasource:
-    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/edgeguardian}
+    # currentSchema is the session search_path. `edgeguardian` first so our
+    # CREATEs / Flyway history land there and never collide with Keycloak
+    # (which owns the `keycloak` schema). `public` second so the TimescaleDB
+    # extension's functions (installed in public by default) resolve from
+    # our migrations without being explicitly qualified.
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/edgeguardian?currentSchema=edgeguardian,public}
     username: ${SPRING_DATASOURCE_USERNAME:edgeguardian}
     password: ${SPRING_DATASOURCE_PASSWORD:edgeguardian-dev}
     driver-class-name: org.postgresql.Driver
@@ -13,9 +18,13 @@ spring:
       hibernate:
         dialect: org.hibernate.dialect.PostgreSQLDialect
         format_sql: true
+        default_schema: edgeguardian
 
   flyway:
     enabled: true
     locations: classpath:db/migration
+    schemas: edgeguardian
+    default-schema: edgeguardian
+    create-schemas: true
     baseline-on-migrate: true
     baseline-version: 0

@@ -16,6 +16,9 @@ import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
+import java.time.Duration;
+import java.util.concurrent.Executors;
+
 /**
  * MQTT client bean wired from {@link MqttProperties}. A non-zero session
  * expiry keeps subscriptions alive across normal broker restarts; the
@@ -49,15 +52,50 @@ public class MqttConfig {
                 options.setPassword(props.password().getBytes());
             }
 
-            mqttClient.connect(options);
-            log.info("MQTT connected to {} as {} (sessionExpiry={}, keepAlive={})",
-                    props.brokerUrl(), props.clientId(),
-                    props.sessionExpiry(), props.keepAlive());
+            connectWithBackoff(options, props);
         } catch (MqttException e) {
-            log.warn("Failed to connect MQTT client to {} - device-plane unavailable: {}",
+            log.warn("Failed to create MQTT client to {}: {}",
                     props.brokerUrl(), e.getMessage());
         }
         return mqttClient;
+    }
+
+    /**
+     * Paho's {@code automaticReconnect} only engages after a successful first
+     * connect. If the broker isn't ready when the controller starts (ordering
+     * race between pods, or EMQX still booting), a single {@code connect()}
+     * that fails leaves the client permanently idle. Retry in the background
+     * until the first connect succeeds, so the controller is resilient to any
+     * startup order.
+     */
+    private void connectWithBackoff(MqttConnectionOptions options, MqttProperties props) {
+        Executors.newSingleThreadExecutor(r -> {
+            Thread t = new Thread(r, "mqtt-initial-connect");
+            t.setDaemon(true);
+            return t;
+        }).submit(() -> {
+            Duration backoff = Duration.ofSeconds(2);
+            Duration max = Duration.ofSeconds(30);
+            for (int attempt = 1; ; attempt++) {
+                try {
+                    mqttClient.connect(options);
+                    log.info("MQTT connected to {} as {} (attempt={}, sessionExpiry={}, keepAlive={})",
+                            props.brokerUrl(), props.clientId(), attempt,
+                            props.sessionExpiry(), props.keepAlive());
+                    return;
+                } catch (MqttException e) {
+                    log.warn("MQTT initial connect attempt {} to {} failed: {} - retry in {}",
+                            attempt, props.brokerUrl(), e.getMessage(), backoff);
+                    try { Thread.sleep(backoff.toMillis()); }
+                    catch (InterruptedException ie) {
+                        Thread.currentThread().interrupt();
+                        return;
+                    }
+                    backoff = backoff.multipliedBy(2);
+                    if (backoff.compareTo(max) > 0) backoff = max;
+                }
+            }
+        });
     }
 
     @PreDestroy
@@ -73,14 +111,16 @@ public class MqttConfig {
     }
 
     /**
-     * On successful reconnect, replays every registered subscription. Startup
-     * (reconnect=false) is a no-op — listener @PostConstruct handlers will
-     * call {@link MqttSubscriptions#register} to bind their topics.
+     * Replays every registered subscription on every successful connect —
+     * both the first one (initial connect may complete after listeners have
+     * already called register(), so their subscribe attempts were deferred)
+     * and every reconnect after a broker outage. {@link MqttSubscriptions}
+     * subscribe is idempotent, so replaying a binding that's already active
+     * is a no-op at the broker.
      */
     private record ResubscribeCallback(ObjectProvider<MqttSubscriptions> subs) implements MqttCallback {
         @Override
         public void connectComplete(boolean reconnect, String serverURI) {
-            if (!reconnect) return;
             MqttSubscriptions s = subs.getIfAvailable();
             if (s != null) s.resubscribeAll();
         }

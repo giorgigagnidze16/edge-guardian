@@ -73,7 +73,10 @@ spec:
               containerPort: 8443
           env:
             - name: SPRING_DATASOURCE_URL
-              value: jdbc:postgresql://postgres:5432/edgeguardian
+              # currentSchema is a search_path — edgeguardian first so our CREATEs
+              # land there, public second so the TimescaleDB extension functions
+              # (create_hypertable, by_range, ...) installed in public are resolved.
+              value: jdbc:postgresql://postgres:5432/edgeguardian?currentSchema=edgeguardian,public
             - name: SPRING_DATASOURCE_USERNAME
               valueFrom: { secretKeyRef: { name: postgres-credentials, key: username } }
             - name: SPRING_DATASOURCE_PASSWORD

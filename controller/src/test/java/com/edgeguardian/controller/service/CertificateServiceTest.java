@@ -154,30 +154,32 @@ class CertificateServiceTest extends AbstractIntegrationTest {
     }
 
     @Test
-    void compromiseDetection_blocksAndRevokes() throws Exception {
+    void reenrollment_supersedesPreviousCertWithoutBlocking() throws Exception {
         // First: issue a cert via manifest (auto-approved)
         var first = certificateService.processRequest(
                 DEVICE_ID, orgId, "device-identity", "test.local",
                 List.of(), generateTestCsr(), CertRequestType.MANIFEST, null);
         assertThat(first.certificate()).isNotNull();
 
-        // Second: try to get a NEW initial cert for the same name
+        // Second: legitimate re-enrollment for the same (deviceId, name) pair —
+        // e.g. agent lost its identity dir after an OS reinstall. Expected
+        // behaviour: old cert auto-revoked (SUPERSEDED), new cert issued,
+        // device stays active.
         var second = certificateService.processRequest(
                 DEVICE_ID, orgId, "device-identity", "test.local",
-                List.of(), generateTestCsr(), CertRequestType.INITIAL, null);
+                List.of(), generateTestCsr(), CertRequestType.MANIFEST, null);
 
-        // Should be blocked
-        assertThat(second.blocked()).isTrue();
-        assertThat(second.request().getState()).isEqualTo(CertRequestState.BLOCKED);
+        assertThat(second.blocked()).isFalse();
+        assertThat(second.certificate()).isNotNull();
+        assertThat(second.certificate().getSerialNumber())
+                .isNotEqualTo(first.certificate().getSerialNumber());
 
-        // Original cert should be revoked
-        IssuedCertificate revoked = certRepository.findById(first.certificate().getId()).orElseThrow();
-        assertThat(revoked.isRevoked()).isTrue();
-        assertThat(revoked.getRevokeReason()).isEqualTo(RevokeReason.COMPROMISED);
+        IssuedCertificate oldCert = certRepository.findById(first.certificate().getId()).orElseThrow();
+        assertThat(oldCert.isRevoked()).isTrue();
+        assertThat(oldCert.getRevokeReason()).isEqualTo(RevokeReason.SUPERSEDED);
 
-        // Device should be suspended
         Device device = deviceRepository.findByDeviceId(DEVICE_ID).orElseThrow();
-        assertThat(device.getState()).isEqualTo(Device.DeviceState.SUSPENDED);
+        assertThat(device.getState()).isNotEqualTo(Device.DeviceState.SUSPENDED);
     }
 
     @Test

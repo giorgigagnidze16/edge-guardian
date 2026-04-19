@@ -83,7 +83,7 @@ public class CrlService {
         }
         return switch (reason) {
             case COMPROMISED -> CRLReason.keyCompromise;
-            case RENEWED -> CRLReason.superseded;
+            case RENEWED, SUPERSEDED -> CRLReason.superseded;
             case DEVICE_DELETED -> CRLReason.cessationOfOperation;
             case ADMIN_REVOKED -> CRLReason.privilegeWithdrawn;
             case EXPIRED -> CRLReason.unspecified;

@@ -58,7 +58,7 @@ public class CertificateAuthorityService {
                           Instant thisUpdate, Instant nextUpdate, long crlNumber) {
         LoadedCa ca = caStore.loadForSigning(orgId);
         try {
-            X500Name issuer = new X500Name(ca.cert().getSubjectX500Principal().getName());
+            X500Name issuer = issuerDnOf(ca);
             X509v2CRLBuilder builder = new X509v2CRLBuilder(issuer, Date.from(thisUpdate));
             builder.setNextUpdate(Date.from(nextUpdate));
             for (CrlEntry e : entries) {
@@ -76,7 +76,7 @@ public class CertificateAuthorityService {
                                       Instant notBefore, Instant notAfter, List<String> sans, String crlUrl) {
         try {
             var builder = new X509v3CertificateBuilder(
-                    new X500Name(ca.cert().getSubjectX500Principal().getName()),
+                    issuerDnOf(ca),
                     serial, Date.from(notBefore), Date.from(notAfter),
                     csr.getSubject(), csr.getSubjectPublicKeyInfo());
 
@@ -100,5 +100,20 @@ public class CertificateAuthorityService {
         } catch (Exception e) {
             throw new IllegalStateException("Failed to sign certificate", e);
         }
+    }
+
+    /**
+     * Derive the issuer DN for signing by reading the CA cert's subject as
+     * DER bytes, not via {@code X500Principal.getName()} — that accessor
+     * re-formats to RFC 2253 which reverses the attribute order. Re-parsing
+     * the reversed string would produce a byte-different DN, which breaks
+     * Go TLS clients that match the server's acceptable-CA list against the
+     * client cert's issuer by exact DER bytes (handshake fails with
+     * "tls: certificate required"). getEncoded() preserves the original
+     * DER, so the device cert's issuer DN equals the CA's subject DN bit
+     * for bit.
+     */
+    private static X500Name issuerDnOf(LoadedCa ca) {
+        return X500Name.getInstance(ca.cert().getSubjectX500Principal().getEncoded());
     }
 }

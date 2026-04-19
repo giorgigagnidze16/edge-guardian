@@ -12,6 +12,23 @@ stringData:
   password: {{ .Values.postgres.credentials.password | quote }}
 ---
 {{- end }}
+# Postgres runs /docker-entrypoint-initdb.d/*.sql exactly once, on a fresh
+# PGDATA. Splits Keycloak and the controller into dedicated schemas so a
+# controller-side data wipe (TRUNCATE ALL) never touches Keycloak's realm,
+# users, or admin state. Existing clusters keep working on `public`; to roll
+# an existing install onto the split schemas, re-init the PVC (or run the
+# statements manually — they're idempotent).
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: postgres-init-schemas
+  labels:
+    {{- include "edgeguardian.componentLabels" (dict "ctx" . "component" "postgres") | nindent 4 }}
+data:
+  00-schemas.sql: |
+    CREATE SCHEMA IF NOT EXISTS keycloak;
+    CREATE SCHEMA IF NOT EXISTS edgeguardian;
+---
 apiVersion: v1
 kind: Service
 metadata:
@@ -81,6 +98,13 @@ spec:
           volumeMounts:
             - name: data
               mountPath: /var/lib/postgresql/data
+            - name: init-schemas
+              mountPath: /docker-entrypoint-initdb.d
+              readOnly: true
+      volumes:
+        - name: init-schemas
+          configMap:
+            name: postgres-init-schemas
   volumeClaimTemplates:
     - metadata:
         name: data
