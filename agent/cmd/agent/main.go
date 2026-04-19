@@ -157,6 +157,7 @@ func runAgent(ctx context.Context, cfg *config.Config, logger *zap.Logger) error
 	go startHealthServer(cfg.Health.Port, logger)
 
 	healthCollector := health.New(cfg.Health.DiskPath)
+	healthCollector.Collect()
 
 	go rec.Run(ctx)
 
@@ -174,16 +175,6 @@ func runAgent(ctx context.Context, cfg *config.Config, logger *zap.Logger) error
 			ManifestVersion: rec.ManifestVersion(),
 			Timestamp:       time.Now(),
 		}
-	})
-
-	go mqttClient.RunTelemetryLoop(ctx, 30*time.Second, func() *model.DeviceStatus {
-		status := healthCollector.Collect()
-		status.ReconcileStatus = rec.Status()
-		lastRec := rec.LastReconcile()
-		if !lastRec.IsZero() {
-			status.LastReconcile = lastRec.Format(time.RFC3339)
-		}
-		return status
 	})
 
 	if identity != nil {
