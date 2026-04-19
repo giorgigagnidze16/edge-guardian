@@ -1,6 +1,7 @@
 package com.edgeguardian.controller.api;
 
 import com.edgeguardian.controller.service.AgentInstallerService;
+import com.edgeguardian.controller.service.AgentInstallerService.InstallerFormat;
 import com.edgeguardian.controller.service.AgentInstallerService.Os;
 import lombok.RequiredArgsConstructor;
 import org.springframework.core.io.InputStreamResource;
@@ -24,20 +25,20 @@ public class AgentInstallerController {
 
     @GetMapping("/installer")
     public ResponseEntity<String> installer(@RequestParam String os,
-                                            @RequestParam String token) throws IOException {
+                                            @RequestParam String token,
+                                            @RequestParam(required = false) String format) throws IOException {
         Os target = Os.of(os);
-        String body = installers.renderInstaller(target, token);
-        String filename = target == Os.WINDOWS ? "install.ps1" : "install.sh";
+        InstallerFormat fmt = InstallerFormat.resolve(target, format);
+        String body = installers.renderInstaller(target, fmt, token);
         return ResponseEntity.ok()
                 .header(HttpHeaders.CONTENT_TYPE, "text/plain; charset=utf-8")
-                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=" + filename)
+                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=" + fmt.filename)
                 .body(body);
     }
 
     @GetMapping("/binary")
     public ResponseEntity<InputStreamResource> binary(@RequestParam String os,
-                                                      @RequestParam(defaultValue = "amd64") String arch)
-            throws IOException {
+                                                      @RequestParam(defaultValue = "amd64") String arch) {
         Os target = Os.of(os);
         InputStream stream = installers.openBinary(target, arch);
         return ResponseEntity.ok()

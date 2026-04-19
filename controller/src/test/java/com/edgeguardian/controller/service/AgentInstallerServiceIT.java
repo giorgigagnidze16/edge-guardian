@@ -4,6 +4,7 @@ import com.edgeguardian.controller.AbstractIntegrationTest;
 import com.edgeguardian.controller.exception.NotFoundException;
 import com.edgeguardian.controller.model.EnrollmentToken;
 import com.edgeguardian.controller.repository.EnrollmentTokenRepository;
+import com.edgeguardian.controller.service.AgentInstallerService.InstallerFormat;
 import com.edgeguardian.controller.service.AgentInstallerService.Os;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -14,7 +15,9 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
 import org.springframework.test.context.TestPropertySource;
 
+import java.nio.charset.StandardCharsets;
 import java.time.Instant;
+import java.util.Base64;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -63,9 +66,9 @@ class AgentInstallerServiceIT extends AbstractIntegrationTest {
     }
 
     @Test
-    void renderInstaller_validToken_substitutesPlaceholders() throws Exception {
+    void renderInstaller_ps1_substitutesPlaceholders() throws Exception {
         EnrollmentToken token = tokenRepository.save(freshToken().build());
-        String script = installers.renderInstaller(Os.WINDOWS, token.getToken());
+        String script = installers.renderInstaller(Os.WINDOWS, InstallerFormat.PS1, token.getToken());
 
         assertThat(script)
                 .doesNotContain("{{CONTROLLER_URL}}")
@@ -75,10 +78,52 @@ class AgentInstallerServiceIT extends AbstractIntegrationTest {
                 .contains("os=windows&arch=amd64");
     }
 
+    @Test
+    void renderInstaller_cmd_embedsBase64Ps1Payload() throws Exception {
+        EnrollmentToken token = tokenRepository.save(freshToken().build());
+        String cmd = installers.renderInstaller(Os.WINDOWS, InstallerFormat.CMD, token.getToken());
+
+        assertThat(cmd)
+                .doesNotContain("{{PS1_BASE64_LINES}}")
+                .contains("Start-Process -FilePath '%~f0' -Verb RunAs")
+                .contains("net session")
+                .contains("FromBase64String");
+
+        String decoded = new String(Base64.getDecoder().decode(extractBase64Payload(cmd)),
+                StandardCharsets.UTF_8);
+        assertThat(decoded)
+                .contains(token.getToken())
+                .contains("http://controller.test:30443")
+                .contains("$ServiceName = 'EdgeGuardianAgent'");
+    }
+
+    @Test
+    void renderInstaller_formatIncompatibleWithOs_rejected() {
+        assertThatThrownBy(() -> installers.renderInstaller(Os.LINUX, InstallerFormat.CMD, "x"))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("not supported");
+    }
+
     private void assertRejected(String tokenSecret) {
-        assertThatThrownBy(() -> installers.renderInstaller(Os.WINDOWS, tokenSecret))
+        assertThatThrownBy(() -> installers.renderInstaller(Os.WINDOWS, InstallerFormat.PS1, tokenSecret))
                 .isInstanceOf(NotFoundException.class)
                 .hasMessageContaining("Enrollment token not found");
+    }
+
+    /** Join the base64 chunks emitted between the >"...payload.b64" ( and ) markers. */
+    private static String extractBase64Payload(String cmd) {
+        int start = cmd.indexOf("payload.b64\" (");
+        int end = cmd.indexOf(")", start);
+        assertThat(start).isPositive();
+        assertThat(end).isGreaterThan(start);
+        StringBuilder b64 = new StringBuilder();
+        for (String line : cmd.substring(start, end).split("\\r?\\n")) {
+            String trimmed = line.trim();
+            if (trimmed.startsWith("echo ")) {
+                b64.append(trimmed.substring(5));
+            }
+        }
+        return b64.toString();
     }
 
     private EnrollmentToken.EnrollmentTokenBuilder freshToken() {

@@ -94,8 +94,5 @@ catch {
     Write-Host ""
     Write-Host "Stack trace:" -ForegroundColor Yellow
     Write-Host $_.ScriptStackTrace
-}
-finally {
-    Write-Host ""
-    Read-Host "Press Enter to close"
+    exit 1
 }
