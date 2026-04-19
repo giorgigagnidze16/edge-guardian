@@ -40,7 +40,8 @@ data:
       exit 1
     fi
 
-    BODY="{\"redirectUris\":[\"http://localhost:3000/*\",\"$NEXTAUTH_URL/*\"],\"webOrigins\":[\"+\"]}"
+    POST_LOGOUT="http://localhost:3000/*##$NEXTAUTH_URL/*"
+    BODY="{\"redirectUris\":[\"http://localhost:3000/*\",\"$NEXTAUTH_URL/*\"],\"webOrigins\":[\"+\"],\"attributes\":{\"post.logout.redirect.uris\":\"$POST_LOGOUT\",\"pkce.code.challenge.method\":\"S256\"}}"
     curl -sf -X PUT -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
       "$KC/admin/realms/$REALM/clients/$CLIENT_UUID" -d "$BODY"
 

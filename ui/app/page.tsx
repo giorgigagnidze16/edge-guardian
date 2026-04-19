@@ -1,3 +1,5 @@
+import { redirect } from "next/navigation";
+import { auth } from "@/lib/auth";
 import { LogoIcon } from "@/components/logo";
 import { ScrollReveal } from "@/components/landing/scroll-reveal";
 import { LandingNavbar } from "@/components/landing/navbar";
@@ -31,7 +33,11 @@ const ST_DOT: Record<string, string> = {
   offline: "bg-zinc-600",
 };
 
-export default function LandingPage() {
+export default async function LandingPage() {
+  const session = await auth();
+  if (session?.user && !(session as { error?: string }).error) {
+    redirect("/dashboard");
+  }
   return (
     <ScrollReveal>
       <div className="relative min-h-screen bg-background text-foreground [overflow-x:clip]">

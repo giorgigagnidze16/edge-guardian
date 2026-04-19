@@ -34,6 +34,7 @@ export const { handlers, auth } = NextAuth({
       if (account) {
         token.accessToken = account.access_token;
         token.refreshToken = account.refresh_token;
+        token.idToken = account.id_token;
         token.expiresAt = account.expires_at;
       }
 
@@ -62,6 +63,7 @@ export const { handlers, auth } = NextAuth({
           const refreshed = await response.json();
           token.accessToken = refreshed.access_token;
           token.refreshToken = refreshed.refresh_token ?? token.refreshToken;
+          if (refreshed.id_token) token.idToken = refreshed.id_token;
           token.expiresAt = Math.floor(Date.now() / 1000) + refreshed.expires_in;
           delete token.error;
           return token;
@@ -80,9 +82,27 @@ export const { handlers, auth } = NextAuth({
     },
     async session({ session, token }) {
       session.accessToken = token.accessToken as string;
-      if (token.error) {
-        (session as { error?: string }).error = token.error as string;
+      if (token.idToken) session.idToken = token.idToken as string;
+
+      const base = process.env.AUTH_URL ?? process.env.NEXTAUTH_URL ?? "";
+      const logoutUrl = new URL(`${issuer}/protocol/openid-connect/logout`);
+      if (token.idToken) {
+        logoutUrl.searchParams.set("id_token_hint", token.idToken as string);
+      } else {
+        logoutUrl.searchParams.set(
+          "client_id",
+          process.env.KEYCLOAK_CLIENT_ID ?? "edgeguardian-ui",
+        );
       }
+      if (base) {
+        logoutUrl.searchParams.set(
+          "post_logout_redirect_uri",
+          `${base.replace(/\/$/, "")}/auth/login`,
+        );
+      }
+      session.logoutUrl = logoutUrl.toString();
+
+      if (token.error) session.error = token.error as string;
       return session;
     },
   },
