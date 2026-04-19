@@ -32,7 +32,7 @@ public record DeviceDto(
             device.getOs(),
             device.getAgentVersion(),
             device.getLabels(),
-            device.getState().name().toLowerCase(),
+            device.getState().name(),
             device.getRegisteredAt(),
             device.getLastHeartbeat(),
             status

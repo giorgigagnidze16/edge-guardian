@@ -105,7 +105,6 @@ export default function DeviceDetailPage() {
   const queryClient = useQueryClient();
   const token = session?.accessToken ?? "";
 
-  // Polling history for sparklines
   const history = usePollingHistory();
 
   const { data: device, isLoading } = useQuery({
@@ -115,7 +114,8 @@ export default function DeviceDetailPage() {
     refetchInterval: 10_000,
   });
 
-  // Accumulate metrics
+  const supportsTemperature = device?.os !== "windows";
+
   useEffect(() => {
     if (device?.status) {
       history.push("cpu", device.status.cpuUsagePercent);
@@ -123,9 +123,11 @@ export default function DeviceDetailPage() {
         ? (device.status.memoryUsedBytes / device.status.memoryTotalBytes) * 100
         : null;
       history.push("memory", memPct);
-      history.push("temp", device.status.temperatureCelsius);
+      if (supportsTemperature) {
+        history.push("temp", device.status.temperatureCelsius);
+      }
     }
-  }, [device, history]);
+  }, [device, history, supportsTemperature]);
 
   // Delete
   const [deleteOpen, setDeleteOpen] = useState(false);
@@ -334,18 +336,20 @@ export default function DeviceDetailPage() {
           icon={HardDrive}
           iconColor="text-orange-500"
         />
-        <MetricCard
-          title="Temperature"
-          value={
-            status?.temperatureCelsius != null
-              ? `${status.temperatureCelsius.toFixed(1)}C`
-              : "--"
-          }
-          description="Board sensor"
-          icon={Thermometer}
-          iconColor="text-red-500"
-          chart={<Sparkline data={history.get("temp")} color="#ef4444" />}
-        />
+        {supportsTemperature && (
+          <MetricCard
+            title="Temperature"
+            value={
+              status?.temperatureCelsius != null
+                ? `${status.temperatureCelsius.toFixed(1)}C`
+                : "--"
+            }
+            description="Board sensor"
+            icon={Thermometer}
+            iconColor="text-red-500"
+            chart={<Sparkline data={history.get("temp")} color="#ef4444" />}
+          />
+        )}
         <MetricCard
           title="Uptime"
           value={status?.uptimeSeconds ? formatUptime(status.uptimeSeconds) : "--"}
