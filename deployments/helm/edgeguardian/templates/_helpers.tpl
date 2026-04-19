@@ -45,3 +45,64 @@ app.kubernetes.io/component: {{ .component }}
 {{- else -}}ClusterIP
 {{- end -}}
 {{- end -}}
+
+{{/*
+EMQX may need an externally-reachable Service independently of HTTP
+externalAccess.mode, since MQTT (1883/8883) cannot go through an HTTP ingress.
+`.Values.emqx.external.type` overrides when set (ClusterIP|NodePort|LoadBalancer).
+*/}}
+{{- define "edgeguardian.emqxServiceType" -}}
+{{- $t := .Values.emqx.external.type | default "" -}}
+{{- if $t -}}{{ $t }}{{- else -}}{{ include "edgeguardian.externalServiceType" . }}{{- end -}}
+{{- end -}}
+
+{{/*
+URL helpers. Precedence: explicit values (.Values.ui.nextAuthUrl etc) >
+derive from ingress.baseDomain when ingress.enabled > empty string (signals
+pki-bootstrap to fall back to node IP + NodePort).
+*/}}
+{{- define "edgeguardian.ingressScheme" -}}
+{{- if and .Values.ingress.enabled .Values.ingress.tls.enabled -}}https{{- else -}}http{{- end -}}
+{{- end -}}
+
+{{- define "edgeguardian.nextAuthUrl" -}}
+{{- if .Values.ui.nextAuthUrl -}}
+{{- .Values.ui.nextAuthUrl -}}
+{{- else if and .Values.ingress.enabled .Values.ingress.baseDomain -}}
+{{- printf "%s://ui.%s" (include "edgeguardian.ingressScheme" .) .Values.ingress.baseDomain -}}
+{{- end -}}
+{{- end -}}
+
+{{- define "edgeguardian.keycloakHostnameUrl" -}}
+{{- if .Values.ui.keycloakIssuerUrl -}}
+{{- .Values.ui.keycloakIssuerUrl | replace "/realms/edgeguardian" "" -}}
+{{- else if and .Values.ingress.enabled .Values.ingress.baseDomain -}}
+{{- printf "%s://keycloak.%s/kc" (include "edgeguardian.ingressScheme" .) .Values.ingress.baseDomain -}}
+{{- end -}}
+{{- end -}}
+
+{{- define "edgeguardian.keycloakIssuerUrl" -}}
+{{- if .Values.ui.keycloakIssuerUrl -}}
+{{- .Values.ui.keycloakIssuerUrl -}}
+{{- else -}}
+{{- $h := include "edgeguardian.keycloakHostnameUrl" . -}}
+{{- if $h -}}{{ printf "%s/realms/edgeguardian" $h }}{{- end -}}
+{{- end -}}
+{{- end -}}
+
+{{- define "edgeguardian.controllerPublicUrl" -}}
+{{- if .Values.controller.publicUrl -}}
+{{- .Values.controller.publicUrl -}}
+{{- else if and .Values.ingress.enabled .Values.ingress.baseDomain -}}
+{{- printf "%s://controller.%s" (include "edgeguardian.ingressScheme" .) .Values.ingress.baseDomain -}}
+{{- end -}}
+{{- end -}}
+
+{{- define "edgeguardian.crlUrl" -}}
+{{- if .Values.controller.crlUrl -}}
+{{- .Values.controller.crlUrl -}}
+{{- else -}}
+{{- $c := include "edgeguardian.controllerPublicUrl" . -}}
+{{- if $c -}}{{ printf "%s/api/v1/pki/crl" $c }}{{- end -}}
+{{- end -}}
+{{- end -}}

@@ -102,13 +102,13 @@ spec:
             - name: EDGEGUARDIAN_CONTROLLER_LOGGING_LOKI_URL
               value: http://loki:3100
             - name: PKI_CRL_URL
-              value: {{ .Values.controller.crlUrl | quote }}
+              value: {{ include "edgeguardian.crlUrl" . | quote }}
             - name: PKI_BROKER_CA_PATH
               value: /pki/broker-ca/ca.crt
             - name: CA_ENCRYPTION_KEY
               valueFrom: { secretKeyRef: { name: controller-secrets, key: ca_encryption_key } }
             - name: EDGEGUARDIAN_AGENT_INSTALLER_CONTROLLER_URL
-              value: {{ .Values.controller.agentInstaller.controllerUrl | quote }}
+              value: {{ coalesce .Values.controller.agentInstaller.controllerUrl (include "edgeguardian.controllerPublicUrl" .) | quote }}
             - name: EDGEGUARDIAN_AGENT_INSTALLER_BROKER_URL
               value: {{ .Values.controller.agentInstaller.brokerUrl | quote }}
             - name: EDGEGUARDIAN_AGENT_INSTALLER_MTLS_BROKER_URL

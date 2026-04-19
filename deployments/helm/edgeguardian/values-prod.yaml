@@ -4,6 +4,8 @@ image:
 ui:
   image:
     tag: 0.2.0
+  # Leave blank — computed from ingress.baseDomain. Override only if you use
+  # a different URL scheme than ui.<baseDomain> / keycloak.<baseDomain>.
   keycloakIssuerUrl: ""
   nextAuthUrl: ""
 
@@ -23,12 +25,22 @@ ingress:
     clusterIssuer: letsencrypt-prod
 
 controller:
-  replicas: 2
+  replicas: 1
   resources:
     requests: { cpu: 500m, memory: 1Gi }
-    limits:   { memory: 2Gi }
+    limits:   { cpu: 2000m, memory: 2Gi }
+  # Leave blank — computed from ingress.baseDomain. Override for a custom CRL
+  # endpoint that must be stable (signed into leaf certs' CDP).
+  publicUrl: ""
   crlUrl: ""
   keycloakIssuerUri: ""
+  # Agents need external MQTT access. See emqx.external.type below — for a
+  # typical cloud deployment set that to LoadBalancer and fill these with the
+  # LB hostname/IP (e.g. tcp://mqtt.<base>:1883 and ssl://mqtt.<base>:8883).
+  agentInstaller:
+    controllerUrl: ""
+    brokerUrl: ""
+    mtlsBrokerUrl: ""
 
 postgres:
   image: timescale/timescaledb:2.17.2-pg16
@@ -62,6 +74,11 @@ emqx:
   mqttUsers:
     controllerUsername: controller
     bootstrapUsername: bootstrap
+  # Expose MQTT via a dedicated LoadBalancer Service so agents can reach the
+  # broker on 1883 (bootstrap) + 8883 (mTLS). HTTP ingress cannot proxy MQTT.
+  external:
+    type: LoadBalancer
+    annotations: {}
 
 pkiBootstrap:
   image: alpine/k8s:1.31.1

@@ -57,7 +57,11 @@ spec:
       containers:
         - name: keycloak
           image: {{ .Values.keycloak.image | quote }}
+          {{- if .Values.ingress.enabled }}
+          args: ["start", "--import-realm"]
+          {{- else }}
           args: ["start-dev", "--import-realm"]
+          {{- end }}
           ports:
             - name: http
               containerPort: 9090
@@ -86,6 +90,22 @@ spec:
                 secretKeyRef: { name: keycloak-admin, key: password }
             - name: KC_HTTP_RELATIVE_PATH
               value: /kc
+            {{- if .Values.ingress.enabled }}
+            # Prod: nginx ingress terminates TLS and forwards X-Forwarded-*
+            # headers over plaintext HTTP. start mode requires either HTTPS
+            # or KC_HTTP_ENABLED=true on the backend hop.
+            - name: KC_HTTP_ENABLED
+              value: "true"
+            - name: KC_PROXY_HEADERS
+              value: xforwarded
+            - name: KC_HOSTNAME_STRICT
+              value: "true"
+            - name: KC_HOSTNAME
+              valueFrom:
+                configMapKeyRef:
+                  name: edgeguardian-runtime-urls
+                  key: KEYCLOAK_HOSTNAME_URL
+            {{- else }}
             - name: KC_HOSTNAME_STRICT
               value: "false"
             - name: KC_HOSTNAME
@@ -94,10 +114,11 @@ spec:
                   name: edgeguardian-runtime-urls
                   key: KEYCLOAK_HOSTNAME_URL
                   optional: true
-            # KC_PROXY_HEADERS intentionally unset — otherwise Keycloak
+            # Dev: KC_PROXY_HEADERS intentionally unset — otherwise Keycloak
             # derives iss from X-Forwarded-Host (browser's Host) instead of
             # KC_HOSTNAME, breaking OIDC iss validation when the browser uses
             # a hostname (localhost) that differs from KC_HOSTNAME (127.0.0.1).
+            {{- end }}
           volumeMounts:
             - name: realm-import
               mountPath: /opt/keycloak/data/import

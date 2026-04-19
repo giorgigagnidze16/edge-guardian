@@ -68,6 +68,14 @@ $EDITOR deployments/helm/edgeguardian/values-prod-secrets.yaml
 
 ### 3. Install
 
+All HTTP URLs are derived from `ingress.baseDomain`. Set it and everything else
+(UI, Keycloak issuer, CRL endpoint, controller agent-installer URL) is computed
+via `_helpers.tpl`. MQTT cannot traverse the HTTP ingress — a dedicated
+LoadBalancer is provisioned for EMQX (`emqx.external.type: LoadBalancer` in
+`values-prod.yaml`); grab its IP/hostname once it's assigned and set the
+`controller.agentInstaller.brokerUrl` / `mtlsBrokerUrl` so agents receive the
+correct endpoints.
+
 ```bash
 LB_IP=$(kubectl -n ingress-nginx get svc ingress-nginx-controller \
   -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
@@ -77,14 +85,25 @@ helm upgrade --install edgeguardian deployments/helm/edgeguardian \
   -f deployments/helm/edgeguardian/values-prod.yaml \
   -f deployments/helm/edgeguardian/values-prod-secrets.yaml \
   --set "ingress.baseDomain=${LB_IP}.sslip.io" \
-  --set "ui.keycloakIssuerUrl=https://keycloak.${LB_IP}.sslip.io/realms/edgeguardian" \
-  --set "ui.nextAuthUrl=https://ui.${LB_IP}.sslip.io" \
-  --set "controller.crlUrl=https://controller.${LB_IP}.sslip.io/api/v1/pki/crl" \
-  --set "controller.keycloakIssuerUri=https://keycloak.${LB_IP}.sslip.io/kc/realms/edgeguardian" \
   --wait --timeout 20m
+
+# After the EMQX LoadBalancer Service has an external IP:
+MQTT_IP=$(kubectl -n edgeguardian get svc emqx-external \
+  -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
+
+helm upgrade edgeguardian deployments/helm/edgeguardian \
+  -n edgeguardian \
+  -f deployments/helm/edgeguardian/values-prod.yaml \
+  -f deployments/helm/edgeguardian/values-prod-secrets.yaml \
+  --set "ingress.baseDomain=${LB_IP}.sslip.io" \
+  --set "controller.agentInstaller.brokerUrl=tcp://${MQTT_IP}:1883" \
+  --set "controller.agentInstaller.mtlsBrokerUrl=ssl://${MQTT_IP}:8883" \
+  --wait
 ```
 
-UI lives at `https://ui.<LB_IP>.sslip.io`.
+UI lives at `https://ui.<LB_IP>.sslip.io`. The `keycloak-init-client` post-install
+hook rotates the OIDC client secret from `values-prod-secrets.yaml` (the realm
+JSON's dev placeholder is overwritten on every install).
 
 ## First-org bootstrap
 

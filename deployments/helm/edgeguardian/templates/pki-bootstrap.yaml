@@ -108,58 +108,69 @@ spec:
               apk add --no-cache openssl
               NS="{{ .Release.Namespace }}"
 
+              # PKI: generate broker CA + server cert only if not already present.
+              # URL computation below runs unconditionally so ingress.baseDomain
+              # changes on subsequent upgrades propagate to dependents.
               if kubectl -n "$NS" get secret edgeguardian-broker-ca-secret >/dev/null 2>&1 \
                  && kubectl -n "$NS" get secret emqx-server-tls >/dev/null 2>&1; then
-                echo "Broker CA + server cert already present — skipping"
-                exit 0
+                echo "Broker CA + server cert already present — skipping PKI gen"
+              else
+                cd /tmp
+                openssl ecparam -name prime256v1 -genkey -noout -out ca.key
+                openssl req -new -x509 -key ca.key -sha256 -days 3650 -nodes \
+                  -subj "/CN=EdgeGuardian Broker CA/O=EdgeGuardian" -out ca.crt
+
+                openssl ecparam -name prime256v1 -genkey -noout -out server.key
+                openssl req -new -key server.key -nodes -subj "/CN=emqx" -out server.csr
+
+                printf 'subjectAltName = DNS:emqx,DNS:emqx.%s.svc.cluster.local,DNS:localhost,IP:127.0.0.1\nextendedKeyUsage = serverAuth\n' "$NS" > server.ext
+
+                openssl x509 -req -in server.csr -CA ca.crt -CAkey ca.key -CAcreateserial \
+                  -out server.crt -days 365 -sha256 -extfile server.ext
+
+                kubectl -n "$NS" create secret generic edgeguardian-broker-ca-secret \
+                  --from-file=ca.crt=ca.crt \
+                  --from-file=tls.crt=ca.crt \
+                  --from-file=tls.key=ca.key \
+                  --dry-run=client -o yaml | kubectl apply -f -
+
+                kubectl -n "$NS" create secret generic emqx-server-tls \
+                  --from-file=tls.crt=server.crt \
+                  --from-file=tls.key=server.key \
+                  --from-file=ca.crt=ca.crt \
+                  --dry-run=client -o yaml | kubectl apply -f -
               fi
 
-              cd /tmp
-              openssl ecparam -name prime256v1 -genkey -noout -out ca.key
-              openssl req -new -x509 -key ca.key -sha256 -days 3650 -nodes \
-                -subj "/CN=EdgeGuardian Broker CA/O=EdgeGuardian" -out ca.crt
+              echo "Computing runtime URLs"
 
-              openssl ecparam -name prime256v1 -genkey -noout -out server.key
-              openssl req -new -key server.key -nodes -subj "/CN=emqx" -out server.csr
+              # Explicit URLs (from values / ingress.baseDomain) take precedence.
+              # Only fall back to node-IP detection when both are empty.
+              NEXTAUTH_URL={{ include "edgeguardian.nextAuthUrl" . | quote }}
+              KC_HOSTNAME={{ include "edgeguardian.keycloakHostnameUrl" . | quote }}
+              KC_ISSUER={{ include "edgeguardian.keycloakIssuerUrl" . | quote }}
+              NODE_IP=""
 
-              printf 'subjectAltName = DNS:emqx,DNS:emqx.%s.svc.cluster.local,DNS:localhost,IP:127.0.0.1\nextendedKeyUsage = serverAuth\n' "$NS" > server.ext
-
-              openssl x509 -req -in server.csr -CA ca.crt -CAkey ca.key -CAcreateserial \
-                -out server.crt -days 365 -sha256 -extfile server.ext
-
-              kubectl -n "$NS" create secret generic edgeguardian-broker-ca-secret \
-                --from-file=ca.crt=ca.crt \
-                --from-file=tls.crt=ca.crt \
-                --from-file=tls.key=ca.key \
-                --dry-run=client -o yaml | kubectl apply -f -
-
-              kubectl -n "$NS" create secret generic emqx-server-tls \
-                --from-file=tls.crt=server.crt \
-                --from-file=tls.key=server.key \
-                --from-file=ca.crt=ca.crt \
-                --dry-run=client -o yaml | kubectl apply -f -
-
-              echo "PKI bootstrap complete — detecting node IP for runtime URLs"
-
-              NODE_IP=$(kubectl get nodes -o jsonpath='{.items[0].status.addresses[?(@.type=="ExternalIP")].address}')
-              if [ -z "$NODE_IP" ]; then
-                NODE_IP=$(kubectl get nodes -o jsonpath='{.items[0].status.addresses[?(@.type=="InternalIP")].address}')
+              if [ -z "$NEXTAUTH_URL" ] || [ -z "$KC_ISSUER" ]; then
+                echo "No explicit URLs set — detecting node IP for nodePort/dev fallback"
+                NODE_IP=$(kubectl get nodes -o jsonpath='{.items[0].status.addresses[?(@.type=="ExternalIP")].address}')
+                if [ -z "$NODE_IP" ]; then
+                  NODE_IP=$(kubectl get nodes -o jsonpath='{.items[0].status.addresses[?(@.type=="InternalIP")].address}')
+                fi
+                if [ -z "$NODE_IP" ]; then
+                  echo "ERROR: could not detect node IP and no explicit URLs configured"
+                  exit 1
+                fi
+                UI_PORT={{ .Values.externalAccess.nodePorts.ui }}
+                NEXTAUTH_URL="${NEXTAUTH_URL:-http://${NODE_IP}:${UI_PORT}}"
+                KC_HOSTNAME="${KC_HOSTNAME:-${NEXTAUTH_URL}/kc}"
+                KC_ISSUER="${KC_ISSUER:-${KC_HOSTNAME}/realms/edgeguardian}"
               fi
-              if [ -z "$NODE_IP" ]; then
-                echo "ERROR: could not detect node IP"
-                exit 1
-              fi
-
-              UI_PORT={{ .Values.externalAccess.nodePorts.ui }}
-              NEXTAUTH_URL="http://${NODE_IP}:${UI_PORT}"
-              KC_HOSTNAME="${NEXTAUTH_URL}/kc"
-              KC_ISSUER="${KC_HOSTNAME}/realms/edgeguardian"
 
               kubectl -n "$NS" create configmap edgeguardian-runtime-urls \
                 --from-literal=NEXTAUTH_URL="$NEXTAUTH_URL" \
                 --from-literal=KEYCLOAK_ISSUER_URL="$KC_ISSUER" \
                 --from-literal=KEYCLOAK_HOSTNAME_URL="$KC_HOSTNAME" \
-                --from-literal=NODE_IP="$NODE_IP" \
+                --from-literal=NODE_IP="${NODE_IP:-}" \
                 --dry-run=client -o yaml | kubectl apply -f -
 
               echo "Runtime URLs: UI=$NEXTAUTH_URL  Keycloak=$KC_ISSUER"

@@ -40,8 +40,22 @@ data:
       exit 1
     fi
 
-    POST_LOGOUT="http://localhost:3000/*##$NEXTAUTH_URL/*"
-    BODY="{\"redirectUris\":[\"http://localhost:3000/*\",\"$NEXTAUTH_URL/*\"],\"webOrigins\":[\"+\"],\"attributes\":{\"post.logout.redirect.uris\":\"$POST_LOGOUT\",\"pkce.code.challenge.method\":\"S256\"}}"
+    # Build redirectUris / post.logout.redirect.uris from what's actually in use:
+    # the configured NEXTAUTH_URL (may be localhost for dev or the ingress URL
+    # for prod). Keep localhost fallback only in dev (NEXTAUTH_URL contains it).
+    POST_LOGOUT="$NEXTAUTH_URL/*"
+    REDIRECTS="\"$NEXTAUTH_URL/*\""
+    case "$NEXTAUTH_URL" in
+      http://localhost:*) : ;;
+      *) POST_LOGOUT="$POST_LOGOUT##http://localhost:3000/*"
+         REDIRECTS="$REDIRECTS,\"http://localhost:3000/*\""
+         ;;
+    esac
+
+    # Rotate client secret to match what the UI pod actually uses. The realm
+    # JSON import seeds a default secret; this PUT overwrites it every install
+    # so the dev placeholder never persists in prod.
+    BODY="{\"redirectUris\":[$REDIRECTS],\"webOrigins\":[\"+\"],\"secret\":\"$CLIENT_SECRET\",\"attributes\":{\"post.logout.redirect.uris\":\"$POST_LOGOUT\",\"pkce.code.challenge.method\":\"S256\"}}"
     curl -sf -X PUT -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
       "$KC/admin/realms/$REALM/clients/$CLIENT_UUID" -d "$BODY"
 
@@ -74,6 +88,9 @@ spec:
             - name: NEXTAUTH_URL
               valueFrom:
                 configMapKeyRef: { name: edgeguardian-runtime-urls, key: NEXTAUTH_URL }
+            - name: CLIENT_SECRET
+              valueFrom:
+                secretKeyRef: { name: ui-secrets, key: keycloak_client_secret }
           command: ["sh", "/scripts/init.sh"]
           volumeMounts:
             - name: script

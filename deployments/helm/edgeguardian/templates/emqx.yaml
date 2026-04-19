@@ -84,19 +84,24 @@ metadata:
   labels:
     {{- include "edgeguardian.componentLabels" (dict "ctx" . "component" "emqx") | nindent 4 }}
     app.kubernetes.io/exposure: external
+  {{- with .Values.emqx.external.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
 spec:
-  type: {{ include "edgeguardian.externalServiceType" . }}
+  type: {{ include "edgeguardian.emqxServiceType" . }}
+  {{- $emqxType := include "edgeguardian.emqxServiceType" . }}
   ports:
     - name: mqtts
       port: 8883
       targetPort: mqtts
-      {{- if eq .Values.externalAccess.mode "nodePort" }}
+      {{- if eq $emqxType "NodePort" }}
       nodePort: {{ .Values.externalAccess.nodePorts.emqxMtls }}
       {{- end }}
     - name: mqtt-bootstrap
       port: 1883
       targetPort: mqtt
-      {{- if eq .Values.externalAccess.mode "nodePort" }}
+      {{- if eq $emqxType "NodePort" }}
       nodePort: {{ .Values.externalAccess.nodePorts.emqxBootstrap }}
       {{- end }}
   selector:

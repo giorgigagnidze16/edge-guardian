@@ -11,6 +11,12 @@ ui:
     pullPolicy: IfNotPresent
   keycloakClientId: edgeguardian-ui
   internalKeycloakUrl: http://keycloak:9090
+  # Explicit UI URL. When empty and ingress.enabled, computed as
+  # "{scheme}://ui.{ingress.baseDomain}" in _helpers.tpl.
+  nextAuthUrl: ""
+  # Explicit OIDC issuer URL used by UI (next-auth). When empty, computed from
+  # ingress.baseDomain. Format: "{scheme}://keycloak.{base}/kc/realms/edgeguardian".
+  keycloakIssuerUrl: ""
 
 externalAccess:
   mode: clusterIP
@@ -35,13 +41,31 @@ controller:
   resources:
     requests: { cpu: 200m, memory: 512Mi }
     limits:   { memory: 1Gi }
+  # Public base URL of the controller (used for CRL + agent installer).
+  # Empty → computed from ingress.baseDomain.
+  publicUrl: ""
+  # Explicit CRL endpoint. Empty → "{publicUrl}/api/v1/pki/crl".
+  crlUrl: ""
+  # Agent installer URLs baked into the installer script. For HTTP the default
+  # is computed; MQTT broker URLs must be explicit since MQTT does not traverse
+  # an HTTP ingress. Set emqx.external.type=LoadBalancer and fill these in prod.
+  agentInstaller:
+    controllerUrl: ""
+    brokerUrl: ""
+    mtlsBrokerUrl: ""
 
 postgres: {}
 keycloak: {}
 minio: {}
 loki: {}
 grafana: {}
-emqx: {}
+emqx:
+  # Independent external exposure for MQTT (HTTP ingress cannot proxy MQTT).
+  # type: "" (default) follows externalAccess.mode; override with LoadBalancer
+  # or NodePort so agents can reach the broker when HTTP uses ingress.
+  external:
+    type: ""
+    annotations: {}
 
 pki:
   brokerCa:
