@@ -1,62 +1,62 @@
 package com.edgeguardian.controller.config;
 
+import com.edgeguardian.controller.mqtt.MqttSubscriptions;
 import jakarta.annotation.PreDestroy;
 import lombok.extern.slf4j.Slf4j;
+import org.eclipse.paho.mqttv5.client.IMqttToken;
+import org.eclipse.paho.mqttv5.client.MqttCallback;
 import org.eclipse.paho.mqttv5.client.MqttClient;
 import org.eclipse.paho.mqttv5.client.MqttConnectionOptions;
+import org.eclipse.paho.mqttv5.client.MqttDisconnectResponse;
 import org.eclipse.paho.mqttv5.client.persist.MemoryPersistence;
 import org.eclipse.paho.mqttv5.common.MqttException;
-import org.springframework.beans.factory.annotation.Value;
+import org.eclipse.paho.mqttv5.common.MqttMessage;
+import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
 /**
- * Configures the MQTT client for the controller.
- * The controller subscribes to telemetry topics and publishes commands.
+ * MQTT client bean wired from {@link MqttProperties}. A non-zero session
+ * expiry keeps subscriptions alive across normal broker restarts; the
+ * reconnect callback delegates to {@link MqttSubscriptions} so even if the
+ * broker loses state the controller re-registers every binding on reconnect.
  */
 @Slf4j
 @Configuration
+@EnableConfigurationProperties(MqttProperties.class)
 public class MqttConfig {
-
-    @Value("${edgeguardian.controller.mqtt.broker-url:tcp://localhost:1883}")
-    private String brokerUrl;
-
-    @Value("${edgeguardian.controller.mqtt.client-id:edgeguardian-controller}")
-    private String clientId;
-
-    @Value("${edgeguardian.controller.mqtt.username:}")
-    private String username;
-
-    @Value("${edgeguardian.controller.mqtt.password:}")
-    private String password;
 
     private MqttClient mqttClient;
 
     @Bean
-    public MqttClient mqttClient() {
+    public MqttClient mqttClient(MqttProperties props,
+                                 ObjectProvider<MqttSubscriptions> subscriptions) {
         try {
-            mqttClient = new MqttClient(brokerUrl, clientId, new MemoryPersistence());
+            mqttClient = new MqttClient(props.brokerUrl(), props.clientId(), new MemoryPersistence());
+            mqttClient.setCallback(new ResubscribeCallback(subscriptions));
 
             MqttConnectionOptions options = new MqttConnectionOptions();
             options.setAutomaticReconnect(true);
             options.setCleanStart(false);
-            options.setConnectionTimeout(10);
-            options.setKeepAliveInterval(60);
-            if (username != null && !username.isBlank()) {
-                options.setUserName(username);
+            options.setSessionExpiryInterval(props.sessionExpiry().toSeconds());
+            options.setConnectionTimeout((int) props.connectTimeout().toSeconds());
+            options.setKeepAliveInterval((int) props.keepAlive().toSeconds());
+            if (props.username() != null && !props.username().isBlank()) {
+                options.setUserName(props.username());
             }
-            if (password != null && !password.isBlank()) {
-                options.setPassword(password.getBytes());
+            if (props.password() != null && !props.password().isBlank()) {
+                options.setPassword(props.password().getBytes());
             }
 
             mqttClient.connect(options);
-            log.info("MQTT client connected to {} as {}", brokerUrl, clientId);
+            log.info("MQTT connected to {} as {} (sessionExpiry={}, keepAlive={})",
+                    props.brokerUrl(), props.clientId(),
+                    props.sessionExpiry(), props.keepAlive());
         } catch (MqttException e) {
-            log.warn("Failed to connect MQTT client to {} - telemetry will be unavailable: {}",
-                brokerUrl, e.getMessage());
-            // Return the unconnected client; subscribers will handle the disconnected state.
+            log.warn("Failed to connect MQTT client to {} - device-plane unavailable: {}",
+                    props.brokerUrl(), e.getMessage());
         }
-
         return mqttClient;
     }
 
@@ -70,5 +70,39 @@ public class MqttConfig {
                 log.warn("Error disconnecting MQTT client: {}", e.getMessage());
             }
         }
+    }
+
+    /**
+     * On successful reconnect, replays every registered subscription. Startup
+     * (reconnect=false) is a no-op — listener @PostConstruct handlers will
+     * call {@link MqttSubscriptions#register} to bind their topics.
+     */
+    private record ResubscribeCallback(ObjectProvider<MqttSubscriptions> subs) implements MqttCallback {
+        @Override
+        public void connectComplete(boolean reconnect, String serverURI) {
+            if (!reconnect) return;
+            MqttSubscriptions s = subs.getIfAvailable();
+            if (s != null) s.resubscribeAll();
+        }
+
+        @Override
+        public void disconnected(MqttDisconnectResponse r) {
+            log.warn("MQTT disconnected: {}", r.getReasonString());
+        }
+
+        @Override
+        public void mqttErrorOccurred(MqttException e) {
+            log.warn("MQTT error: {}", e.getMessage());
+        }
+
+        @Override
+        public void messageArrived(String topic, MqttMessage m) { /* per-subscription */ }
+
+        @Override
+        public void deliveryComplete(IMqttToken token) { /* no-op */ }
+
+        @Override
+        public void authPacketArrived(int reasonCode,
+                                      org.eclipse.paho.mqttv5.common.packet.MqttProperties p) { /* no-op */ }
     }
 }

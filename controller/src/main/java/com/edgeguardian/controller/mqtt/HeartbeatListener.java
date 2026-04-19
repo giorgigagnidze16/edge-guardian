@@ -1,5 +1,6 @@
 package com.edgeguardian.controller.mqtt;
 
+import com.edgeguardian.controller.config.MqttProperties;
 import com.edgeguardian.controller.model.DeviceManifestEntity;
 import com.edgeguardian.controller.model.DeviceStatus;
 import com.edgeguardian.controller.mqtt.payload.HeartbeatPayload;
@@ -9,12 +10,9 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.eclipse.paho.mqttv5.client.IMqttMessageListener;
 import org.eclipse.paho.mqttv5.client.MqttClient;
 import org.eclipse.paho.mqttv5.common.MqttException;
 import org.eclipse.paho.mqttv5.common.MqttMessage;
-import org.eclipse.paho.mqttv5.common.MqttSubscription;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 import java.util.LinkedHashMap;
@@ -32,31 +30,17 @@ import java.util.Optional;
 public class HeartbeatListener {
 
     private final MqttClient mqttClient;
+    private final MqttProperties props;
+    private final MqttSubscriptions subscriptions;
     private final ObjectMapper objectMapper;
     private final DeviceRegistry registry;
     private final OTAService otaService;
     private final CommandPublisher commandPublisher;
 
-    @Value("${edgeguardian.controller.mqtt.topic-root:edgeguardian}")
-    private String topicRoot;
-
     @PostConstruct
-    public void subscribe() {
-        if (!mqttClient.isConnected()) {
-            log.warn("MQTT client not connected, heartbeat subscription deferred");
-            return;
-        }
-
-        String topic = topicRoot + "/device/+/heartbeat";
-        try {
-            var subscription = new MqttSubscription(topic, MqttTopics.QOS_BEST_EFFORT);
-            IMqttMessageListener listener = this::onHeartbeat;
-            mqttClient.subscribe(new MqttSubscription[]{subscription},
-                    new IMqttMessageListener[]{listener});
-            log.info("Subscribed to heartbeat topic: {}", topic);
-        } catch (MqttException e) {
-            log.error("Failed to subscribe to heartbeat topic: {}", e.getMessage());
-        }
+    void register() {
+        subscriptions.register("/device/+/heartbeat",
+                MqttTopics.QOS_BEST_EFFORT, this::onHeartbeat);
     }
 
     private void onHeartbeat(String topic, MqttMessage message) {
@@ -111,7 +95,7 @@ public class HeartbeatListener {
             manifestMap.put("spec", entity.getSpec() != null ? entity.getSpec() : Map.of());
             manifestMap.put("version", entity.getVersion());
 
-            String stateTopic = topicRoot + "/device/" + deviceId + "/state/desired";
+            String stateTopic = props.topicRoot() + "/device/" + deviceId + "/state/desired";
             byte[] payload = objectMapper.writeValueAsBytes(manifestMap);
             var msg = new MqttMessage(payload);
             msg.setQos(MqttTopics.QOS_BEST_EFFORT);
@@ -123,5 +107,4 @@ public class HeartbeatListener {
             log.error("Failed to push desired state to device {}: {}", deviceId, e.getMessage());
         }
     }
-
 }

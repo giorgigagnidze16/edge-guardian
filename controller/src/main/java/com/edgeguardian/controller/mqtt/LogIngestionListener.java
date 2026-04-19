@@ -4,13 +4,9 @@ import com.edgeguardian.controller.service.LogService;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.annotation.PostConstruct;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.eclipse.paho.mqttv5.client.IMqttMessageListener;
-import org.eclipse.paho.mqttv5.client.MqttClient;
-import org.eclipse.paho.mqttv5.common.MqttException;
 import org.eclipse.paho.mqttv5.common.MqttMessage;
-import org.eclipse.paho.mqttv5.common.MqttSubscription;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 /**
@@ -19,45 +15,21 @@ import org.springframework.stereotype.Component;
  */
 @Slf4j
 @Component
+@RequiredArgsConstructor
 public class LogIngestionListener {
 
-    private final MqttClient mqttClient;
     private final LogService logService;
     private final ObjectMapper objectMapper;
-
-    @Value("${edgeguardian.controller.mqtt.topic-root:edgeguardian}")
-    private String topicRoot;
-
-    public LogIngestionListener(MqttClient mqttClient,
-                                LogService logService,
-                                ObjectMapper objectMapper) {
-        this.mqttClient = mqttClient;
-        this.logService = logService;
-        this.objectMapper = objectMapper;
-    }
+    private final MqttSubscriptions subscriptions;
 
     @PostConstruct
-    public void subscribe() {
-        if (!mqttClient.isConnected()) {
-            log.warn("MQTT client not connected, log ingestion subscription deferred");
-            return;
-        }
-
-        String topic = topicRoot + "/device/+/logs";
-        try {
-            MqttSubscription subscription = new MqttSubscription(topic, MqttTopics.QOS_BEST_EFFORT);
-            IMqttMessageListener listener = this::onLogMessage;
-            mqttClient.subscribe(new MqttSubscription[]{subscription},
-                    new IMqttMessageListener[]{listener});
-            log.info("Subscribed to log ingestion topic: {}", topic);
-        } catch (MqttException e) {
-            log.error("Failed to subscribe to log topic {}: {}", topic, e.getMessage());
-        }
+    void register() {
+        subscriptions.register("/device/+/logs",
+                MqttTopics.QOS_BEST_EFFORT, this::onLogMessage);
     }
 
     private void onLogMessage(String topic, MqttMessage message) {
         try {
-            // Extract device ID from topic: edgeguardian/device/{deviceId}/logs
             String deviceId = MqttTopics.extractDeviceId(topic);
             if (deviceId == null || deviceId.isEmpty()) {
                 log.warn("Invalid log topic format: {}", topic);

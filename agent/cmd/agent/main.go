@@ -357,6 +357,7 @@ func enrollmentClientConfig(cfg *config.Config, store *storage.Store) comms.MQTT
 		Password:  cfg.MQTT.Password,
 		TopicRoot: cfg.MQTT.TopicRoot,
 		Store:     store,
+		Bootstrap: true,
 	}
 }
 

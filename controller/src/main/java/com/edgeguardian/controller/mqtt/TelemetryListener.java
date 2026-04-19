@@ -6,12 +6,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.eclipse.paho.mqttv5.client.IMqttMessageListener;
-import org.eclipse.paho.mqttv5.client.MqttClient;
-import org.eclipse.paho.mqttv5.common.MqttException;
 import org.eclipse.paho.mqttv5.common.MqttMessage;
-import org.eclipse.paho.mqttv5.common.MqttSubscription;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 /**
@@ -23,30 +18,14 @@ import org.springframework.stereotype.Component;
 @RequiredArgsConstructor
 public class TelemetryListener {
 
-    private final MqttClient mqttClient;
     private final DeviceRegistry registry;
     private final ObjectMapper objectMapper;
-
-    @Value("${edgeguardian.controller.mqtt.topic-root:edgeguardian}")
-    private String topicRoot;
+    private final MqttSubscriptions subscriptions;
 
     @PostConstruct
-    public void subscribe() {
-        if (!mqttClient.isConnected()) {
-            log.warn("MQTT client not connected, telemetry subscription deferred");
-            return;
-        }
-
-        String topic = topicRoot + "/device/+/telemetry";
-        try {
-            MqttSubscription subscription = new MqttSubscription(topic, MqttTopics.QOS_BEST_EFFORT);
-            IMqttMessageListener listener = this::onTelemetryMessage;
-            mqttClient.subscribe(new MqttSubscription[]{subscription},
-                    new IMqttMessageListener[]{listener});
-            log.info("Subscribed to telemetry topic: {}", topic);
-        } catch (MqttException e) {
-            log.error("Failed to subscribe to telemetry topic {}: {}", topic, e.getMessage());
-        }
+    void register() {
+        subscriptions.register("/device/+/telemetry",
+                MqttTopics.QOS_BEST_EFFORT, this::onTelemetryMessage);
     }
 
     private void onTelemetryMessage(String topic, MqttMessage message) {
@@ -71,5 +50,4 @@ public class TelemetryListener {
                     topic, e.getMessage());
         }
     }
-
 }

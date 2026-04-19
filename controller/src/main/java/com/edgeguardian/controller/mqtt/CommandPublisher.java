@@ -1,5 +1,6 @@
 package com.edgeguardian.controller.mqtt;
 
+import com.edgeguardian.controller.config.MqttProperties;
 import com.edgeguardian.controller.mqtt.payload.CommandEnvelope;
 import com.edgeguardian.controller.mqtt.payload.CommandPayload;
 import com.fasterxml.jackson.core.JsonProcessingException;
@@ -9,7 +10,6 @@ import lombok.extern.slf4j.Slf4j;
 import org.eclipse.paho.mqttv5.client.MqttClient;
 import org.eclipse.paho.mqttv5.common.MqttException;
 import org.eclipse.paho.mqttv5.common.MqttMessage;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 import java.time.Instant;
@@ -26,10 +26,8 @@ import java.util.UUID;
 public class CommandPublisher {
 
     private final MqttClient mqttClient;
+    private final MqttProperties props;
     private final ObjectMapper objectMapper;
-
-    @Value("${edgeguardian.controller.mqtt.topic-root:edgeguardian}")
-    private String topicRoot;
 
     /**
      * Publish a command to a specific device.
@@ -57,7 +55,7 @@ public class CommandPublisher {
             return;
         }
 
-        String topic = topicRoot + "/device/" + deviceId + "/" + topicSuffix;
+        String topic = props.topicRoot() + "/device/" + deviceId + "/" + topicSuffix;
         try {
             byte[] bytes = objectMapper.writeValueAsBytes(payload);
             var message = new MqttMessage(bytes);

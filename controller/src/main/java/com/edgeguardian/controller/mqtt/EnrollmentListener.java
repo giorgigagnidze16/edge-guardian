@@ -1,5 +1,6 @@
 package com.edgeguardian.controller.mqtt;
 
+import com.edgeguardian.controller.config.MqttProperties;
 import com.edgeguardian.controller.dto.AgentRegisterResponse;
 import com.edgeguardian.controller.model.CertRequestType;
 import com.edgeguardian.controller.model.Device;
@@ -15,12 +16,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.eclipse.paho.mqttv5.client.IMqttMessageListener;
 import org.eclipse.paho.mqttv5.client.MqttClient;
-import org.eclipse.paho.mqttv5.common.MqttException;
 import org.eclipse.paho.mqttv5.common.MqttMessage;
-import org.eclipse.paho.mqttv5.common.MqttSubscription;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 import java.util.LinkedHashMap;
@@ -34,32 +31,21 @@ public class EnrollmentListener {
 
     private static final String IDENTITY_CERT_NAME = "device-identity";
 
+    private final MqttProperties props;
     private final MqttClient mqttClient;
     private final ObjectMapper objectMapper;
+
     private final DeviceRegistry deviceRegistry;
+    private final MqttSubscriptions subscriptions;
+    private final BrokerCaProvider brokerCaProvider;
     private final EnrollmentService enrollmentService;
     private final CertificateAuthorityService caService;
     private final CertificateService certificateService;
-    private final BrokerCaProvider brokerCaProvider;
-
-    @Value("${edgeguardian.controller.mqtt.topic-root:edgeguardian}")
-    private String topicRoot;
 
     @PostConstruct
-    public void subscribe() {
-        if (!mqttClient.isConnected()) {
-            log.warn("MQTT not connected, enrollment subscription deferred");
-            return;
-        }
-        String topic = topicRoot + "/device/+/enroll/request";
-        try {
-            mqttClient.subscribe(
-                    new MqttSubscription[]{new MqttSubscription(topic, MqttTopics.QOS_RELIABLE)},
-                    new IMqttMessageListener[]{this::onEnrollRequest});
-            log.info("Subscribed to enrollment topic: {}", topic);
-        } catch (MqttException e) {
-            log.error("Failed to subscribe to enrollment topic", e);
-        }
+    void register() {
+        subscriptions.register("/device/+/enroll/request",
+                MqttTopics.QOS_RELIABLE, this::onEnrollRequest);
     }
 
     private void onEnrollRequest(String topic, MqttMessage message) {
@@ -124,7 +110,6 @@ public class EnrollmentListener {
         return sb.toString();
     }
 
-    // Treated as MANIFEST so compromise detection applies to re-enrollments.
     private IssuedCertificate issueIdentityCertIfRequested(Device device, EnrollRequestPayload request) {
         if (request.csrPem() == null || request.csrPem().isBlank()) {
             return null;
@@ -160,7 +145,7 @@ public class EnrollmentListener {
     }
 
     private void publish(String deviceId, AgentRegisterResponse response) {
-        String responseTopic = topicRoot + "/device/" + deviceId + "/enroll/response";
+        String responseTopic = props.topicRoot() + "/device/" + deviceId + "/enroll/response";
         try {
             var msg = new MqttMessage(objectMapper.writeValueAsBytes(response));
             msg.setQos(MqttTopics.QOS_RELIABLE);

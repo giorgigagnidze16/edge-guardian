@@ -29,6 +29,7 @@ type MQTTClient struct {
 	topicRoot           string
 	store               *storage.Store
 	logger              *zap.Logger
+	bootstrap           bool
 	cmdHandler          CommandHandler
 	desiredStateHandler DesiredStateHandler
 	certResponseHandler CertResponseHandler
@@ -45,6 +46,7 @@ type MQTTConfig struct {
 	TopicRoot string
 	Store     *storage.Store
 	TLS       TLSConfig
+	Bootstrap bool
 }
 
 // NewMQTTClient creates an MQTT client. Call Connect() to establish the connection.
@@ -54,6 +56,7 @@ func NewMQTTClient(cfg MQTTConfig, logger *zap.Logger) (*MQTTClient, error) {
 		topicRoot:        cfg.TopicRoot,
 		store:            cfg.Store,
 		logger:           logger,
+		bootstrap:        cfg.Bootstrap,
 		enrollResponseCh: make(chan *model.RegisterResponse, 1),
 	}
 
@@ -333,6 +336,10 @@ func (mc *MQTTClient) queueMessage(topic string, payload []byte) error {
 }
 
 func (mc *MQTTClient) onConnect(client mqtt.Client) {
+	if mc.bootstrap {
+		mc.logger.Info("MQTT bootstrap connection established, enrollment")
+		return
+	}
 	mc.logger.Info("MQTT connection established, subscribing to topics")
 
 	mc.subscribeToTopic(client, mc.topic("command"), mc.handleCommand)

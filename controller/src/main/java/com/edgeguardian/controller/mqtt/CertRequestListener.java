@@ -1,6 +1,8 @@
 package com.edgeguardian.controller.mqtt;
 
+import com.edgeguardian.controller.config.MqttProperties;
 import com.edgeguardian.controller.model.CertRequestType;
+import com.edgeguardian.controller.model.Device;
 import com.edgeguardian.controller.model.IssuedCertificate;
 import com.edgeguardian.controller.mqtt.payload.CertRequestPayload;
 import com.edgeguardian.controller.mqtt.payload.CertResponsePayload;
@@ -11,13 +13,10 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.eclipse.paho.mqttv5.client.IMqttMessageListener;
 import org.eclipse.paho.mqttv5.client.MqttClient;
-import org.eclipse.paho.mqttv5.common.MqttException;
 import org.eclipse.paho.mqttv5.common.MqttMessage;
-import org.eclipse.paho.mqttv5.common.MqttSubscription;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
+import org.springframework.util.StringUtils;
 
 import java.util.List;
 
@@ -27,50 +26,36 @@ import java.util.List;
 public class CertRequestListener {
 
     private final MqttClient mqttClient;
+    private final MqttProperties props;
+    private final MqttSubscriptions subscriptions;
     private final ObjectMapper objectMapper;
+    private final DeviceRepository deviceRepository;
     private final CertificateService certificateService;
     private final CertificateAuthorityService caService;
-    private final DeviceRepository deviceRepository;
-
-    @Value("${edgeguardian.controller.mqtt.topic-root:edgeguardian}")
-    private String topicRoot;
 
     @PostConstruct
-    public void subscribe() {
-        if (!mqttClient.isConnected()) {
-            log.warn("MQTT client not connected, cert request subscription deferred");
-            return;
-        }
-
-        String topic = topicRoot + "/device/+/cert/request";
-        try {
-            var subscription = new MqttSubscription(topic, MqttTopics.QOS_RELIABLE);
-            IMqttMessageListener listener = this::onCertRequest;
-            mqttClient.subscribe(new MqttSubscription[]{subscription},
-                    new IMqttMessageListener[]{listener});
-            log.info("Subscribed to cert request topic: {}", topic);
-        } catch (MqttException e) {
-            log.error("Failed to subscribe to cert request topic: {}", e.getMessage());
-        }
+    void register() {
+        subscriptions.register("/device/+/cert/request",
+                MqttTopics.QOS_RELIABLE, this::onCertRequest);
     }
 
     private void onCertRequest(String topic, MqttMessage message) {
-        String deviceId = extractDeviceId(topic);
+        String deviceId = MqttTopics.extractDeviceId(topic);
         try {
             var request = objectMapper.readValue(message.getPayload(), CertRequestPayload.class);
-            String resolvedDeviceId = request.deviceId() != null ? request.deviceId() : deviceId;
+            String resolvedDeviceId = StringUtils.hasText(request.deviceId()) ? request.deviceId() : deviceId;
 
-            if (resolvedDeviceId == null || resolvedDeviceId.isBlank()) {
+            if (!StringUtils.hasText(resolvedDeviceId)) {
                 publishResponse(deviceId, request.name(), false, "deviceId is required", null, null);
                 return;
             }
-            if (request.csrPem() == null || request.csrPem().isBlank()) {
+            if (!StringUtils.hasText(request.csrPem())) {
                 publishResponse(resolvedDeviceId, request.name(), false, "csrPem is required", null, null);
                 return;
             }
 
             Long orgId = deviceRepository.findByDeviceId(resolvedDeviceId)
-                    .map(d -> d.getOrganizationId())
+                    .map(Device::getOrganizationId)
                     .orElse(null);
 
             if (orgId == null) {
@@ -97,8 +82,6 @@ public class CertRequestListener {
                 publishResponse(resolvedDeviceId, request.name(), true,
                         "Certificate issued", cert.getCertPem(), caService.getCaCertPem(orgId));
             }
-            // If cert is null and not blocked, request is pending manual approval.
-            // Response will be sent when admin approves (via CertificateController).
 
         } catch (Exception e) {
             log.error("Failed to process cert request from topic {}: {}", topic, e.getMessage(), e);
@@ -117,9 +100,9 @@ public class CertRequestListener {
 
     private void publishResponse(String deviceId, String name, boolean accepted,
                                  String message, String certPem, String caCertPem) {
-        if (deviceId == null) return;
+        if (!StringUtils.hasText(deviceId)) return;
         try {
-            String responseTopic = topicRoot + "/device/" + deviceId + "/cert/response";
+            String responseTopic = props.topicRoot() + "/device/" + deviceId + "/cert/response";
             var response = new CertResponsePayload(name, accepted, message, certPem, caCertPem);
             byte[] payload = objectMapper.writeValueAsBytes(response);
             var msg = new MqttMessage(payload);
@@ -132,10 +115,6 @@ public class CertRequestListener {
         }
     }
 
-    private String extractDeviceId(String topic) {
-        return MqttTopics.extractDeviceId(topic);
-    }
-
     private CertRequestType parseType(String type) {
         if (type == null) return CertRequestType.INITIAL;
         return switch (type.toLowerCase()) {
@@ -144,5 +123,4 @@ public class CertRequestListener {
             default -> CertRequestType.INITIAL;
         };
     }
-
 }
