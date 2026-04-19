@@ -15,21 +15,26 @@ $forwards = @(
     @{ svc = 'emqx';       ports = '30883:8883'  }
 )
 
+# Bind to the IPv4 loopback explicitly. Services running on Windows that
+# resolve "localhost" via DNS hit ::1 first, which kubectl port-forward does
+# not listen on - so agents/CLIs must use 127.0.0.1 in their config.
+$bindAddress = '127.0.0.1'
+
 $jobs = @()
 try {
     foreach ($f in $forwards) {
-        Write-Host "Starting port-forward svc/$($f.svc) $($f.ports)"
+        Write-Host "Starting port-forward svc/$($f.svc) $($f.ports) on $bindAddress"
         $jobs += Start-Job -ScriptBlock {
-            param($ns, $svc, $ports)
-            kubectl -n $ns port-forward "svc/$svc" $ports
-        } -ArgumentList $ns, $f.svc, $f.ports
+            param($ns, $svc, $ports, $addr)
+            kubectl -n $ns port-forward --address $addr "svc/$svc" $ports
+        } -ArgumentList $ns, $f.svc, $f.ports, $bindAddress
     }
 
     Write-Host ""
     Write-Host "Forwards running. Ctrl+C to stop." -ForegroundColor Green
-    Write-Host "  controller : http://localhost:30443"
-    Write-Host "  emqx mqtt  : tcp://localhost:31883"
-    Write-Host "  emqx mtls  : ssl://localhost:30883"
+    Write-Host "  controller : http://127.0.0.1:30443"
+    Write-Host "  emqx mqtt  : tcp://127.0.0.1:31883"
+    Write-Host "  emqx mtls  : ssl://127.0.0.1:30883"
     Write-Host ""
 
     while ($true) {

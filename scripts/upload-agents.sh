@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Build agent binaries for the install matrix (using Docker — no local Go required)
+# Build agent binaries for the install matrix (using Docker - no local Go required)
 # and upload them to MinIO via a throwaway in-cluster mc pod (no local mc required).
 set -euo pipefail
 
@@ -37,7 +37,7 @@ for entry in "${PLATFORMS[@]}"; do
     -v "$ROOT/build:/out" \
     -e CGO_ENABLED=0 -e GOOS="$os" -e GOARCH="$arch" \
     -w //src "$GO_IMAGE" \
-    go build -ldflags="-s -w -X main.agentVersion=0.2.0" -o "$out" ./cmd/agent
+    go build -ldflags="-s -w -X main.agentVersion=0.4.0" -o "$out" ./cmd/agent
 done
 
 echo "=== Launching throwaway mc pod in cluster ==="

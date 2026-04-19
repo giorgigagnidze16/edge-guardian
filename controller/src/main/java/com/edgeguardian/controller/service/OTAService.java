@@ -1,9 +1,16 @@
 package com.edgeguardian.controller.service;
 
-import com.edgeguardian.controller.model.*;
+import com.edgeguardian.controller.model.DeploymentDeviceStatus;
+import com.edgeguardian.controller.model.DeploymentState;
+import com.edgeguardian.controller.model.Device;
+import com.edgeguardian.controller.model.OtaArtifact;
+import com.edgeguardian.controller.model.OtaDeployment;
+import com.edgeguardian.controller.model.OtaDeviceState;
 import com.edgeguardian.controller.mqtt.CommandPublisher;
-import com.edgeguardian.controller.repository.*;
-import static com.edgeguardian.controller.model.OtaDeviceState.*;
+import com.edgeguardian.controller.repository.DeploymentDeviceStatusRepository;
+import com.edgeguardian.controller.repository.DeviceRepository;
+import com.edgeguardian.controller.repository.OtaArtifactRepository;
+import com.edgeguardian.controller.repository.OtaDeploymentRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.eclipse.paho.mqttv5.common.MqttException;
@@ -13,7 +20,16 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.time.Instant;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.UUID;
+
+import static com.edgeguardian.controller.model.OtaDeviceState.DOWNLOADING;
+import static com.edgeguardian.controller.model.OtaDeviceState.FAILED;
+import static com.edgeguardian.controller.model.OtaDeviceState.PENDING;
+import static com.edgeguardian.controller.model.OtaDeviceState.ROLLED_BACK;
 
 @Slf4j
 @Service
@@ -31,8 +47,8 @@ public class OTAService {
 
     @Transactional
     public OtaArtifact createArtifact(Long orgId, String name, String version,
-                                       String architecture, long size, String sha256,
-                                       String ed25519Sig, String s3Key, Long createdBy) {
+                                      String architecture, long size, String sha256,
+                                      String ed25519Sig, String s3Key, Long createdBy) {
         return artifactRepository.save(OtaArtifact.builder()
                 .organizationId(orgId)
                 .name(name).version(version).architecture(architecture)
@@ -62,12 +78,12 @@ public class OTAService {
     // --- Deployments ---
 
     // NOTE: The `strategy` parameter (rolling/canary/immediate) is descriptive-only and
-    // NOT YET IMPLEMENTED. This method always performs an immediate fan-out — every matching
+    // NOT YET IMPLEMENTED. This method always performs an immediate fan-out - every matching
     // device receives the OTA command in the same transaction. The value is stored on the
     // deployment row so a future staged-rollout implementation can hook in without API changes.
     @Transactional
     public OtaDeployment createDeployment(Long orgId, Long artifactId, String strategy,
-                                           Map<String, String> labelSelector, Long createdBy) {
+                                          Map<String, String> labelSelector, Long createdBy) {
         var artifact = getArtifact(artifactId, orgId);
 
         var deployment = deploymentRepository.save(OtaDeployment.builder()
@@ -78,7 +94,7 @@ public class OTAService {
                 .createdBy(createdBy)
                 .build());
 
-        // Org-scoped lookup at the repository layer — was previously findAll() + in-memory
+        // Org-scoped lookup at the repository layer - was previously findAll() + in-memory
         // filter which (a) leaks bytes proportional to total fleet size and (b) risked
         // cross-tenant deployment if the filter clause ever got dropped in a refactor.
         var targetDevices = deviceRepository.findByOrganizationId(orgId).stream()
@@ -129,7 +145,7 @@ public class OTAService {
 
     @Transactional
     public void updateDeviceOtaStatus(Long deploymentId, String deviceId,
-                                       String state, int progress, String errorMessage) {
+                                      String state, int progress, String errorMessage) {
         var status = deviceStatusRepository
                 .findByDeploymentIdAndDeviceId(deploymentId, deviceId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
@@ -200,7 +216,7 @@ public class OTAService {
     }
 
     private void publishOtaCommand(String deviceId, Long deploymentId,
-                                    OtaArtifact artifact, String downloadUrl) {
+                                   OtaArtifact artifact, String downloadUrl) {
         try {
             commandPublisher.publishCommand(deviceId, "ota_update", Map.of(
                     "deployment_id", String.valueOf(deploymentId),

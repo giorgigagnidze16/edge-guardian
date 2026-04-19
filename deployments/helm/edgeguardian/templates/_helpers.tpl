@@ -106,3 +106,14 @@ pki-bootstrap to fall back to node IP + NodePort).
 {{- if $c -}}{{ printf "%s/api/v1/pki/crl" $c }}{{- end -}}
 {{- end -}}
 {{- end -}}
+
+{{/*
+Fingerprint of every URL that the edgeguardian-runtime-urls ConfigMap is
+derived from. Stamped onto the Deployment pod template as an annotation so a
+helm upgrade that changes any of these inputs automatically triggers a rolling
+restart - otherwise configMapKeyRef env vars stay pinned to whatever was read
+at pod-start time and the controller rejects JWTs with "iss claim not valid".
+*/}}
+{{- define "edgeguardian.runtimeUrlsChecksum" -}}
+{{- printf "%s|%s|%s|%s|%s|%s" .Values.ingress.baseDomain (.Values.ui.nextAuthUrl | default "") (.Values.ui.keycloakIssuerUrl | default "") (.Values.controller.publicUrl | default "") (.Values.controller.crlUrl | default "") (include "edgeguardian.ingressScheme" .) | sha256sum -}}
+{{- end -}}

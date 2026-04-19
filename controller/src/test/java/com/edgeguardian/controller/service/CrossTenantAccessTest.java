@@ -1,8 +1,16 @@
 package com.edgeguardian.controller.service;
 
 import com.edgeguardian.controller.AbstractIntegrationTest;
-import com.edgeguardian.controller.model.*;
-import com.edgeguardian.controller.repository.*;
+import com.edgeguardian.controller.model.ApiKey;
+import com.edgeguardian.controller.model.EnrollmentToken;
+import com.edgeguardian.controller.model.Organization;
+import com.edgeguardian.controller.model.OtaArtifact;
+import com.edgeguardian.controller.model.OtaDeployment;
+import com.edgeguardian.controller.repository.ApiKeyRepository;
+import com.edgeguardian.controller.repository.EnrollmentTokenRepository;
+import com.edgeguardian.controller.repository.OrganizationRepository;
+import com.edgeguardian.controller.repository.OtaArtifactRepository;
+import com.edgeguardian.controller.repository.OtaDeploymentRepository;
 import com.edgeguardian.controller.service.pki.OrganizationCaStore;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;

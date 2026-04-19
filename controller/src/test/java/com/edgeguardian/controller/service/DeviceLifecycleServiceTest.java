@@ -27,7 +27,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.web.server.ResponseStatusException;
 
 /**
- * Pure unit test for DeviceLifecycleService — verifies the orchestration contract
+ * Pure unit test for DeviceLifecycleService - verifies the orchestration contract
  * (who gets called, in what order, and with what arguments) without spinning up Spring.
  */
 @ExtendWith(MockitoExtension.class)
@@ -117,7 +117,7 @@ class DeviceLifecycleServiceTest {
 
     @Test
     void deleteDevice_concurrentDelete_surfacesAs404() {
-        // findById succeeds but remove() returns false — another actor raced us.
+        // findById succeeds but remove() returns false - another actor raced us.
         when(deviceRegistry.findById(DEVICE_ID)).thenReturn(Optional.of(device));
         when(deviceRegistry.remove(DEVICE_ID)).thenReturn(false);
 
@@ -126,7 +126,7 @@ class DeviceLifecycleServiceTest {
                 .extracting(e -> ((ResponseStatusException) e).getStatusCode())
                 .isEqualTo(HttpStatus.NOT_FOUND);
 
-        // Audit should NOT fire if removal didn't happen — avoids lying to the log.
+        // Audit should NOT fire if removal didn't happen - avoids lying to the log.
         verifyNoInteractions(auditService);
     }
 

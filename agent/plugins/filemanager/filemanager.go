@@ -151,7 +151,7 @@ func (fm *FileManager) reconcileFile(spec reconciler.ResourceSpec) reconciler.Ac
 				zap.String("owner", desiredOwner),
 				zap.Error(err),
 			)
-			// Ownership failure is non-fatal — log warning but report success.
+			// Ownership failure is non-fatal - log warning but report success.
 		}
 	}
 

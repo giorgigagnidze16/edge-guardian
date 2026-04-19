@@ -1,7 +1,12 @@
 package com.edgeguardian.controller.service;
 
 import com.edgeguardian.controller.config.CaProperties;
-import com.edgeguardian.controller.model.*;
+import com.edgeguardian.controller.model.CertRequestState;
+import com.edgeguardian.controller.model.CertRequestType;
+import com.edgeguardian.controller.model.CertificateRequest;
+import com.edgeguardian.controller.model.Device;
+import com.edgeguardian.controller.model.IssuedCertificate;
+import com.edgeguardian.controller.model.RevokeReason;
 import com.edgeguardian.controller.repository.CertificateRequestRepository;
 import com.edgeguardian.controller.repository.DeviceRepository;
 import com.edgeguardian.controller.repository.IssuedCertificateRepository;
@@ -37,8 +42,8 @@ public class CertificateService {
                                             String csrPem, CertRequestType type,
                                             String currentSerial) {
         return switch (type) {
-            case INITIAL  -> processInitial(deviceId, orgId, name, commonName, sans, csrPem);
-            case RENEWAL  -> processRenewal(deviceId, orgId, name, commonName, sans, csrPem, currentSerial);
+            case INITIAL -> processInitial(deviceId, orgId, name, commonName, sans, csrPem);
+            case RENEWAL -> processRenewal(deviceId, orgId, name, commonName, sans, csrPem, currentSerial);
             case MANIFEST -> processManifest(deviceId, orgId, name, commonName, sans, csrPem);
         };
     }
@@ -124,7 +129,7 @@ public class CertificateService {
                                                  String csrPem, CertRequestType type,
                                                  int activeCertCount) {
         log.warn("SECURITY: Device {} requested cert '{}' (type={}) but already has {} valid cert(s). "
-                 + "Blocking and revoking.", deviceId, name, type, activeCertCount);
+                + "Blocking and revoking.", deviceId, name, type, activeCertCount);
 
         revokeAllForDevice(deviceId, RevokeReason.COMPROMISED);
         suspendDevice(deviceId);
@@ -297,9 +302,9 @@ public class CertificateService {
     }
 
     private CertificateRequest saveRequest(String deviceId, Long orgId, String name,
-                                             String commonName, List<String> sans,
-                                             String csrPem, CertRequestType type,
-                                             String currentSerial) {
+                                           String commonName, List<String> sans,
+                                           String csrPem, CertRequestType type,
+                                           String currentSerial) {
         return requestRepository.save(CertificateRequest.builder()
                 .deviceId(deviceId)
                 .organizationId(orgId)

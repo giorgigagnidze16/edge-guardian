@@ -126,7 +126,7 @@ export default async function LandingPage() {
         </section>
 
         {/* ══════════════════════════════════════════════
-         *  SUPPORTED PLATFORMS (client component — rAF marquees)
+         *  SUPPORTED PLATFORMS (client component - rAF marquees)
          * ══════════════════════════════════════════════ */}
         <section className="relative z-10 pt-28 lg:pt-36">
           <div className="reveal reveal-up text-center mb-12 px-6">
@@ -135,14 +135,14 @@ export default async function LandingPage() {
               Runs <span className="text-gradient">everywhere</span>
             </h2>
             <p className="mt-3 text-lg text-muted-foreground max-w-xl mx-auto">
-              From single-board computers to industrial gateways — one agent binary, every platform.
+              From single-board computers to industrial gateways - one agent binary, every platform.
             </p>
           </div>
           <MarqueeSection />
         </section>
 
         {/* ══════════════════════════════════════════════
-         *  FEATURES — 3 Cards
+         *  FEATURES - 3 Cards
          * ══════════════════════════════════════════════ */}
         <section id="features" className="relative z-10 mx-auto max-w-7xl px-6 py-32 lg:py-40 sm:px-12 lg:px-16">
           <div className="reveal reveal-up text-center mb-20">
@@ -152,7 +152,7 @@ export default async function LandingPage() {
               <span className="text-gradient"> edge operations</span>
             </h2>
             <p className="mt-4 text-lg text-muted-foreground max-w-2xl mx-auto">
-              A complete platform for managing IoT devices at any scale — from prototypes to production fleets.
+              A complete platform for managing IoT devices at any scale - from prototypes to production fleets.
             </p>
           </div>
 
@@ -164,7 +164,7 @@ export default async function LandingPage() {
               <h3 className="text-2xl font-bold mb-3">Every device. One view.</h3>
               <p className="text-base text-muted-foreground leading-relaxed mb-8">
                 Real-time visibility into your entire fleet. Health scores, resource
-                metrics, connection status — filter and drill into any device instantly.
+                metrics, connection status - filter and drill into any device instantly.
               </p>
               <div className="rounded-xl bg-slate-50 dark:bg-[#0c0c16] border border-border dark:border-white/10 p-4">
                 <div className="grid grid-cols-3 gap-2 mb-3">
@@ -275,7 +275,7 @@ export default async function LandingPage() {
             </h2>
             <p className="mt-4 text-lg text-muted-foreground max-w-2xl mx-auto">
               Zero-touch provisioning. Devices automatically discover, register, and sync
-              with your controller — no manual configuration required.
+              with your controller - no manual configuration required.
             </p>
           </div>
           <DiscoverySection />
@@ -295,7 +295,7 @@ export default async function LandingPage() {
               </h2>
               <p className="mt-4 text-lg text-muted-foreground max-w-2xl mx-auto">
                 Connect to any device via web terminal or SSH. Deploy firmware updates.
-                Monitor fleet health — all from a single interface.
+                Monitor fleet health - all from a single interface.
               </p>
             </div>
             <TerminalSection />
@@ -325,7 +325,7 @@ export default async function LandingPage() {
                 <h3 className="text-2xl font-bold mb-3">Define once. Converge always.</h3>
                 <p className="text-base text-muted-foreground leading-relaxed mb-8">
                   Push YAML manifests describing desired device state. The agent
-                  reconciles automatically — services, files, network config.
+                  reconciles automatically - services, files, network config.
                 </p>
                 <div className="rounded-xl bg-slate-50 dark:bg-[#0c0c16] border border-border dark:border-white/10 p-5 font-mono text-sm leading-relaxed overflow-hidden">
                   <div><span className="text-violet-600 dark:text-violet-400">kind</span><span className="text-slate-400 dark:text-zinc-600">:</span> <span className="text-emerald-600 dark:text-emerald-400">DeviceManifest</span></div>

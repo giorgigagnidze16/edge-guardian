@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Minikube dev bring-up: build images into minikube's docker, then helm install.
-# Prod: just run `helm install` yourself — see deployments/helm/edgeguardian/README.md.
+# Prod: just run `helm install` yourself - see deployments/helm/edgeguardian/README.md.
 
 set -euo pipefail
 

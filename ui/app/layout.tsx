@@ -23,7 +23,7 @@ export const metadata: Metadata = {
   description:
     "Kubernetes-style IoT fleet management. Sub-5MB agents, declarative YAML config, OTA updates with automatic rollback. Built for ARM, x86, and everything in between.",
   openGraph: {
-    title: "EdgeGuardian — IoT Fleet Management",
+    title: "EdgeGuardian - IoT Fleet Management",
     description:
       "Deploy to thousands. Monitor everything. Sub-5MB agents that self-heal with declarative config and OTA updates.",
     siteName: "EdgeGuardian",
@@ -31,7 +31,7 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: "summary_large_image",
-    title: "EdgeGuardian — IoT Fleet Management",
+    title: "EdgeGuardian - IoT Fleet Management",
     description:
       "Deploy to thousands. Monitor everything. Sub-5MB agents that self-heal with declarative config and OTA updates.",
   },

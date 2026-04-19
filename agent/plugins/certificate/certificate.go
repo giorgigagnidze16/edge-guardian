@@ -115,11 +115,11 @@ func (cm *CertificateManager) reconcileCert(spec reconciler.ResourceSpec) reconc
 
 	// 3. Check certificate state
 	if _, err := os.Stat(certPath); os.IsNotExist(err) {
-		// No cert — request one
+		// No cert - request one
 		return cm.requestCert(name, cn, sans, keyPath, "manifest", "")
 	}
 
-	// Cert exists — check validity
+	// Cert exists - check validity
 	certPEM, err := os.ReadFile(certPath)
 	if err != nil {
 		return cm.errorAction(name, "read cert", err)
@@ -132,14 +132,14 @@ func (cm *CertificateManager) reconcileCert(spec reconciler.ResourceSpec) reconc
 
 	now := time.Now()
 	if now.After(cert.NotAfter) {
-		// Expired — request initial (not renewal, since old cert is dead)
+		// Expired - request initial (not renewal, since old cert is dead)
 		cm.logger.Warn("certificate expired", zap.String("cert", name), zap.Time("expired", cert.NotAfter))
 		return cm.requestCert(name, cn, sans, keyPath, "initial", "")
 	}
 
 	renewAt := cert.NotAfter.AddDate(0, 0, -defaultRenewBeforeDays)
 	if now.After(renewAt) {
-		// In renewal window — generate new key and request renewal
+		// In renewal window - generate new key and request renewal
 		cm.logger.Info("certificate entering renewal window",
 			zap.String("cert", name), zap.Time("expires", cert.NotAfter))
 		return cm.requestRenewal(name, cn, sans, keyPath, keyAlgo, cert.SerialNumber)

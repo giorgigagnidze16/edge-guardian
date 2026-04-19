@@ -120,7 +120,7 @@ func TestFileManager_NoopWhenConverged(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Skip mode in spec — POSIX file modes are not enforced on Windows,
+	// Skip mode in spec - POSIX file modes are not enforced on Windows,
 	// so checkMode would always see a mismatch. The production target is Linux.
 	fm := New(testLogger())
 	specs := []reconciler.ResourceSpec{

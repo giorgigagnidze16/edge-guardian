@@ -8,7 +8,6 @@ import (
 	"net"
 	"net/http"
 	"os"
-	"os/signal"
 	"path/filepath"
 	"runtime"
 	"time"
@@ -41,9 +40,19 @@ func main() {
 		os.Exit(1)
 	}
 
-	logger := initLogger(cfg.LogLevel)
+	logger := initLogger(cfg)
 	defer logger.Sync()
 
+	if err := runPlatform(cfg, logger); err != nil {
+		logger.Error("agent terminated with error", zap.Error(err))
+		os.Exit(1)
+	}
+}
+
+// runAgent is the OS-agnostic agent lifecycle. It runs until ctx is
+// cancelled - by the interactive signal handler (unix/console) or by the
+// Windows Service Control Manager dispatcher.
+func runAgent(ctx context.Context, cfg *config.Config, logger *zap.Logger) error {
 	logger.Info("EdgeGuardian agent starting",
 		zap.String("version", agentVersion),
 		zap.String("device_id", cfg.DeviceID),
@@ -53,13 +62,13 @@ func main() {
 	)
 
 	if err := os.MkdirAll(cfg.DataDir, 0750); err != nil {
-		logger.Fatal("failed to create data directory", zap.Error(err))
+		return fmt.Errorf("create data directory: %w", err)
 	}
 
 	dbPath := filepath.Join(cfg.DataDir, "agent.db")
 	store, err := storage.Open(dbPath)
 	if err != nil {
-		logger.Fatal("failed to open BoltDB", zap.String("path", dbPath), zap.Error(err))
+		return fmt.Errorf("open BoltDB at %s: %w", dbPath, err)
 	}
 	defer func() {
 		if err := store.Close(); err != nil {
@@ -69,12 +78,6 @@ func main() {
 	}()
 	logger.Info("BoltDB opened", zap.String("path", dbPath))
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	sigCh := make(chan os.Signal, 1)
-	signal.Notify(sigCh, platformSignals()...)
-
 	rec := reconciler.New(cfg.ReconcileInterval, logger)
 	rec.RegisterPlugin(filemanager.New(logger))
 	rec.RegisterPlugin(service.New(logger))
@@ -83,12 +86,12 @@ func main() {
 
 	identityMgr, err := bootstrap.NewManager(cfg.DataDir)
 	if err != nil {
-		logger.Fatal("failed to initialize identity manager", zap.Error(err))
+		return fmt.Errorf("initialize identity manager: %w", err)
 	}
 
-	identity, mqttClient, err := connectWithIdentity(cfg, identityMgr, store, logger)
+	identity, mqttClient, err := connectWithIdentityRetry(ctx, cfg, identityMgr, store, logger)
 	if err != nil {
-		logger.Fatal("failed to establish MQTT connection", zap.Error(err))
+		return fmt.Errorf("establish MQTT connection: %w", err)
 	}
 	defer mqttClient.Close()
 
@@ -196,11 +199,58 @@ func main() {
 
 	logger.Info("agent running, waiting for shutdown signal")
 
-	sig := <-sigCh
-	logger.Info("received signal, shutting down", zap.String("signal", sig.String()))
-	cancel()
+	<-ctx.Done()
+	logger.Info("shutdown requested", zap.Error(ctx.Err()))
 	time.Sleep(500 * time.Millisecond)
 	logger.Info("agent stopped")
+	return nil
+}
+
+// connectWithIdentityRetry keeps retrying connectWithIdentity with exponential
+// backoff until it succeeds or ctx is cancelled. Lets the service stay alive
+// through transient broker/controller outages - SCM sees a Running service and
+// the agent joins the fleet once the dependency recovers.
+func connectWithIdentityRetry(
+	ctx context.Context,
+	cfg *config.Config,
+	mgr *bootstrap.Manager,
+	store *storage.Store,
+	logger *zap.Logger,
+) (*bootstrap.Identity, *comms.MQTTClient, error) {
+	const initial = 2 * time.Second
+	const max = 60 * time.Second
+
+	backoff := initial
+	attempt := 0
+	for {
+		if err := ctx.Err(); err != nil {
+			return nil, nil, err
+		}
+		attempt++
+		identity, client, err := connectWithIdentity(cfg, mgr, store, logger)
+		if err == nil {
+			if attempt > 1 {
+				logger.Info("MQTT connection established after retries",
+					zap.Int("attempts", attempt))
+			}
+			return identity, client, nil
+		}
+		logger.Warn("MQTT connect failed; will retry",
+			zap.Int("attempt", attempt),
+			zap.Duration("next_in", backoff),
+			zap.Error(err))
+		select {
+		case <-time.After(backoff):
+		case <-ctx.Done():
+			return nil, nil, ctx.Err()
+		}
+		if backoff < max {
+			backoff *= 2
+			if backoff > max {
+				backoff = max
+			}
+		}
+	}
 }
 
 // connectWithIdentity loads or enrolls the identity and returns a connected mTLS MQTT client.
@@ -220,7 +270,7 @@ func connectWithIdentity(
 		// Password-only auth left revocation unenforceable at the wire level; operators
 		// must point the agent at an mTLS broker (ssl://…:8883).
 		return nil, nil, fmt.Errorf(
-			"mtls_broker_url is required — password-only auth is no longer supported")
+			"mtls_broker_url is required - password-only auth is no longer supported")
 	}
 
 	if identity != nil {
@@ -234,7 +284,7 @@ func connectWithIdentity(
 		return identity, client, nil
 	}
 
-	logger.Info("no persisted identity — running enrollment bootstrap")
+	logger.Info("no persisted identity - running enrollment bootstrap")
 
 	bootstrapClient, err := comms.NewMQTTClient(enrollmentClientConfig(cfg, store), logger)
 	if err != nil {
@@ -338,7 +388,7 @@ func checkPostUpdateStatus(updater *ota.Updater,
 
 	rollbackExists, _ := updater.ReadRollbackMarker()
 	if rollbackExists {
-		logger.Warn("rollback marker detected — previous OTA update was rolled back")
+		logger.Warn("rollback marker detected - previous OTA update was rolled back")
 		if marker, err := updater.ReadUpdateMarker(); err == nil {
 			_ = mqttClient.PublishOTAStatus(&model.OTAStatusReport{
 				DeploymentID: marker.DeploymentID,
@@ -357,7 +407,7 @@ func checkPostUpdateStatus(updater *ota.Updater,
 	if err != nil {
 		return
 	}
-	logger.Info("update marker detected — OTA update completed successfully",
+	logger.Info("update marker detected - OTA update completed successfully",
 		zap.Int64("deployment_id", marker.DeploymentID),
 		zap.String("previous_version", marker.PreviousVersion))
 	_ = mqttClient.PublishOTAStatus(&model.OTAStatusReport{
@@ -394,9 +444,12 @@ func startHealthServer(port int, logger *zap.Logger) {
 	}
 }
 
-func initLogger(level string) *zap.Logger {
+// initLogger builds a zap logger that writes JSON to stdout AND to
+// {DataDir}/logs/agent.log. File output is critical under Windows SCM where
+// stdout is discarded - the log file gives operators post-mortem visibility.
+func initLogger(cfg *config.Config) *zap.Logger {
 	var zapLevel zapcore.Level
-	switch level {
+	switch cfg.LogLevel {
 	case "debug":
 		zapLevel = zapcore.DebugLevel
 	case "warn":
@@ -407,16 +460,26 @@ func initLogger(level string) *zap.Logger {
 		zapLevel = zapcore.InfoLevel
 	}
 
-	cfg := zap.Config{
+	outputs := []string{"stdout"}
+	if cfg.DataDir != "" {
+		logDir := filepath.Join(cfg.DataDir, "logs")
+		if err := os.MkdirAll(logDir, 0750); err == nil {
+			// zap requires forward slashes in paths on all platforms.
+			logFile := filepath.ToSlash(filepath.Join(logDir, "agent.log"))
+			outputs = append(outputs, logFile)
+		}
+	}
+
+	zapCfg := zap.Config{
 		Level:            zap.NewAtomicLevelAt(zapLevel),
 		Development:      false,
 		Encoding:         "json",
 		EncoderConfig:    zap.NewProductionEncoderConfig(),
-		OutputPaths:      []string{"stdout"},
+		OutputPaths:      outputs,
 		ErrorOutputPaths: []string{"stderr"},
 	}
 
-	logger, err := cfg.Build()
+	logger, err := zapCfg.Build()
 	if err != nil {
 		panic(fmt.Sprintf("failed to initialize logger: %v", err))
 	}

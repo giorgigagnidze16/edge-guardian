@@ -113,7 +113,7 @@ spec:
               # changes on subsequent upgrades propagate to dependents.
               if kubectl -n "$NS" get secret edgeguardian-broker-ca-secret >/dev/null 2>&1 \
                  && kubectl -n "$NS" get secret emqx-server-tls >/dev/null 2>&1; then
-                echo "Broker CA + server cert already present — skipping PKI gen"
+                echo "Broker CA + server cert already present - skipping PKI gen"
               else
                 cd /tmp
                 openssl ecparam -name prime256v1 -genkey -noout -out ca.key
@@ -151,7 +151,7 @@ spec:
               NODE_IP=""
 
               if [ -z "$NEXTAUTH_URL" ] || [ -z "$KC_ISSUER" ]; then
-                echo "No explicit URLs set — detecting node IP for nodePort/dev fallback"
+                echo "No explicit URLs set - detecting node IP for nodePort/dev fallback"
                 NODE_IP=$(kubectl get nodes -o jsonpath='{.items[0].status.addresses[?(@.type=="ExternalIP")].address}')
                 if [ -z "$NODE_IP" ]; then
                   NODE_IP=$(kubectl get nodes -o jsonpath='{.items[0].status.addresses[?(@.type=="InternalIP")].address}')

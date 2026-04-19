@@ -7,11 +7,11 @@ import java.util.Map;
  *
  * <p>Fields relevant to mTLS bootstrap:
  * <ul>
- *   <li>{@code caCertPem} — the organization's CA certificate (trust anchor for agent server-auth).</li>
- *   <li>{@code identityCertPem} — leaf certificate signed for the device's CSR (present only
+ *   <li>{@code caCertPem} - the organization's CA certificate (trust anchor for agent server-auth).</li>
+ *   <li>{@code identityCertPem} - leaf certificate signed for the device's CSR (present only
  *       when the agent submitted a CSR in the enroll request). This cert is what the agent
  *       subsequently presents on the mTLS listener.</li>
- *   <li>{@code identityCertSerial} — hex-encoded serial of the same leaf, used by the agent to
+ *   <li>{@code identityCertSerial} - hex-encoded serial of the same leaf, used by the agent to
  *       submit renewal requests later.</li>
  * </ul>
  */

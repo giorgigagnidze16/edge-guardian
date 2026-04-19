@@ -81,13 +81,13 @@ func TestManager_Enroll_PersistsIdentity(t *testing.T) {
 		t.Fatal("Enroll returned nil identity")
 	}
 	if stub.receivedReq == nil || stub.receivedReq.CsrPem == "" {
-		t.Fatal("enroller never saw a CSR — manager didn't build one")
+		t.Fatal("enroller never saw a CSR - manager didn't build one")
 	}
 	if stub.receivedReq.CommonName != "test-device" {
 		t.Fatalf("wrong CN: %q", stub.receivedReq.CommonName)
 	}
 
-	// Reload from disk — proves we persisted, not just returned from memory.
+	// Reload from disk - proves we persisted, not just returned from memory.
 	reloaded, err := mgr.Load()
 	if err != nil {
 		t.Fatalf("Load after Enroll: %v", err)

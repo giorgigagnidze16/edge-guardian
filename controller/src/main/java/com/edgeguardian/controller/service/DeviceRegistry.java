@@ -128,7 +128,7 @@ public class DeviceRegistry {
 
     /**
      * Find a device by its logical device ID, scoped to one organization.
-     * Returns empty if the device exists but belongs to a different org — callers
+     * Returns empty if the device exists but belongs to a different org - callers
      * should surface this as 404 (not 403) to avoid leaking existence across tenants.
      */
     @Transactional(readOnly = true)

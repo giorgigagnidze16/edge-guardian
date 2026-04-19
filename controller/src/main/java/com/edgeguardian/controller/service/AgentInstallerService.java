@@ -61,6 +61,7 @@ public class AgentInstallerService {
                 .queryParam("arch", "amd64")
                 .build().toUriString();
         String systemdUnit = os == Os.LINUX ? loadResource("installers/edgeguardian-agent.service.tmpl") : "";
+        String logo = loadResource("installers/logo.txt");
 
         return Map.of(
                 "CONTROLLER_URL", props.controllerUrl(),
@@ -69,8 +70,17 @@ public class AgentInstallerService {
                 "BOOTSTRAP_PASSWORD", props.bootstrapPassword(),
                 "ENROLLMENT_TOKEN", token.getToken(),
                 "BINARY_URL", binaryUrl,
-                "SYSTEMD_UNIT", systemdUnit
+                "SYSTEMD_UNIT", systemdUnit,
+                "AGENT_VERSION", props.agentVersion() == null ? "unknown" : props.agentVersion(),
+                "LOGO", stripTrailingNewline(logo)
         );
+    }
+
+    private static String stripTrailingNewline(String s) {
+        if (s == null || s.isEmpty()) return s;
+        if (s.endsWith("\r\n")) return s.substring(0, s.length() - 2);
+        if (s.endsWith("\n") || s.endsWith("\r")) return s.substring(0, s.length() - 1);
+        return s;
     }
 
     /**

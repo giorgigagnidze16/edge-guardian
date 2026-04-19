@@ -46,7 +46,7 @@ func (r *RealSystemd) runCheck(ctx context.Context, verb, name string) (bool, er
 	result := strings.TrimSpace(string(output))
 
 	if err != nil {
-		// systemctl exits non-zero for "inactive"/"disabled" — that is not an error.
+		// systemctl exits non-zero for "inactive"/"disabled" - that is not an error.
 		if result == "inactive" || result == "disabled" || result == "unknown" {
 			return false, nil
 		}

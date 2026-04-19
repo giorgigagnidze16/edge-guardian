@@ -34,7 +34,7 @@ public class EmqxAdminClient {
 
     public void kickout(String clientId) {
         if (!properties.isConfigured()) {
-            log.debug("EMQX admin not configured — skipping kickout for {}", clientId);
+            log.debug("EMQX admin not configured - skipping kickout for {}", clientId);
             return;
         }
 
@@ -61,11 +61,11 @@ public class EmqxAdminClient {
                 }
                 // 400/401/403 indicate config problems that retrying won't fix.
                 if (status == 400 || status == 401 || status == 403) {
-                    log.error("EMQX kickout for {} returned HTTP {} (non-retryable) — body: {}",
+                    log.error("EMQX kickout for {} returned HTTP {} (non-retryable) - body: {}",
                             clientId, status, truncate(response.body()));
                     return;
                 }
-                lastErr = new RuntimeException("HTTP " + status + " — " + truncate(response.body()));
+                lastErr = new RuntimeException("HTTP " + status + " - " + truncate(response.body()));
             } catch (InterruptedException ie) {
                 Thread.currentThread().interrupt();
                 log.warn("EMQX kickout interrupted for {}", clientId);

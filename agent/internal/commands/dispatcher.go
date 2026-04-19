@@ -150,7 +150,7 @@ func (d *Dispatcher) handleOtaUpdate(updater *ota.Updater,
 			zap.String("version", cmd.Params["artifact_version"]),
 			zap.Int64("deployment_id", deploymentID))
 
-		// 1. Download (presigned URL — full URL, no prefix needed)
+		// 1. Download (presigned URL - full URL, no prefix needed)
 		report("downloading", 10, "")
 		stagingPath, err := updater.Download(downloadURL)
 		if err != nil {
@@ -178,7 +178,7 @@ func (d *Dispatcher) handleOtaUpdate(updater *ota.Updater,
 			d.logger.Warn("failed to write update marker", zap.Error(err))
 		}
 
-		// 5. Apply — exits with code 42 for watchdog to swap binary
+		// 5. Apply - exits with code 42 for watchdog to swap binary
 		return updater.Apply(stagingPath)
 	}
 }

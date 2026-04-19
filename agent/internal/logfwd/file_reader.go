@@ -63,7 +63,7 @@ func (t *FileTailer) Run(ctx context.Context) {
 				})
 			}
 		} else {
-			// No more data — wait and retry
+			// No more data - wait and retry
 			time.Sleep(pollInterval)
 			// Re-check for new data (scanner resumes from last position)
 		}

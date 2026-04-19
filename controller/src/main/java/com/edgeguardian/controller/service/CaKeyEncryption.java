@@ -42,7 +42,7 @@ public class CaKeyEncryption {
     void init() {
         String configured = caProperties.encryptionKey();
         if (configured == null || configured.isBlank()) {
-            log.warn("CA_ENCRYPTION_KEY not set — using insecure default. DO NOT use in production.");
+            log.warn("CA_ENCRYPTION_KEY not set - using insecure default. DO NOT use in production.");
             masterKey = new SecretKeySpec(
                     "edgeguardian-dev-key-not-4-prod!".getBytes(StandardCharsets.UTF_8), "AES");
         } else {

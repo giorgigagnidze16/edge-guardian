@@ -1,22 +1,19 @@
 package com.edgeguardian.controller.service;
 
-import static org.assertj.core.api.Assertions.assertThat;
-
 import com.edgeguardian.controller.AbstractIntegrationTest;
-import com.edgeguardian.controller.config.PkiProperties;
-import com.edgeguardian.controller.model.*;
-import com.edgeguardian.controller.repository.*;
-import java.io.ByteArrayInputStream;
-import java.io.StringWriter;
-import java.math.BigInteger;
-import java.security.KeyPair;
-import java.security.KeyPairGenerator;
-import java.security.cert.CertificateFactory;
-import java.security.cert.X509CRL;
-import java.security.cert.X509CRLEntry;
-import java.security.spec.ECGenParameterSpec;
-import java.util.List;
-import java.util.Map;
+import com.edgeguardian.controller.model.CertRequestType;
+import com.edgeguardian.controller.model.CertificateRevocationList;
+import com.edgeguardian.controller.model.Device;
+import com.edgeguardian.controller.model.Organization;
+import com.edgeguardian.controller.model.User;
+import com.edgeguardian.controller.repository.AuditLogRepository;
+import com.edgeguardian.controller.repository.CertificateRequestRepository;
+import com.edgeguardian.controller.repository.CertificateRevocationListRepository;
+import com.edgeguardian.controller.repository.DeviceRepository;
+import com.edgeguardian.controller.repository.IssuedCertificateRepository;
+import com.edgeguardian.controller.repository.OrganizationCaRepository;
+import com.edgeguardian.controller.repository.OrganizationRepository;
+import com.edgeguardian.controller.repository.UserRepository;
 import org.bouncycastle.asn1.x500.X500Name;
 import org.bouncycastle.openssl.jcajce.JcaPEMWriter;
 import org.bouncycastle.operator.jcajce.JcaContentSignerBuilder;
@@ -30,6 +27,20 @@ import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
 
+import java.io.ByteArrayInputStream;
+import java.io.StringWriter;
+import java.math.BigInteger;
+import java.security.KeyPair;
+import java.security.KeyPairGenerator;
+import java.security.cert.CertificateFactory;
+import java.security.cert.X509CRL;
+import java.security.cert.X509CRLEntry;
+import java.security.spec.ECGenParameterSpec;
+import java.util.List;
+import java.util.Map;
+
+import static org.assertj.core.api.Assertions.assertThat;
+
 /**
  * Verifies that CRL generation actually works end-to-end: after a revocation,
  * the CRL rebuild is signed by the org CA and the revoked cert's serial appears
@@ -39,18 +50,30 @@ import org.springframework.context.annotation.Import;
         CaKeyEncryption.class, AuditService.class, CrlServiceIT.MockEmqxConfig.class})
 class CrlServiceIT extends AbstractIntegrationTest {
 
-    @Autowired private CrlService crlService;
-    @Autowired private CertificateService certificateService;
-    @Autowired private CertificateAuthorityService caService;
-    @Autowired private CertificateRevocationListRepository crlRepository;
-    @Autowired private IssuedCertificateRepository certRepository;
-    @Autowired private CertificateRequestRepository requestRepository;
-    @Autowired private DeviceRepository deviceRepository;
-    @Autowired private OrganizationRepository organizationRepository;
-    @Autowired private OrganizationCaRepository caRepository;
-    @Autowired private AuditLogRepository auditLogRepository;
-    @Autowired private UserRepository userRepository;
-    @Autowired private EmqxAdminClient emqxAdminClient;
+    @Autowired
+    private CrlService crlService;
+    @Autowired
+    private CertificateService certificateService;
+    @Autowired
+    private CertificateAuthorityService caService;
+    @Autowired
+    private CertificateRevocationListRepository crlRepository;
+    @Autowired
+    private IssuedCertificateRepository certRepository;
+    @Autowired
+    private CertificateRequestRepository requestRepository;
+    @Autowired
+    private DeviceRepository deviceRepository;
+    @Autowired
+    private OrganizationRepository organizationRepository;
+    @Autowired
+    private OrganizationCaRepository caRepository;
+    @Autowired
+    private AuditLogRepository auditLogRepository;
+    @Autowired
+    private UserRepository userRepository;
+    @Autowired
+    private EmqxAdminClient emqxAdminClient;
 
     private Long orgId;
     private Long reviewerId;
@@ -112,7 +135,7 @@ class CrlServiceIT extends AbstractIntegrationTest {
         CertificateRevocationList crl = crlRepository.findByOrganizationId(orgId).orElseThrow();
         X509CRL parsed = parseCrl(crl.getCrlDer());
 
-        // Signature must validate against the org CA public key — this is the
+        // Signature must validate against the org CA public key - this is the
         // property every TLS verifier relies on.
         parsed.verify(loadCaPublicKey(orgId));
 
@@ -120,7 +143,7 @@ class CrlServiceIT extends AbstractIntegrationTest {
         assertThat(entry).as("revoked serial must appear in CRL").isNotNull();
         assertThat(crl.getRevokedCount()).isEqualTo(1);
 
-        // Kickout must be invoked so active sessions drop — the CRL only helps next handshake.
+        // Kickout must be invoked so active sessions drop - the CRL only helps next handshake.
         Mockito.verify(emqxAdminClient).kickout("dev-crl");
     }
 
@@ -153,12 +176,14 @@ class CrlServiceIT extends AbstractIntegrationTest {
         var signer = new JcaContentSignerBuilder("SHA256withECDSA").build(keyPair.getPrivate());
         var csr = builder.build(signer);
         StringWriter sw = new StringWriter();
-        try (JcaPEMWriter w = new JcaPEMWriter(sw)) { w.writeObject(csr); }
+        try (JcaPEMWriter w = new JcaPEMWriter(sw)) {
+            w.writeObject(csr);
+        }
         return sw.toString();
     }
 
     /**
-     * Stand-in for {@link EmqxAdminClient} — we don't want real HTTP traffic in tests,
+     * Stand-in for {@link EmqxAdminClient} - we don't want real HTTP traffic in tests,
      * but we do want to assert kickout is invoked on revoke.
      */
     @TestConfiguration

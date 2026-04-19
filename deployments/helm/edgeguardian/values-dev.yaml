@@ -34,9 +34,11 @@ controller:
     # the agent will run. For minikube + docker driver on Windows/Mac the minikube
     # IP isn't routable, so we use localhost and require the operator to run
     # `scripts/dev-tunnel.ps1` (or `dev-tunnel.sh`) to forward NodePorts.
-    controllerUrl: http://localhost:30443
-    brokerUrl:     tcp://localhost:31883
-    mtlsBrokerUrl: ssl://localhost:30883
+    # 127.0.0.1 (not "localhost") so agents don't resolve to ::1 - kubectl
+    # port-forward binds IPv4 only, and Windows prefers IPv6 for "localhost".
+    controllerUrl: http://127.0.0.1:30443
+    brokerUrl:     tcp://127.0.0.1:31883
+    mtlsBrokerUrl: ssl://127.0.0.1:30883
 
 postgres:
   image: timescale/timescaledb:2.17.2-pg16

@@ -13,7 +13,7 @@ spec:
   files:
     - path: /etc/edgeguardian/managed.conf
       content: |
-        # Managed by EdgeGuardian — do not edit manually
+        # Managed by EdgeGuardian - do not edit manually
         device_id=rpi-gateway-01
         role=gateway
       mode: "0644"

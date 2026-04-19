@@ -1,7 +1,17 @@
 package com.edgeguardian.controller.model;
 
-import jakarta.persistence.*;
-import lombok.*;
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.GenerationType;
+import jakarta.persistence.Id;
+import jakarta.persistence.PrePersist;
+import jakarta.persistence.PreUpdate;
+import jakarta.persistence.Table;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Data;
+import lombok.NoArgsConstructor;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
 
@@ -26,7 +36,7 @@ public class OtaDeployment {
     @Column(name = "artifact_id", nullable = false)
     private Long artifactId;
 
-    // NOTE: Rollout strategy (rolling/canary/immediate) is descriptive-only — NOT YET IMPLEMENTED.
+    // NOTE: Rollout strategy (rolling/canary/immediate) is descriptive-only - NOT YET IMPLEMENTED.
     // OTAService.createDeployment currently fans out commands to every matching device at once
     // regardless of this value, so the effective behavior is always "immediate". The field is
     // retained in the DB schema and API surface for forward-compatibility with staged rollouts.

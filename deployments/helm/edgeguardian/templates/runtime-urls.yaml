@@ -93,18 +93,18 @@ spec:
                 if [ -n "$UI_IP" ]; then
                   break
                 fi
-                echo "Waiting for LoadBalancer IP (ui=$UI_IP) — requires 'minikube tunnel' running"
+                echo "Waiting for LoadBalancer IP (ui=$UI_IP) - requires 'minikube tunnel' running"
                 sleep 5
                 i=$((i + 1))
               done
 
               if [ -z "$UI_IP" ]; then
-                echo "ERROR: LoadBalancer IP not assigned after 5 min — run 'minikube tunnel' (admin)"
+                echo "ERROR: LoadBalancer IP not assigned after 5 min - run 'minikube tunnel' (admin)"
                 exit 1
               fi
 
               # Single origin: UI hosts Keycloak under /kc via Next.js rewrites.
-              # Use 'localhost' — same IP as 127.0.0.1 but matches what most
+              # Use 'localhost' - same IP as 127.0.0.1 but matches what most
               # users type in the browser. OIDC iss is hostname-string-equal.
               _=${UI_IP}  # IP is kept for NODE_IP bookkeeping
               NEXTAUTH_URL="http://localhost:3000"

@@ -111,14 +111,14 @@ public class OrganizationService {
     }
 
     /**
-     * Removes a member. OWNER cannot be removed — to leave, delete the whole organization.
+     * Removes a member. OWNER cannot be removed - to leave, delete the whole organization.
      */
     @Transactional
     public void removeMemberById(Long memberId, Long orgId) {
         OrganizationMember member = requireMemberInOrg(memberId, orgId);
         if (member.getOrgRole() == OrgRole.OWNER) {
             throw new ConflictException(
-                    "The organization owner cannot be removed — delete the organization instead");
+                    "The organization owner cannot be removed - delete the organization instead");
         }
         memberRepository.delete(member);
     }
@@ -142,7 +142,7 @@ public class OrganizationService {
 
     private void rejectOwnerRole(OrgRole role) {
         if (role == OrgRole.OWNER) {
-            throw new ConflictException("OWNER role cannot be assigned — it is fixed at org creation");
+            throw new ConflictException("OWNER role cannot be assigned - it is fixed at org creation");
         }
     }
 

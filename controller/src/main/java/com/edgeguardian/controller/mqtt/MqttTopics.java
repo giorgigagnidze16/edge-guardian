@@ -6,10 +6,14 @@ package com.edgeguardian.controller.mqtt;
  */
 public final class MqttTopics {
 
-    /** At-least-once — for commands, enrollment, certs (must not be lost). */
+    /**
+     * At-least-once - for commands, enrollment, certs (must not be lost).
+     */
     public static final int QOS_RELIABLE = 1;
 
-    /** Fire-and-forget — for telemetry, heartbeats, logs (periodic, loss is fine). */
+    /**
+     * Fire-and-forget - for telemetry, heartbeats, logs (periodic, loss is fine).
+     */
     public static final int QOS_BEST_EFFORT = 0;
 
     private MqttTopics() {

@@ -459,7 +459,7 @@ export default function SettingsPage() {
               {createdKey && (
                 <div className="rounded-lg border border-emerald-500/30 bg-emerald-500/5 p-3">
                   <p className="text-sm font-medium text-green-800 dark:text-green-200">
-                    API Key created! Copy it now — it won&apos;t be shown again.
+                    API Key created! Copy it now - it won&apos;t be shown again.
                   </p>
                   <div className="mt-2 flex items-center gap-2">
                     <code className="rounded bg-green-100 px-2 py-1 text-xs font-mono dark:bg-green-800">{createdKey}</code>
@@ -568,7 +568,7 @@ export default function SettingsPage() {
           {createdToken ? (
             <div className="space-y-3">
               <div className="rounded-lg border border-emerald-500/30 bg-emerald-500/5 p-3">
-                <p className="text-sm font-medium mb-2">Token created! Copy it now — it won&apos;t be shown again.</p>
+                <p className="text-sm font-medium mb-2">Token created! Copy it now - it won&apos;t be shown again.</p>
                 <div className="flex items-center gap-2">
                   <code className="flex-1 rounded bg-muted px-2 py-1 text-xs break-all">{createdToken}</code>
                   <Button size="sm" variant="outline" onClick={() => { navigator.clipboard.writeText(createdToken); toast.success("Copied!"); }}>

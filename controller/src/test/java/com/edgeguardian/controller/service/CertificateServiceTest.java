@@ -1,19 +1,25 @@
 package com.edgeguardian.controller.service;
 
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
-
 import com.edgeguardian.controller.AbstractIntegrationTest;
-import com.edgeguardian.controller.model.*;
-import com.edgeguardian.controller.repository.*;
-import java.io.StringWriter;
-import java.security.*;
-import java.security.spec.ECGenParameterSpec;
-import java.util.List;
-import java.util.Map;
+import com.edgeguardian.controller.model.CertRequestState;
+import com.edgeguardian.controller.model.CertRequestType;
+import com.edgeguardian.controller.model.CertificateRequest;
+import com.edgeguardian.controller.model.Device;
+import com.edgeguardian.controller.model.IssuedCertificate;
+import com.edgeguardian.controller.model.Organization;
+import com.edgeguardian.controller.model.RevokeReason;
+import com.edgeguardian.controller.repository.AuditLogRepository;
+import com.edgeguardian.controller.repository.CertificateRequestRepository;
+import com.edgeguardian.controller.repository.DeviceRepository;
+import com.edgeguardian.controller.repository.IssuedCertificateRepository;
+import com.edgeguardian.controller.repository.OrganizationCaRepository;
+import com.edgeguardian.controller.repository.OrganizationRepository;
+import com.edgeguardian.controller.repository.UserRepository;
 import org.bouncycastle.openssl.jcajce.JcaPEMWriter;
 import org.bouncycastle.operator.jcajce.JcaContentSignerBuilder;
-import org.junit.jupiter.api.*;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.TestConfiguration;
@@ -21,22 +27,39 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.io.StringWriter;
+import java.security.KeyPair;
+import java.security.KeyPairGenerator;
+import java.security.spec.ECGenParameterSpec;
+import java.util.List;
+import java.util.Map;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+
 @Import({CertificateService.class, CertificateAuthorityService.class, com.edgeguardian.controller.service.pki.OrganizationCaStore.class, CaKeyEncryption.class,
         AuditService.class, CrlService.class, CertificateServiceTest.MockEmqxConfig.class})
 class CertificateServiceTest extends AbstractIntegrationTest {
 
-    @Autowired private CertificateService certificateService;
-    @Autowired private CertificateRequestRepository requestRepository;
-    @Autowired private IssuedCertificateRepository certRepository;
-    @Autowired private DeviceRepository deviceRepository;
-    @Autowired private OrganizationRepository organizationRepository;
-    @Autowired private OrganizationCaRepository caRepository;
-    @Autowired private AuditLogRepository auditLogRepository;
-    @Autowired private UserRepository userRepository;
-
+    private static final String DEVICE_ID = "test-rpi-001";
+    @Autowired
+    private CertificateService certificateService;
+    @Autowired
+    private CertificateRequestRepository requestRepository;
+    @Autowired
+    private IssuedCertificateRepository certRepository;
+    @Autowired
+    private DeviceRepository deviceRepository;
+    @Autowired
+    private OrganizationRepository organizationRepository;
+    @Autowired
+    private OrganizationCaRepository caRepository;
+    @Autowired
+    private AuditLogRepository auditLogRepository;
+    @Autowired
+    private UserRepository userRepository;
     private Long orgId;
     private Long reviewerUserId;
-    private static final String DEVICE_ID = "test-rpi-001";
 
     @BeforeEach
     void setUp() {
@@ -224,16 +247,6 @@ class CertificateServiceTest extends AbstractIntegrationTest {
                 .isInstanceOf(ResponseStatusException.class);
     }
 
-    @TestConfiguration
-    static class MockEmqxConfig {
-        @Bean
-        EmqxAdminClient emqxAdminClient() {
-            return Mockito.mock(EmqxAdminClient.class);
-        }
-    }
-
-    // --- Helper: generate a real ECDSA CSR for testing ---
-
     private String generateTestCsr() throws Exception {
         KeyPairGenerator keyGen = KeyPairGenerator.getInstance("EC");
         keyGen.initialize(new ECGenParameterSpec("secp256r1"));
@@ -252,5 +265,15 @@ class CertificateServiceTest extends AbstractIntegrationTest {
             writer.writeObject(csr);
         }
         return sw.toString();
+    }
+
+    // --- Helper: generate a real ECDSA CSR for testing ---
+
+    @TestConfiguration
+    static class MockEmqxConfig {
+        @Bean
+        EmqxAdminClient emqxAdminClient() {
+            return Mockito.mock(EmqxAdminClient.class);
+        }
     }
 }

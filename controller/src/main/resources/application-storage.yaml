@@ -10,3 +10,4 @@ edgeguardian:
       broker-url: ${EDGEGUARDIAN_AGENT_INSTALLER_BROKER_URL:tcp://localhost:31883}
       mtls-broker-url: ${EDGEGUARDIAN_AGENT_INSTALLER_MTLS_BROKER_URL:ssl://localhost:30883}
       bootstrap-password: ${EDGEGUARDIAN_AGENT_INSTALLER_BOOTSTRAP_PASSWORD:admin}
+      agent-version: ${EDGEGUARDIAN_AGENT_INSTALLER_AGENT_VERSION:0.4.0}

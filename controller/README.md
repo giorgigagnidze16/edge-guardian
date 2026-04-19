@@ -1,6 +1,6 @@
 # EdgeGuardian Controller
 
-Spring Boot backend for EdgeGuardian — fleet management, certificate authority, OTA orchestration, and telemetry ingestion for edge devices. Communicates with agents exclusively via MQTT 5.0.
+Spring Boot backend for EdgeGuardian - fleet management, certificate authority, OTA orchestration, and telemetry ingestion for edge devices. Communicates with agents exclusively via MQTT 5.0.
 
 ## Tech Stack
 
@@ -48,7 +48,7 @@ See `../deployments/helm/edgeguardian/README.md` for prod install and secrets ma
 ./gradlew bootRun        # Run with local profile
 ```
 
-Tests use **Testcontainers** with a real TimescaleDB/PostgreSQL instance — Docker must be running.
+Tests use **Testcontainers** with a real TimescaleDB/PostgreSQL instance - Docker must be running.
 
 ## Architecture
 
@@ -79,10 +79,10 @@ The controller is the sole bridge between the dashboard and edge devices. All de
 Each organization gets an auto-generated **ECDSA P-256 CA** (10-year validity). CA private keys are AES-256-GCM encrypted at rest.
 
 Certificate request security model:
-- **INITIAL** (no existing cert) — requires manual admin approval
-- **MANIFEST** (no existing cert) — auto-approved (desired-state driven)
-- **RENEWAL** (valid `currentSerial`) — auto-approved, old cert rotated
-- **Any type + existing valid cert** — **BLOCKED** (compromise detection: all certs revoked, device suspended)
+- **INITIAL** (no existing cert) - requires manual admin approval
+- **MANIFEST** (no existing cert) - auto-approved (desired-state driven)
+- **RENEWAL** (valid `currentSerial`) - auto-approved, old cert rotated
+- **Any type + existing valid cert** - **BLOCKED** (compromise detection: all certs revoked, device suspended)
 
 ### OTA Updates
 
@@ -92,7 +92,7 @@ Artifacts are uploaded to MinIO. Deployments target devices via label selectors.
 
 All endpoints under `/api/v1/`. Dashboard endpoints require JWT or API key. The only agent-facing
 HTTP endpoints are `/api/v1/agent/enroll` (bootstrap enrollment) and the public PKI endpoints
-(`/api/v1/pki/crl/**`, `/api/v1/pki/ca-bundle`, `/api/v1/pki/broker-ca`) — everything else an agent
+(`/api/v1/pki/crl/**`, `/api/v1/pki/ca-bundle`, `/api/v1/pki/broker-ca`) - everything else an agent
 does flows over MQTT.
 
 | Path | Auth | Description |

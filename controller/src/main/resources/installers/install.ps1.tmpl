@@ -1,14 +1,16 @@
 # EdgeGuardian agent installer (Windows). Generated per-token.
 #
-# Run from an Administrator PowerShell:
-#   Set-ExecutionPolicy Bypass -Scope Process -Force
-#   iwr "http://<controller>/api/v1/agent/installer?os=windows&tokenId=<id>" -UseBasicParsing | iex
-#
-# Or, if you downloaded install.ps1:
-#   Unblock-File .\install.ps1
-#   .\install.ps1
+# Normally invoked via the self-elevating EdgeGuardianInstall.cmd wrapper.
+# Can also be run directly from an elevated PowerShell:
+#   Unblock-File .\install.ps1 ; .\install.ps1
+
 $ErrorActionPreference = 'Stop'
 
+$Logo = @'
+{{LOGO}}
+'@
+
+$AgentVersion      = '{{AGENT_VERSION}}'
 $ControllerUrl     = '{{CONTROLLER_URL}}'
 $BrokerUrl         = '{{BROKER_URL}}'
 $MtlsBrokerUrl     = '{{MTLS_BROKER_URL}}'
@@ -19,34 +21,140 @@ $BinaryUrl         = '{{BINARY_URL}}'
 $InstallDir  = 'C:\Program Files\EdgeGuardian'
 $ConfigDir   = 'C:\ProgramData\EdgeGuardian'
 $DataDir     = Join-Path $ConfigDir 'data'
+# Agent writes logs to {DataDir}/logs/agent.log - see initLogger in cmd/agent.
+$LogDir      = Join-Path $DataDir 'logs'
 $ServiceName = 'EdgeGuardianAgent'
+$DisplayName = 'EdgeGuardian Agent'
 $BinaryPath  = Join-Path $InstallDir 'edgeguardian-agent.exe'
 $ConfigPath  = Join-Path $ConfigDir 'agent.yaml'
 
-try {
-    if (-not ([Security.Principal.WindowsPrincipal] `
-              [Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole(
-              [Security.Principal.WindowsBuiltInRole] 'Administrator')) {
-        throw "This script must run from an Administrator PowerShell (Start menu -> PowerShell -> Run as administrator)."
+$TotalSteps  = 5
+
+function Write-Banner {
+    Write-Host ""
+    Write-Host $Logo -ForegroundColor Green
+    Write-Host ""
+    Write-Host "  EdgeGuardian Agent Installer" -ForegroundColor White
+    Write-Host ("  Version {0}" -f $AgentVersion) -ForegroundColor DarkCyan
+    Write-Host ("  " + ("-" * 52)) -ForegroundColor DarkGray
+    Write-Host ""
+}
+
+function Write-Step {
+    param([int]$Number, [string]$Title)
+    Write-Host ""
+    Write-Host ("  [{0}/{1}] {2}" -f $Number, $TotalSteps, $Title) -ForegroundColor Cyan
+}
+
+function Write-SubStep {
+    param([string]$Message)
+    Write-Host ("        - {0}" -f $Message) -ForegroundColor Gray
+}
+
+function Write-OK {
+    param([string]$Message)
+    Write-Host ("        OK {0}" -f $Message) -ForegroundColor Green
+}
+
+function Assert-Admin {
+    $principal = New-Object Security.Principal.WindowsPrincipal(
+        [Security.Principal.WindowsIdentity]::GetCurrent())
+    if (-not $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
+        throw "This installer must run as Administrator."
     }
+}
 
-    Write-Host "[1/5] Downloading agent binary from $BinaryUrl ..."
-    New-Item -ItemType Directory -Force -Path $InstallDir | Out-Null
-    New-Item -ItemType Directory -Force -Path $ConfigDir  | Out-Null
-    New-Item -ItemType Directory -Force -Path $DataDir    | Out-Null
-    Invoke-WebRequest -Uri $BinaryUrl -OutFile $BinaryPath -UseBasicParsing
+function Remove-ExistingService {
+    $svc = Get-Service -Name $ServiceName -ErrorAction SilentlyContinue
+    if ($null -eq $svc) { return }
+    Write-SubStep "Stopping existing service"
+    Stop-Service $ServiceName -Force -ErrorAction SilentlyContinue
+    Write-SubStep "Removing existing service"
+    $sc = Start-Process -FilePath sc.exe -ArgumentList 'delete', $ServiceName `
+        -NoNewWindow -Wait -PassThru
+    if ($sc.ExitCode -ne 0) {
+        throw ("sc.exe delete failed with exit code {0}" -f $sc.ExitCode)
+    }
+    # Wait for the SCM to actually release the binary file handle — otherwise a
+    # subsequent overwrite of edgeguardian-agent.exe fails with "file in use".
+    $deadline = (Get-Date).AddSeconds(10)
+    while ((Get-Service -Name $ServiceName -ErrorAction SilentlyContinue) `
+            -and (Get-Date) -lt $deadline) {
+        Start-Sleep -Milliseconds 250
+    }
+}
 
-    Write-Host "[2/5] Writing config to $ConfigPath ..."
-    $uri = [Uri]$ControllerUrl
-    $controllerHost = $uri.Host
-    $controllerPort = $uri.Port
-    if ($controllerPort -le 0) { $controllerPort = if ($uri.Scheme -eq 'https') { 443 } else { 80 } }
+function Resolve-ControllerHostPort {
+    param([string]$Url)
+    $uri = [Uri]$Url
+    $port = $uri.Port
+    if ($port -le 0) {
+        $port = if ($uri.Scheme -eq 'https') { 443 } else { 80 }
+    }
+    return [PSCustomObject]@{ Host = $uri.Host; Port = $port }
+}
+
+# kubectl port-forward sometimes tears the TCP stream on large responses. Retry
+# transparently with exponential backoff so a flaky tunnel doesn't kill the
+# install; only surface the error if every attempt fails.
+function Invoke-Download {
+    param(
+        [Parameter(Mandatory)][string]$Uri,
+        [Parameter(Mandatory)][string]$OutFile,
+        [int]$MaxAttempts = 4,
+        [int]$TimeoutSec  = 120
+    )
+    for ($attempt = 1; $attempt -le $MaxAttempts; $attempt++) {
+        try {
+            $ProgressPreference = 'SilentlyContinue'
+            Invoke-WebRequest -Uri $Uri -OutFile $OutFile `
+                              -UseBasicParsing -TimeoutSec $TimeoutSec
+            return
+        }
+        catch {
+            if ($attempt -eq $MaxAttempts) { throw }
+            $delay = [math]::Min(30, 2 * $attempt)
+            Write-SubStep ("Attempt {0}/{1} failed ({2}); retrying in {3}s" `
+                -f $attempt, $MaxAttempts, $_.Exception.Message, $delay)
+            Start-Sleep -Seconds $delay
+        }
+    }
+}
+
+try {
+    Write-Banner
+    Assert-Admin
+
+    # [1/5] Directories (+ stop any prior service so the binary isn't held open)
+    Write-Step 1 "Preparing installation directories"
+    foreach ($d in @($InstallDir, $ConfigDir, $DataDir, $LogDir)) {
+        New-Item -ItemType Directory -Force -Path $d | Out-Null
+        Write-SubStep $d
+    }
+    Remove-ExistingService
+    Write-OK "Directories ready"
+
+    # [2/5] Binary download
+    Write-Step 2 "Downloading agent binary"
+    Write-SubStep ("Source:      {0}" -f $BinaryUrl)
+    Write-SubStep ("Destination: {0}" -f $BinaryPath)
+    Invoke-Download -Uri $BinaryUrl -OutFile $BinaryPath
+    $sizeKb = [math]::Round((Get-Item $BinaryPath).Length / 1KB, 1)
+    Write-OK ("Downloaded {0} KB" -f $sizeKb)
+
+    # [3/5] Config
+    Write-Step 3 "Writing configuration"
+    $endpoint = Resolve-ControllerHostPort -Url $ControllerUrl
     $deviceId = "$env:COMPUTERNAME-$(Get-Date -Format 'yyyyMMddHHmmss')"
     $dataDirYaml = $DataDir -replace '\\','/'
+    Write-SubStep ("Device ID:  {0}" -f $deviceId)
+    Write-SubStep ("Controller: {0}:{1}" -f $endpoint.Host, $endpoint.Port)
+    Write-SubStep ("MQTT:       {0}" -f $MtlsBrokerUrl)
+    Write-SubStep ("Config:     {0}" -f $ConfigPath)
     $yaml = @"
 device_id: $deviceId
-controller_address: $controllerHost
-controller_port: $controllerPort
+controller_address: $($endpoint.Host)
+controller_port: $($endpoint.Port)
 data_dir: $dataDirYaml
 reconcile_interval_seconds: 30
 log_level: info
@@ -63,36 +171,62 @@ mqtt:
   identity_key_path: $dataDirYaml/identity/identity.key
 "@
     Set-Content -Path $ConfigPath -Value $yaml -Encoding UTF8
+    Write-OK "Configuration written"
 
-    Write-Host "[3/5] Registering Windows service..."
-    if (Get-Service -Name $ServiceName -ErrorAction SilentlyContinue) {
-        Stop-Service $ServiceName -Force -ErrorAction SilentlyContinue
-        $scDelete = Start-Process sc.exe -ArgumentList 'delete', $ServiceName `
-            -NoNewWindow -Wait -PassThru
-        if ($scDelete.ExitCode -ne 0) { throw "sc.exe delete failed with code $($scDelete.ExitCode)" }
-        Start-Sleep -Seconds 1
-    }
+    # [4/5] Service registration (service already stopped+removed in step 1)
+    Write-Step 4 "Registering Windows service"
     $binaryPathName = "`"$BinaryPath`" -config `"$ConfigPath`""
+    Write-SubStep ("Name:        {0}" -f $ServiceName)
+    Write-SubStep ("BinaryPath:  {0}" -f $binaryPathName)
+    Write-SubStep ("StartupType: Automatic")
     New-Service -Name $ServiceName `
                 -BinaryPathName $binaryPathName `
-                -DisplayName 'EdgeGuardian Agent' `
-                -Description 'EdgeGuardian edge device agent' `
+                -DisplayName $DisplayName `
+                -Description 'EdgeGuardian edge device agent (reconciliation + OTA + telemetry)' `
                 -StartupType Automatic | Out-Null
+    Write-OK "Service registered"
 
-    Write-Host "[4/5] Starting service..."
+    # [5/5] Service start
+    Write-Step 5 "Starting service"
     Start-Service $ServiceName
+    $deadline = (Get-Date).AddSeconds(20)
+    do {
+        Start-Sleep -Milliseconds 500
+        $svc = Get-Service $ServiceName
+    } while ($svc.Status -ne 'Running' -and (Get-Date) -lt $deadline)
+    Write-SubStep ("Status: {0}" -f $svc.Status)
+    if ($svc.Status -ne 'Running') {
+        throw ("Service failed to reach Running state (last status: {0})" -f $svc.Status)
+    }
+    Write-OK "Agent is running"
 
-    Write-Host "[5/5] Done. Status:"
-    Start-Sleep -Seconds 2
-    Get-Service $ServiceName | Format-Table -AutoSize
-    Write-Host "Install succeeded."
+    Write-Host ""
+    Write-Host ("  " + ("-" * 52)) -ForegroundColor DarkGray
+    Write-Host ("  Install succeeded. EdgeGuardian Agent v{0} is running." -f $AgentVersion) -ForegroundColor Green
+    Write-Host ("  Service:  {0} ({1})" -f $DisplayName, $ServiceName) -ForegroundColor DarkGray
+    Write-Host ("  Config:   {0}" -f $ConfigPath) -ForegroundColor DarkGray
+    Write-Host ("  Data dir: {0}" -f $DataDir) -ForegroundColor DarkGray
+    Write-Host ("  Logs:     {0}" -f (Join-Path $LogDir 'agent.log')) -ForegroundColor DarkGray
+    Write-Host ""
 }
 catch {
     Write-Host ""
-    Write-Host "*** INSTALL FAILED ***" -ForegroundColor Red
-    Write-Host "Error: $($_.Exception.Message)" -ForegroundColor Red
-    Write-Host ""
-    Write-Host "Stack trace:" -ForegroundColor Yellow
-    Write-Host $_.ScriptStackTrace
+    Write-Host "  *** INSTALL FAILED ***" -ForegroundColor Red
+    Write-Host ("  {0}" -f $_.Exception.Message) -ForegroundColor Red
+
+    $agentLog = Join-Path $LogDir 'agent.log'
+    if (Test-Path -LiteralPath $agentLog) {
+        Write-Host ""
+        Write-Host ("  Last 20 lines of {0}:" -f $agentLog) -ForegroundColor DarkYellow
+        Get-Content -LiteralPath $agentLog -Tail 20 | ForEach-Object {
+            Write-Host ("    {0}" -f $_) -ForegroundColor DarkGray
+        }
+    }
+
+    if ($_.ScriptStackTrace) {
+        Write-Host ""
+        Write-Host "  Stack trace:" -ForegroundColor DarkYellow
+        $_.ScriptStackTrace -split "`n" | ForEach-Object { Write-Host ("    {0}" -f $_) -ForegroundColor DarkGray }
+    }
     exit 1
 }

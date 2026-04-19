@@ -23,8 +23,8 @@ public class UserService {
      *
      * <p>Lookup order:
      * <ol>
-     *   <li>by Keycloak subject — normal sign-in;
-     *   <li>by email — rebinds the Keycloak id when the IdP was reset (same human, new
+     *   <li>by Keycloak subject - normal sign-in;
+     *   <li>by email - rebinds the Keycloak id when the IdP was reset (same human, new
      *       {@code sub}) so the unique-email constraint doesn't collide;
      *   <li>otherwise register a new user and bootstrap their personal org.
      * </ol>

@@ -25,7 +25,7 @@ import org.springframework.context.annotation.Import;
  *
  * <ul>
  *   <li>{@code findByIdForOrganization} returns empty when a device exists but belongs
- *       to a different org — callers should surface this as 404 and NOT as 403 so
+ *       to a different org - callers should surface this as 404 and NOT as 403 so
  *       device existence isn't leaked via status codes.</li>
  *   <li>{@code findByOrganizationId} returns only the caller's org's devices.</li>
  *   <li>{@code countByOrganizationId} is per-org and doesn't leak global counts.</li>
@@ -73,7 +73,7 @@ class DeviceRegistryTenancyTest extends AbstractIntegrationTest {
         Optional<Device> sameOrg = registry.findByIdForOrganization("rpi-only-in-a", orgA);
         assertThat(sameOrg).isPresent();
 
-        // Cross-org lookup returns empty — the controller maps this to 404, preventing
+        // Cross-org lookup returns empty - the controller maps this to 404, preventing
         // org B admins from confirming whether "rpi-only-in-a" exists at all.
         Optional<Device> crossOrg = registry.findByIdForOrganization("rpi-only-in-a", orgB);
         assertThat(crossOrg).isEmpty();

@@ -50,5 +50,4 @@ build/
 *.bolt
 .claude
 
-# Prod secrets values file — never commit
 deployments/helm/edgeguardian/values-prod-secrets.yaml

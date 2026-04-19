@@ -24,7 +24,7 @@ public class PkiBootstrapRunner implements ApplicationRunner {
     public void run(ApplicationArguments args) {
         List<Organization> orgs = organizationRepository.findAll();
         if (orgs.isEmpty()) {
-            log.info("PKI bootstrap: no organizations yet — nothing to materialize");
+            log.info("PKI bootstrap: no organizations yet - nothing to materialize");
             return;
         }
 

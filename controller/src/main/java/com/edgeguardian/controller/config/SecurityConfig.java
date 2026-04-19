@@ -4,6 +4,7 @@ import com.edgeguardian.controller.security.ApiKeyAuthenticationFilter;
 import com.edgeguardian.controller.security.DeviceTokenAuthFilter;
 import com.edgeguardian.controller.security.JwtTenantConverter;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.config.Customizer;
@@ -12,6 +13,13 @@ import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
 import org.springframework.security.config.http.SessionCreationPolicy;
+import org.springframework.security.oauth2.core.DelegatingOAuth2TokenValidator;
+import org.springframework.security.oauth2.core.OAuth2TokenValidator;
+import org.springframework.security.oauth2.jwt.Jwt;
+import org.springframework.security.oauth2.jwt.JwtClaimValidator;
+import org.springframework.security.oauth2.jwt.JwtDecoder;
+import org.springframework.security.oauth2.jwt.JwtValidators;
+import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
 import org.springframework.security.oauth2.server.resource.web.authentication.BearerTokenAuthenticationFilter;
 import org.springframework.security.web.SecurityFilterChain;
 
@@ -24,6 +32,23 @@ public class SecurityConfig {
     private final ApiKeyAuthenticationFilter apiKeyAuthenticationFilter;
     private final DeviceTokenAuthFilter deviceTokenAuthFilter;
     private final JwtTenantConverter jwtTenantConverter;
+
+    @Value("${spring.security.oauth2.resourceserver.jwt.issuer-uri}")
+    private String expectedIssuer;
+
+    @Value("${spring.security.oauth2.resourceserver.jwt.jwk-set-uri}")
+    private String jwkSetUri;
+
+    @Bean
+    public JwtDecoder jwtDecoder() {
+        NimbusJwtDecoder decoder = NimbusJwtDecoder.withJwkSetUri(jwkSetUri).build();
+        OAuth2TokenValidator<Jwt> issuerValidator =
+                new JwtClaimValidator<String>("iss", expectedIssuer::equals);
+        OAuth2TokenValidator<Jwt> validator = new DelegatingOAuth2TokenValidator<>(
+                JwtValidators.createDefault(), issuerValidator);
+        decoder.setJwtValidator(validator);
+        return decoder;
+    }
 
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) {
@@ -41,10 +66,6 @@ public class SecurityConfig {
                         .requestMatchers("/api/v1/pki/crl/**", "/api/v1/pki/ca-bundle",
                                 "/api/v1/pki/broker-ca").permitAll()
                         .requestMatchers("/api/v1/**").authenticated()
-                        // Deny by default — any path not explicitly permitted or authenticated
-                        // above is refused. Prevents accidental public exposure when new
-                        // endpoints are added outside /api/v1/ (management paths, static assets,
-                        // future Swagger UI, etc.) without a matching rule.
                         .anyRequest().denyAll()
                 )
                 .oauth2ResourceServer(oauth2 -> oauth2

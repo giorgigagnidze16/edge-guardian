@@ -15,7 +15,7 @@ import (
 
 // ErrAndroidPersistenceUnsupported is returned by Enable when boot-time persistence is requested.
 var ErrAndroidPersistenceUnsupported = errors.New(
-	"enable/disable not supported on android — service will not auto-start at boot")
+	"enable/disable not supported on android - service will not auto-start at boot")
 
 // AndroidExecutor manages processes on Android using direct process control.
 type AndroidExecutor struct{}

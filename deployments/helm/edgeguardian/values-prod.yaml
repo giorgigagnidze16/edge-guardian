@@ -4,7 +4,7 @@ image:
 ui:
   image:
     tag: 0.2.0
-  # Leave blank — computed from ingress.baseDomain. Override only if you use
+  # Leave blank - computed from ingress.baseDomain. Override only if you use
   # a different URL scheme than ui.<baseDomain> / keycloak.<baseDomain>.
   keycloakIssuerUrl: ""
   nextAuthUrl: ""
@@ -29,12 +29,12 @@ controller:
   resources:
     requests: { cpu: 500m, memory: 1Gi }
     limits:   { cpu: 2000m, memory: 2Gi }
-  # Leave blank — computed from ingress.baseDomain. Override for a custom CRL
+  # Leave blank - computed from ingress.baseDomain. Override for a custom CRL
   # endpoint that must be stable (signed into leaf certs' CDP).
   publicUrl: ""
   crlUrl: ""
   keycloakIssuerUri: ""
-  # Agents need external MQTT access. See emqx.external.type below — for a
+  # Agents need external MQTT access. See emqx.external.type below - for a
   # typical cloud deployment set that to LoadBalancer and fill these with the
   # LB hostname/IP (e.g. tcp://mqtt.<base>:1883 and ssl://mqtt.<base>:8883).
   agentInstaller:

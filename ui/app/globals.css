@@ -5,7 +5,7 @@
 
 /*
  * ═══════════════════════════════════════════════════════════
- *  EdgeGuardian — "Midnight Luminance" Design System
+ *  EdgeGuardian - "Midnight Luminance" Design System
  *  Dark-first IoT fleet management. Electric cyan on void.
  * ═══════════════════════════════════════════════════════════
  */
@@ -33,7 +33,7 @@
   --color-ring: #06b6d4;
   --radius: 0.625rem;
 
-  /* Sidebar — light */
+  /* Sidebar - light */
   --color-sidebar-background: #ffffff;
   --color-sidebar-foreground: #475569;
   --color-sidebar-primary: #0891b2;
@@ -51,7 +51,7 @@
 
   --color-glow: #06b6d4;
 
-  /* Typography — Plus Jakarta Sans via next/font */
+  /* Typography - Plus Jakarta Sans via next/font */
   --font-sans: var(--font-sans), "Plus Jakarta Sans", ui-sans-serif, system-ui, sans-serif;
   --font-mono: var(--font-mono), "JetBrains Mono", ui-monospace, "Cascadia Code", monospace;
 }
@@ -78,7 +78,7 @@
   --color-input: #2a2a3e;
   --color-ring: #06b6d4;
 
-  /* Sidebar — dark */
+  /* Sidebar - dark */
   --color-sidebar-background: #0e0e18;
   --color-sidebar-foreground: #6b7a8d;
   --color-sidebar-primary: #06b6d4;
@@ -87,7 +87,7 @@
   --color-sidebar-accent-foreground: #22d3ee;
   --color-sidebar-border: #2a2a3e;
 
-  /* Charts — brighter on dark */
+  /* Charts - brighter on dark */
   --color-chart-1: #22d3ee;
   --color-chart-2: #34d399;
   --color-chart-3: #fbbf24;
@@ -116,7 +116,7 @@
     -moz-osx-font-smoothing: grayscale;
   }
 
-  /* Text selection — cyan tint */
+  /* Text selection - cyan tint */
   ::selection {
     background: rgba(6, 182, 212, 0.25);
     color: inherit;

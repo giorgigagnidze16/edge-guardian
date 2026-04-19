@@ -1,19 +1,24 @@
 package com.edgeguardian.controller.service;
 
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
-
 import com.edgeguardian.controller.AbstractIntegrationTest;
-import com.edgeguardian.controller.model.*;
+import com.edgeguardian.controller.model.AuditLog;
+import com.edgeguardian.controller.model.CertRequestState;
+import com.edgeguardian.controller.model.CertRequestType;
+import com.edgeguardian.controller.model.CertificateRequest;
+import com.edgeguardian.controller.model.DeviceToken;
+import com.edgeguardian.controller.model.IssuedCertificate;
+import com.edgeguardian.controller.model.Organization;
+import com.edgeguardian.controller.model.RevokeReason;
 import com.edgeguardian.controller.model.User;
-import com.edgeguardian.controller.repository.*;
-import java.io.StringWriter;
-import java.security.KeyPair;
-import java.security.KeyPairGenerator;
-import java.security.spec.ECGenParameterSpec;
-import java.time.Instant;
-import java.util.List;
-import java.util.Map;
+import com.edgeguardian.controller.repository.AuditLogRepository;
+import com.edgeguardian.controller.repository.CertificateRequestRepository;
+import com.edgeguardian.controller.repository.DeviceManifestRepository;
+import com.edgeguardian.controller.repository.DeviceRepository;
+import com.edgeguardian.controller.repository.DeviceTokenRepository;
+import com.edgeguardian.controller.repository.IssuedCertificateRepository;
+import com.edgeguardian.controller.repository.OrganizationCaRepository;
+import com.edgeguardian.controller.repository.OrganizationRepository;
+import com.edgeguardian.controller.repository.UserRepository;
 import org.bouncycastle.asn1.x500.X500Name;
 import org.bouncycastle.openssl.jcajce.JcaPEMWriter;
 import org.bouncycastle.operator.jcajce.JcaContentSignerBuilder;
@@ -28,11 +33,22 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.io.StringWriter;
+import java.security.KeyPair;
+import java.security.KeyPairGenerator;
+import java.security.spec.ECGenParameterSpec;
+import java.time.Instant;
+import java.util.List;
+import java.util.Map;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+
 /**
  * End-to-end integration test for the device-delete cascade.
  * Uses the real PostgreSQL (Testcontainers) to verify that deleting a device actually
  * revokes its certs, rejects its pending requests, removes its token and manifest,
- * and writes an audit entry — all in one transaction.
+ * and writes an audit entry - all in one transaction.
  */
 @Import({DeviceLifecycleService.class, DeviceRegistry.class, CertificateService.class,
         CertificateAuthorityService.class, com.edgeguardian.controller.service.pki.OrganizationCaStore.class, CaKeyEncryption.class, AuditService.class,
@@ -42,19 +58,31 @@ class DeviceLifecycleServiceIT extends AbstractIntegrationTest {
     private static final String DEVICE_ID = "rpi-lifecycle-it";
     private static final String OTHER_DEVICE_ID = "rpi-lifecycle-it-other";
 
-    @Autowired private DeviceLifecycleService lifecycle;
-    @Autowired private CertificateService certificateService;
-    @Autowired private DeviceRegistry registry;
+    @Autowired
+    private DeviceLifecycleService lifecycle;
+    @Autowired
+    private CertificateService certificateService;
+    @Autowired
+    private DeviceRegistry registry;
 
-    @Autowired private DeviceRepository deviceRepository;
-    @Autowired private DeviceManifestRepository manifestRepository;
-    @Autowired private DeviceTokenRepository deviceTokenRepository;
-    @Autowired private CertificateRequestRepository requestRepository;
-    @Autowired private IssuedCertificateRepository certRepository;
-    @Autowired private OrganizationRepository organizationRepository;
-    @Autowired private OrganizationCaRepository caRepository;
-    @Autowired private AuditLogRepository auditLogRepository;
-    @Autowired private UserRepository userRepository;
+    @Autowired
+    private DeviceRepository deviceRepository;
+    @Autowired
+    private DeviceManifestRepository manifestRepository;
+    @Autowired
+    private DeviceTokenRepository deviceTokenRepository;
+    @Autowired
+    private CertificateRequestRepository requestRepository;
+    @Autowired
+    private IssuedCertificateRepository certRepository;
+    @Autowired
+    private OrganizationRepository organizationRepository;
+    @Autowired
+    private OrganizationCaRepository caRepository;
+    @Autowired
+    private AuditLogRepository auditLogRepository;
+    @Autowired
+    private UserRepository userRepository;
 
     private Long orgId;
     private Long actorUserId;
@@ -121,7 +149,7 @@ class DeviceLifecycleServiceIT extends AbstractIntegrationTest {
         assertThat(deviceRepository.findByDeviceId(DEVICE_ID)).isEmpty();
         assertThat(manifestRepository.findByDeviceId(DEVICE_ID)).isEmpty();
 
-        // Token deleted — agent endpoint auth will reject it going forward
+        // Token deleted - agent endpoint auth will reject it going forward
         assertThat(deviceTokenRepository.findByDeviceId(DEVICE_ID)).isEmpty();
 
         // Cert is revoked with DEVICE_DELETED reason (rows are retained for audit/CRL)
@@ -177,21 +205,13 @@ class DeviceLifecycleServiceIT extends AbstractIntegrationTest {
 
     @Test
     void deleteDevice_isIdempotentWhenNoCertsOrTokens() {
-        // Fresh device, no certs, no tokens — delete should still succeed and audit.
+        // Fresh device, no certs, no tokens - delete should still succeed and audit.
         lifecycle.deleteDevice(DEVICE_ID, actorUserId);
 
         assertThat(deviceRepository.findByDeviceId(DEVICE_ID)).isEmpty();
         assertThat(auditLogRepository.findAll())
                 .anyMatch(l -> "device_deleted".equals(l.getAction())
                         && DEVICE_ID.equals(l.getResourceId()));
-    }
-
-    @TestConfiguration
-    static class MockEmqxConfig {
-        @Bean
-        EmqxAdminClient emqxAdminClient() {
-            return Mockito.mock(EmqxAdminClient.class);
-        }
     }
 
     private String generateCsr() throws Exception {
@@ -209,5 +229,13 @@ class DeviceLifecycleServiceIT extends AbstractIntegrationTest {
             writer.writeObject(csr);
         }
         return sw.toString();
+    }
+
+    @TestConfiguration
+    static class MockEmqxConfig {
+        @Bean
+        EmqxAdminClient emqxAdminClient() {
+            return Mockito.mock(EmqxAdminClient.class);
+        }
     }
 }

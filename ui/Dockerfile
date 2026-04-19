@@ -3,7 +3,7 @@
 FROM node:20-bookworm-slim AS deps
 WORKDIR /app
 COPY package.json package-lock.json ./
-# Drop lockfile — npm's cross-platform optional-deps bug (npm/cli#4828) keeps
+# Drop lockfile - npm's cross-platform optional-deps bug (npm/cli#4828) keeps
 # native binaries like lightningcss from being installed when the lockfile was
 # generated on Windows. Fresh install on Linux resolves it correctly.
 RUN rm package-lock.json && npm install --no-audit --no-fund

@@ -53,6 +53,8 @@ spec:
     metadata:
       labels:
         {{- include "edgeguardian.componentLabels" (dict "ctx" . "component" "keycloak") | nindent 8 }}
+      annotations:
+        checksum/runtime-urls: {{ include "edgeguardian.runtimeUrlsChecksum" . }}
     spec:
       containers:
         - name: keycloak
@@ -114,7 +116,7 @@ spec:
                   name: edgeguardian-runtime-urls
                   key: KEYCLOAK_HOSTNAME_URL
                   optional: true
-            # Dev: KC_PROXY_HEADERS intentionally unset — otherwise Keycloak
+            # Dev: KC_PROXY_HEADERS intentionally unset - otherwise Keycloak
             # derives iss from X-Forwarded-Host (browser's Host) instead of
             # KC_HOSTNAME, breaking OIDC iss validation when the browser uses
             # a hostname (localhost) that differs from KC_HOSTNAME (127.0.0.1).

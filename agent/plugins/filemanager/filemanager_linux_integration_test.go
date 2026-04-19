@@ -205,7 +205,7 @@ func TestLinux_AtomicWrite_SurvivesConcurrentRead(t *testing.T) {
 
 	fm := New(integrationLogger())
 
-	// Update the file — should be atomic (temp + rename).
+	// Update the file - should be atomic (temp + rename).
 	specs := []reconciler.ResourceSpec{
 		{
 			Kind: "file",

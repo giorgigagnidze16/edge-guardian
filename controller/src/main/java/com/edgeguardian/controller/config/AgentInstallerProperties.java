@@ -7,5 +7,6 @@ public record AgentInstallerProperties(
         String controllerUrl,
         String brokerUrl,
         String mtlsBrokerUrl,
-        String bootstrapPassword
+        String bootstrapPassword,
+        String agentVersion
 ) {}

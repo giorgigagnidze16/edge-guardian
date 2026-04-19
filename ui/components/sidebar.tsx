@@ -74,7 +74,7 @@ export function Sidebar() {
         collapsed ? "w-16" : "w-64",
       )}
     >
-      {/* Expand handle — appears on hover of collapsed rail (Linear pattern) */}
+      {/* Expand handle - appears on hover of collapsed rail (Linear pattern) */}
       {collapsed && (
         <Tooltip>
           <TooltipTrigger asChild>

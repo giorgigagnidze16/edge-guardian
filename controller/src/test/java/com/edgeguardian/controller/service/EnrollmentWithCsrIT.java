@@ -1,19 +1,19 @@
 package com.edgeguardian.controller.service;
 
-import static org.assertj.core.api.Assertions.assertThat;
-
 import com.edgeguardian.controller.AbstractIntegrationTest;
-import com.edgeguardian.controller.model.*;
-import com.edgeguardian.controller.repository.*;
-import java.io.StringWriter;
-import java.security.KeyPair;
-import java.security.KeyPairGenerator;
-import java.security.spec.ECGenParameterSpec;
-import java.time.Duration;
-import java.time.Instant;
-import java.util.List;
-import java.util.Map;
-
+import com.edgeguardian.controller.model.CertRequestType;
+import com.edgeguardian.controller.model.Device;
+import com.edgeguardian.controller.model.EnrollmentToken;
+import com.edgeguardian.controller.model.IssuedCertificate;
+import com.edgeguardian.controller.model.Organization;
+import com.edgeguardian.controller.model.RevokeReason;
+import com.edgeguardian.controller.repository.AuditLogRepository;
+import com.edgeguardian.controller.repository.CertificateRequestRepository;
+import com.edgeguardian.controller.repository.DeviceRepository;
+import com.edgeguardian.controller.repository.EnrollmentTokenRepository;
+import com.edgeguardian.controller.repository.IssuedCertificateRepository;
+import com.edgeguardian.controller.repository.OrganizationCaRepository;
+import com.edgeguardian.controller.repository.OrganizationRepository;
 import com.edgeguardian.controller.service.pki.OrganizationCaStore;
 import org.bouncycastle.asn1.x500.X500Name;
 import org.bouncycastle.openssl.jcajce.JcaPEMWriter;
@@ -28,6 +28,17 @@ import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
 
+import java.io.StringWriter;
+import java.security.KeyPair;
+import java.security.KeyPairGenerator;
+import java.security.spec.ECGenParameterSpec;
+import java.time.Duration;
+import java.time.Instant;
+import java.util.List;
+import java.util.Map;
+
+import static org.assertj.core.api.Assertions.assertThat;
+
 /**
  * End-to-end test of the CSR-in-enrollment flow. We don't exercise the full MQTT listener
  * (that requires a broker), but we validate the service-layer composition that the listener
@@ -39,15 +50,24 @@ import org.springframework.context.annotation.Import;
         CrlService.class, EnrollmentWithCsrIT.MockEmqxConfig.class})
 class EnrollmentWithCsrIT extends AbstractIntegrationTest {
 
-    @Autowired private EnrollmentService enrollmentService;
-    @Autowired private CertificateService certificateService;
-    @Autowired private OrganizationRepository organizationRepository;
-    @Autowired private EnrollmentTokenRepository enrollmentTokenRepository;
-    @Autowired private DeviceRepository deviceRepository;
-    @Autowired private IssuedCertificateRepository certRepository;
-    @Autowired private CertificateRequestRepository requestRepository;
-    @Autowired private OrganizationCaRepository caRepository;
-    @Autowired private AuditLogRepository auditLogRepository;
+    @Autowired
+    private EnrollmentService enrollmentService;
+    @Autowired
+    private CertificateService certificateService;
+    @Autowired
+    private OrganizationRepository organizationRepository;
+    @Autowired
+    private EnrollmentTokenRepository enrollmentTokenRepository;
+    @Autowired
+    private DeviceRepository deviceRepository;
+    @Autowired
+    private IssuedCertificateRepository certRepository;
+    @Autowired
+    private CertificateRequestRepository requestRepository;
+    @Autowired
+    private OrganizationCaRepository caRepository;
+    @Autowired
+    private AuditLogRepository auditLogRepository;
 
     private Long orgId;
     private String enrollmentToken;
@@ -81,7 +101,7 @@ class EnrollmentWithCsrIT extends AbstractIntegrationTest {
 
     @Test
     void enrollAndSignCsr_producesValidIdentityCert() throws Exception {
-        // Enroll — registers the device and increments token useCount.
+        // Enroll - registers the device and increments token useCount.
         var result = enrollmentService.enrollDevice(
                 enrollmentToken, "rpi-001", "host", "arm64", "linux", "0.4.0", Map.of());
 
@@ -111,7 +131,7 @@ class EnrollmentWithCsrIT extends AbstractIntegrationTest {
         assertThat(first.certificate()).isNotNull();
 
         // Second identity cert request for the same device while the first is still valid
-        // must trip compromise detection — the controller has no way to know whether the
+        // must trip compromise detection - the controller has no way to know whether the
         // original key was exfiltrated or the device simply lost state.
         var second = certificateService.processRequest(
                 "rpi-001", orgId, "device-identity", "rpi-001",
@@ -138,7 +158,9 @@ class EnrollmentWithCsrIT extends AbstractIntegrationTest {
         var signer = new JcaContentSignerBuilder("SHA256withECDSA").build(kp.getPrivate());
         var csr = builder.build(signer);
         StringWriter sw = new StringWriter();
-        try (JcaPEMWriter w = new JcaPEMWriter(sw)) { w.writeObject(csr); }
+        try (JcaPEMWriter w = new JcaPEMWriter(sw)) {
+            w.writeObject(csr);
+        }
         return sw.toString();
     }
 

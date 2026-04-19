@@ -1,6 +1,6 @@
 # EdgeGuardian Helm chart
 
-Per-environment values files. All credentials come from the values files — dev defaults live in `values-dev.yaml`; prod passwords live in a gitignored `values-prod-secrets.yaml` that you create locally.
+Per-environment values files. All credentials come from the values files - dev defaults live in `values-dev.yaml`; prod passwords live in a gitignored `values-prod-secrets.yaml` that you create locally.
 
 ## Dev (minikube)
 
@@ -70,7 +70,7 @@ $EDITOR deployments/helm/edgeguardian/values-prod-secrets.yaml
 
 All HTTP URLs are derived from `ingress.baseDomain`. Set it and everything else
 (UI, Keycloak issuer, CRL endpoint, controller agent-installer URL) is computed
-via `_helpers.tpl`. MQTT cannot traverse the HTTP ingress — a dedicated
+via `_helpers.tpl`. MQTT cannot traverse the HTTP ingress - a dedicated
 LoadBalancer is provisioned for EMQX (`emqx.external.type: LoadBalancer` in
 `values-prod.yaml`); grab its IP/hostname once it's assigned and set the
 `controller.agentInstaller.brokerUrl` / `mtlsBrokerUrl` so agents receive the

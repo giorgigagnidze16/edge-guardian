@@ -61,6 +61,8 @@ spec:
     metadata:
       labels:
         {{- include "edgeguardian.componentLabels" (dict "ctx" . "component" "controller") | nindent 8 }}
+      annotations:
+        checksum/runtime-urls: {{ include "edgeguardian.runtimeUrlsChecksum" . }}
     spec:
       containers:
         - name: controller
@@ -136,7 +138,7 @@ spec:
             {{- toYaml .Values.controller.resources | nindent 12 }}
       volumes:
         # cert-manager creates this Secret (post-install hook). Marked optional so the
-        # controller Pod can start before the hook fires — kubelet picks up the Secret
+        # controller Pod can start before the hook fires - kubelet picks up the Secret
         # contents within ~60s of creation and BrokerCaProvider reads them on next call.
         - name: broker-ca
           secret:

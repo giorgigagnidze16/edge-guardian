@@ -26,6 +26,8 @@ spec:
     metadata:
       labels:
         {{- include "edgeguardian.componentLabels" (dict "ctx" . "component" "ui") | nindent 8 }}
+      annotations:
+        checksum/runtime-urls: {{ include "edgeguardian.runtimeUrlsChecksum" . }}
     spec:
       containers:
         - name: ui

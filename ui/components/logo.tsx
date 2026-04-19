@@ -9,7 +9,7 @@ interface LogoIconProps {
 /**
  * EdgeGuardian logomark.
  *
- * A geometric shield enclosing a hub-and-spoke network topology —
+ * A geometric shield enclosing a hub-and-spoke network topology -
  * the controller (hub) manages edge devices (nodes). Shield = guardian,
  * network = fleet management.
  */
@@ -32,7 +32,7 @@ export function LogoIcon({ className, size = 32, outlined = false }: LogoIconPro
         fill="none"
       />
 
-      {/* Spokes — hub to device nodes */}
+      {/* Spokes - hub to device nodes */}
       <path
         d="M24 20 L15 32 M24 20 L33 32 M24 20 V10"
         stroke="currentColor"

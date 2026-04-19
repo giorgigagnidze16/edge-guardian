@@ -29,7 +29,7 @@ public class JwtTenantConverter implements Converter<Jwt, AbstractAuthentication
         List<OrganizationMember> memberships = memberRepository.findByUserId(user.getId());
         if (memberships.size() > 1) {
             log.warn("User {} (id={}) has {} org memberships; binding principal to the first. " +
-                    "Multi-org users are not fully supported — context switching requires logout.",
+                            "Multi-org users are not fully supported - context switching requires logout.",
                     jwt.getSubject(), user.getId(), memberships.size());
         }
         OrganizationMember membership = memberships.isEmpty() ? null : memberships.get(0);

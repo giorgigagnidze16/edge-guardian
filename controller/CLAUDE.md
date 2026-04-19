@@ -1,4 +1,4 @@
-# CLAUDE.md — EdgeGuardian Controller
+# CLAUDE.md - EdgeGuardian Controller
 
 Instructions for Claude Code when working in the `controller/` directory.
 
@@ -8,7 +8,7 @@ Instructions for Claude Code when working in the `controller/` directory.
 ./gradlew build            # Full build + tests (requires Docker)
 ./gradlew test             # Tests only (Testcontainers → real PostgreSQL)
 ./gradlew compileJava      # Fast compile check
-./gradlew bootRun          # Run locally (needs infra in a minikube cluster — see ../scripts/install.sh)
+./gradlew bootRun          # Run locally (needs infra in a minikube cluster - see ../scripts/install.sh)
 ```
 
 Infrastructure runs in Kubernetes via Helm. For iterative backend work, bring up the full stack once
@@ -22,7 +22,7 @@ image into minikube by rebuilding with `./gradlew bootBuildImage` and rolling th
 src/main/java/com/edgeguardian/controller/
 ├── api/              # REST controllers (10 classes)
 ├── config/           # Spring @Configuration + @ConfigurationProperties (incl. SecurityConfig)
-├── dto/              # Request/response records — never expose entities directly
+├── dto/              # Request/response records - never expose entities directly
 ├── model/            # JPA @Entity classes + enums
 ├── mqtt/             # MQTT listeners (7) + CommandPublisher + MqttTopics utility
 ├── repository/       # Spring Data JPA interfaces (19)
@@ -51,21 +51,21 @@ src/test/java/com/edgeguardian/controller/
 ## Key Conventions
 
 ### Layering
-Controller -> Service -> Repository. Controllers never touch repositories directly. MQTT listeners follow the same rule — they delegate to services.
+Controller -> Service -> Repository. Controllers never touch repositories directly. MQTT listeners follow the same rule - they delegate to services.
 
 ### DTOs
 All API responses use records from the `dto/` package. Entities in `model/` are JPA-annotated and must not leak into API responses. Each DTO has a `static from(Entity)` factory method.
 
 ### Security
 `config/SecurityConfig.java` defines the HTTP auth model (agent data-plane comms are MQTT-only):
-- **`permitAll`** — `/actuator/health/**`, `/actuator/info`, `/api/v1/agent/enroll` (bootstrap-credentials auth happens at the broker), and the public PKI endpoints: `/api/v1/pki/crl/**`, `/api/v1/pki/ca-bundle`, `/api/v1/pki/broker-ca`
-- **Authenticated** — everything else under `/api/v1/**` via JWT (Keycloak OAuth2) or `X-API-Key` header (ApiKeyAuthenticationFilter). `DeviceTokenAuthFilter` is registered but used only by legacy callers.
-- **`denyAll`** — any other path. Intentional backstop: new routes outside `/api/v1/` must opt in to a rule.
-- Authorization uses `@PreAuthorize("@orgSecurity.hasMinRole(authentication, 'ROLE')")` with hierarchy: VIEWER < OPERATOR < ADMIN < OWNER. Org-scoped repositories expose `findByIdForOrganization(...)` — cross-tenant access returns 404 rather than 403.
+- **`permitAll`** - `/actuator/health/**`, `/actuator/info`, `/api/v1/agent/enroll` (bootstrap-credentials auth happens at the broker), and the public PKI endpoints: `/api/v1/pki/crl/**`, `/api/v1/pki/ca-bundle`, `/api/v1/pki/broker-ca`
+- **Authenticated** - everything else under `/api/v1/**` via JWT (Keycloak OAuth2) or `X-API-Key` header (ApiKeyAuthenticationFilter). `DeviceTokenAuthFilter` is registered but used only by legacy callers.
+- **`denyAll`** - any other path. Intentional backstop: new routes outside `/api/v1/` must opt in to a rule.
+- Authorization uses `@PreAuthorize("@orgSecurity.hasMinRole(authentication, 'ROLE')")` with hierarchy: VIEWER < OPERATOR < ADMIN < OWNER. Org-scoped repositories expose `findByIdForOrganization(...)` - cross-tenant access returns 404 rather than 403.
 
 ### MQTT
 - All listeners are in the `mqtt/` package, subscribe in `@PostConstruct`
-- Topic format: `{topicRoot}/device/{deviceId}/{suffix}` — `topicRoot` defaults to `edgeguardian`
+- Topic format: `{topicRoot}/device/{deviceId}/{suffix}` - `topicRoot` defaults to `edgeguardian`
 - Device ID is extracted from the topic path via `MqttTopics.extractDeviceId(topic)`
 - QoS constants: `QOS_RELIABLE (1)` for commands/certs/enrollment, `QOS_BEST_EFFORT (0)` for telemetry/heartbeats/logs
 - The controller connects as MQTT user `controller` with full `edgeguardian/#` ACL access
@@ -89,9 +89,9 @@ Every resource is scoped to an `organizationId`. The `TenantPrincipal` record ca
 
 ## What NOT to Do
 
-- Do not add `@Transactional` to controllers — it belongs on service methods
-- Do not return JPA entities from REST endpoints — use DTOs
+- Do not add `@Transactional` to controllers - it belongs on service methods
+- Do not return JPA entities from REST endpoints - use DTOs
 - Do not bypass the service layer from MQTT listeners
-- Do not hardcode topic strings — use `topicRoot` + `MqttTopics` utility
+- Do not hardcode topic strings - use `topicRoot` + `MqttTopics` utility
 - Do not add new Spring profiles without a corresponding `application-{name}.yaml`
-- Do not use `CertRequestType.MANIFEST` to skip security checks — compromise detection is intentionally applied to all non-renewal types
+- Do not use `CertRequestType.MANIFEST` to skip security checks - compromise detection is intentionally applied to all non-renewal types

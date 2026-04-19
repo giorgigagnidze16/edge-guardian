@@ -1,0 +1,49 @@
+@echo off
+REM EdgeGuardian agent installer for Windows.
+REM
+REM Double-click this file to install. The script self-elevates via UAC and
+REM runs the embedded PowerShell installer as Administrator. No terminal or
+REM network round-trip required - the PowerShell payload is base64-embedded
+REM below and decoded at install time.
+
+setlocal enabledelayedexpansion
+
+REM Green-on-black console to match the installer's colour scheme.
+color 0A
+title EdgeGuardian Agent Installer
+
+net session >nul 2>&1
+if errorlevel 1 (
+    echo Requesting administrator privileges via UAC...
+    powershell -NoProfile -Command "Start-Process -FilePath '%~f0' -Verb RunAs"
+    exit /b
+)
+
+set "EG_WORK=%TEMP%\edgeguardian-installer-%RANDOM%%RANDOM%"
+mkdir "%EG_WORK%" >nul 2>&1 || (
+    echo *** INSTALL FAILED *** Could not create working directory: %EG_WORK%
+    pause
+    exit /b 1
+)
+
+>"%EG_WORK%\payload.b64" (
+{{PS1_BASE64_LINES}}
+)
+
+powershell -NoProfile -Command "$b64 = (Get-Content -LiteralPath '%EG_WORK%\payload.b64' -Raw) -replace '\s',''; if (-not $b64) { exit 2 }; [IO.File]::WriteAllBytes('%EG_WORK%\install.ps1', [Convert]::FromBase64String($b64))"
+if errorlevel 1 (
+    echo *** INSTALL FAILED *** Could not decode installer payload.
+    rmdir /s /q "%EG_WORK%" >nul 2>&1
+    pause
+    exit /b 1
+)
+
+powershell -NoProfile -ExecutionPolicy Bypass -File "%EG_WORK%\install.ps1"
+set "EG_EXIT=%ERRORLEVEL%"
+
+rmdir /s /q "%EG_WORK%" >nul 2>&1
+
+echo.
+pause
+endlocal
+exit /b %EG_EXIT%

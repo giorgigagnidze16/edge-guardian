@@ -169,7 +169,7 @@ type CommandMessage struct {
 // EnrollRequest is sent by the agent to enroll with an enrollment token.
 //
 // If CsrPem is provided, the controller will issue a leaf mTLS identity cert for the
-// device in the same exchange — avoiding a second round-trip over the bootstrap listener.
+// device in the same exchange - avoiding a second round-trip over the bootstrap listener.
 type EnrollRequest struct {
 	EnrollmentToken string            `json:"enrollmentToken"`
 	DeviceID        string            `json:"deviceId"`

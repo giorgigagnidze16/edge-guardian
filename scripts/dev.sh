@@ -44,7 +44,7 @@ check_prereqs() {
       missing=1
     fi
   else
-    error "Docker is not installed — needed for infrastructure (PostgreSQL, Keycloak, EMQX, MinIO, Loki, Grafana)"
+    error "Docker is not installed - needed for infrastructure (PostgreSQL, Keycloak, EMQX, MinIO, Loki, Grafana)"
     missing=1
   fi
 
@@ -62,7 +62,7 @@ check_prereqs() {
   if command -v go &>/dev/null; then
     info "Go: $(go version | awk '{print $3}')"
   else
-    error "Go is not installed — needed to build the agent"
+    error "Go is not installed - needed to build the agent"
     missing=1
   fi
 
@@ -76,7 +76,7 @@ check_prereqs() {
       missing=1
     fi
   else
-    error "Java is not installed — needed to build the controller"
+    error "Java is not installed - needed to build the controller"
     missing=1
   fi
 
@@ -84,7 +84,7 @@ check_prereqs() {
   if command -v node &>/dev/null; then
     info "Node.js: $(node --version)"
   else
-    error "Node.js is not installed — needed for the dashboard"
+    error "Node.js is not installed - needed for the dashboard"
     missing=1
   fi
 
