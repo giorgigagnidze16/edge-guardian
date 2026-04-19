@@ -1,4 +1,5 @@
-import { apiFetch } from "../api-client";
+import { absoluteUrl, apiFetch } from "../api-client";
+import { endpoints } from "./endpoints";
 
 export interface Organization {
   id: number;
@@ -25,18 +26,18 @@ export interface MeResponse {
 }
 
 export async function getMe(token: string): Promise<MeResponse> {
-  return apiFetch<MeResponse>("/api/v1/me", { token });
+  return apiFetch<MeResponse>(endpoints.me(), { token });
 }
 
 export async function getOrganization(token: string): Promise<Organization> {
-  return apiFetch<Organization>("/api/v1/organization", { token });
+  return apiFetch<Organization>(endpoints.organization.get(), { token });
 }
 
 export async function updateOrganization(
   token: string,
   data: { name?: string; description?: string },
 ): Promise<Organization> {
-  return apiFetch<Organization>("/api/v1/organization", {
+  return apiFetch<Organization>(endpoints.organization.update(), {
     method: "PUT", token, body: JSON.stringify(data),
   });
 }
@@ -71,17 +72,17 @@ export interface ApiKeyEntry {
 }
 
 export async function listMembers(token: string): Promise<OrgMember[]> {
-  return apiFetch<OrgMember[]>("/api/v1/organization/members", { token });
+  return apiFetch<OrgMember[]>(endpoints.organization.members.list(), { token });
 }
 
 export async function addMember(token: string, data: { email: string; role: string }): Promise<void> {
-  return apiFetch("/api/v1/organization/members", {
+  return apiFetch(endpoints.organization.members.create(), {
     method: "POST", token, body: JSON.stringify(data),
   });
 }
 
 export async function removeMember(token: string, memberId: number): Promise<void> {
-  return apiFetch(`/api/v1/organization/members/${memberId}`, { method: "DELETE", token });
+  return apiFetch(endpoints.organization.members.byId(memberId), { method: "DELETE", token });
 }
 
 export async function updateMemberRole(
@@ -89,26 +90,26 @@ export async function updateMemberRole(
   memberId: number,
   role: string,
 ): Promise<OrgMember> {
-  return apiFetch<OrgMember>(`/api/v1/organization/members/${memberId}`, {
+  return apiFetch<OrgMember>(endpoints.organization.members.byId(memberId), {
     method: "PATCH", token, body: JSON.stringify({ role }),
   });
 }
 
 export async function listEnrollmentTokens(token: string): Promise<EnrollmentToken[]> {
-  return apiFetch<EnrollmentToken[]>("/api/v1/enrollment-tokens", { token });
+  return apiFetch<EnrollmentToken[]>(endpoints.enrollmentTokens.list(), { token });
 }
 
 export async function createEnrollmentToken(
   token: string,
   data: { description: string; maxUses: number },
 ): Promise<EnrollmentToken> {
-  return apiFetch<EnrollmentToken>("/api/v1/enrollment-tokens", {
+  return apiFetch<EnrollmentToken>(endpoints.enrollmentTokens.create(), {
     method: "POST", token, body: JSON.stringify(data),
   });
 }
 
 export async function deleteEnrollmentToken(token: string, tokenId: number): Promise<void> {
-  return apiFetch(`/api/v1/enrollment-tokens/${tokenId}`, { method: "DELETE", token });
+  return apiFetch(endpoints.enrollmentTokens.byId(tokenId), { method: "DELETE", token });
 }
 
 export function buildInstallerUrl(
@@ -116,21 +117,20 @@ export function buildInstallerUrl(
   arch: "amd64" | "arm64",
   tokenSecret: string,
 ): string {
-  const base = process.env.NEXT_PUBLIC_API_URL ?? "";
   const params = new URLSearchParams({ os, arch, token: tokenSecret });
-  return `${base}/api/v1/agent/installer?${params.toString()}`;
+  return absoluteUrl(`${endpoints.agent.installer()}?${params.toString()}`);
 }
 
 export async function listApiKeys(token: string): Promise<ApiKeyEntry[]> {
-  return apiFetch<ApiKeyEntry[]>("/api/v1/api-keys", { token });
+  return apiFetch<ApiKeyEntry[]>(endpoints.apiKeys.list(), { token });
 }
 
 export async function createApiKey(token: string, data: { name: string }): Promise<{ id: number; rawKey: string }> {
-  return apiFetch("/api/v1/api-keys", { method: "POST", token, body: JSON.stringify(data) });
+  return apiFetch(endpoints.apiKeys.create(), { method: "POST", token, body: JSON.stringify(data) });
 }
 
 export async function deleteApiKey(token: string, keyId: number): Promise<void> {
-  return apiFetch(`/api/v1/api-keys/${keyId}`, { method: "DELETE", token });
+  return apiFetch(endpoints.apiKeys.byId(keyId), { method: "DELETE", token });
 }
 
 export interface AuditLogEntry {
@@ -155,6 +155,6 @@ export async function listAuditLog(
   if (params?.resourceType) searchParams.set("resourceType", params.resourceType);
   const qs = searchParams.toString();
   return apiFetch<AuditLogEntry[]>(
-    `/api/v1/organization/audit-log${qs ? `?${qs}` : ""}`, { token },
+    `${endpoints.organization.auditLog()}${qs ? `?${qs}` : ""}`, { token },
   );
 }

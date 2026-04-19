@@ -1,4 +1,5 @@
-import { apiFetch } from "../api-client";
+import { apiFetch, apiFetchText } from "../api-client";
+import { endpoints } from "./endpoints";
 
 export interface CertificateRequest {
   id: number;
@@ -28,36 +29,31 @@ export interface Certificate {
 }
 
 export async function listCertificateRequests(token: string): Promise<CertificateRequest[]> {
-  return apiFetch<CertificateRequest[]>("/api/v1/certificates/requests", { token });
+  return apiFetch<CertificateRequest[]>(endpoints.certificates.requests.list(), { token });
 }
 
 export async function listCertificates(token: string): Promise<Certificate[]> {
-  return apiFetch<Certificate[]>("/api/v1/certificates", { token });
+  return apiFetch<Certificate[]>(endpoints.certificates.list(), { token });
 }
 
 export async function approveCertRequest(token: string, requestId: number): Promise<Certificate> {
   return apiFetch<Certificate>(
-    `/api/v1/certificates/requests/${requestId}/approve`,
+    endpoints.certificates.requests.approve(requestId),
     { method: "POST", token },
   );
 }
 
 export async function rejectCertRequest(token: string, requestId: number, reason?: string): Promise<void> {
   return apiFetch(
-    `/api/v1/certificates/requests/${requestId}/reject`,
+    endpoints.certificates.requests.reject(requestId),
     { method: "POST", token, body: JSON.stringify({ reason: reason ?? "" }) },
   );
 }
 
 export async function revokeCertificate(token: string, certId: number): Promise<void> {
-  return apiFetch(`/api/v1/certificates/${certId}/revoke`, { method: "POST", token });
+  return apiFetch(endpoints.certificates.revoke(certId), { method: "POST", token });
 }
 
 export async function getCaCert(token: string): Promise<string> {
-  const response = await fetch(
-    `${process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8443"}/api/v1/certificates/ca`,
-    { headers: { Authorization: `Bearer ${token}` } },
-  );
-  if (!response.ok) throw new Error("Failed to download CA cert");
-  return response.text();
+  return apiFetchText(endpoints.certificates.ca(), { token });
 }

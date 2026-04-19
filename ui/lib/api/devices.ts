@@ -1,4 +1,5 @@
 import { apiFetch } from "../api-client";
+import { endpoints } from "./endpoints";
 
 export interface DeviceStatus {
   cpuUsagePercent: number;
@@ -26,35 +27,23 @@ export interface Device {
 }
 
 export async function listDevices(token: string): Promise<Device[]> {
-  return apiFetch<Device[]>("/api/v1/devices", { token });
+  return apiFetch<Device[]>(endpoints.devices.list(), { token });
 }
 
-export async function getDevice(
-  token: string,
-  deviceId: string,
-): Promise<Device> {
-  return apiFetch<Device>(`/api/v1/devices/${deviceId}`, { token });
+export async function getDevice(token: string, deviceId: string): Promise<Device> {
+  return apiFetch<Device>(endpoints.devices.byId(deviceId), { token });
 }
 
-export async function deleteDevice(
-  token: string,
-  deviceId: string,
-): Promise<void> {
-  return apiFetch(`/api/v1/devices/${deviceId}`, {
-    method: "DELETE",
-    token,
-  });
+export async function deleteDevice(token: string, deviceId: string): Promise<void> {
+  return apiFetch(endpoints.devices.byId(deviceId), { method: "DELETE", token });
 }
 
 export async function getDeviceCount(token: string): Promise<number> {
-  return apiFetch<number>("/api/v1/devices/count", { token });
+  return apiFetch<number>(endpoints.devices.count(), { token });
 }
 
-export async function getDeviceManifest(
-  token: string,
-  deviceId: string,
-): Promise<unknown> {
-  return apiFetch(`/api/v1/devices/${deviceId}/manifest`, { token });
+export async function getDeviceManifest(token: string, deviceId: string): Promise<unknown> {
+  return apiFetch(endpoints.devices.manifest(deviceId), { token });
 }
 
 export async function getDeviceLogs(
@@ -68,7 +57,7 @@ export async function getDeviceLogs(
   if (params?.limit) q.set("limit", String(params.limit));
   if (params?.level) q.set("level", params.level);
   if (params?.search) q.set("search", params.search);
-  return apiFetch(`/api/v1/devices/${deviceId}/logs?${q.toString()}`, { token });
+  return apiFetch(`${endpoints.devices.logs(deviceId)}?${q.toString()}`, { token });
 }
 
 export async function updateDeviceManifest(
@@ -76,7 +65,7 @@ export async function updateDeviceManifest(
   deviceId: string,
   yamlContent: string,
 ): Promise<void> {
-  return apiFetch(`/api/v1/devices/${deviceId}/manifest`, {
+  return apiFetch(endpoints.devices.manifest(deviceId), {
     method: "PUT",
     token,
     body: JSON.stringify({ content: yamlContent }),
@@ -88,9 +77,35 @@ export async function updateDeviceLabels(
   deviceId: string,
   labels: Record<string, string>,
 ): Promise<void> {
-  return apiFetch(`/api/v1/devices/${deviceId}/labels`, {
+  return apiFetch(endpoints.devices.labels(deviceId), {
     method: "PUT",
     token,
     body: JSON.stringify(labels),
   });
+}
+
+export interface TelemetryDataPoint {
+  time: string;
+  cpuUsagePercent: number;
+  memoryUsedBytes: number;
+  memoryTotalBytes: number;
+  diskUsedBytes: number;
+  diskTotalBytes: number;
+  temperatureCelsius: number;
+  uptimeSeconds: number;
+  reconcileStatus: string;
+}
+
+export type TelemetryBucket = "raw" | "hourly";
+
+export async function getDeviceTelemetry(
+  token: string,
+  deviceId: string,
+  params: { start: string; end: string; bucket?: TelemetryBucket },
+): Promise<TelemetryDataPoint[]> {
+  const path = params.bucket === "hourly"
+    ? endpoints.devices.telemetryHourly(deviceId)
+    : endpoints.devices.telemetry(deviceId);
+  const q = new URLSearchParams({ start: params.start, end: params.end });
+  return apiFetch<TelemetryDataPoint[]>(`${path}?${q.toString()}`, { token });
 }

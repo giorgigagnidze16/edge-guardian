@@ -1,14 +1,14 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useOrganization } from "@/lib/hooks/use-organization";
 import { PageHeader } from "@/components/page-header";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Globe, Github, Radio, Terminal, Copy, Check } from "lucide-react";
-
-const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8443";
+import { absoluteUrl } from "@/lib/api-client";
+import { endpoints } from "@/lib/api/endpoints";
 
 export default function IntegrationsPage() {
   const { orgId } = useOrganization();
@@ -35,8 +35,15 @@ export default function IntegrationsPage() {
     </Button>
   );
 
+  const [origin, setOrigin] = useState("");
+  useEffect(() => setOrigin(window.location.origin), []);
+
+  const apiBase = absoluteUrl("") || origin;
+  const devicesUrl = `${apiBase}${endpoints.devices.list()}`;
+  const artifactsUrl = `${apiBase}${endpoints.ota.artifacts.create()}`;
+
   const curlExample = `curl -H "Authorization: Bearer YOUR_API_KEY" \\
-  ${API_BASE}/api/v1/devices`;
+  ${devicesUrl}`;
 
   const githubActionsYaml = `name: OTA Deploy
 on:
@@ -49,12 +56,12 @@ jobs:
     steps:
       - name: Create OTA Artifact
         run: |
-          curl -X POST ${API_BASE}/api/v1/organizations/${orgId ?? 1}/ota/artifacts \\
+          curl -X POST ${artifactsUrl} \\
             -H "Authorization: Bearer \${{ secrets.EDGEGUARDIAN_API_KEY }}" \\
             -H "Content-Type: application/json" \\
             -d '{"name":"my-app","version":"\${{ github.ref_name }}","architecture":"arm64"}'`;
 
-  const enrollCommand = `curl -sSL https://get.edgeguardian.io | sh -s -- --token YOUR_ENROLLMENT_TOKEN --api ${API_BASE}`;
+  const enrollCommand = `curl -sSL https://get.edgeguardian.io | sh -s -- --token YOUR_ENROLLMENT_TOKEN --api ${apiBase}`;
 
   return (
     <div className="space-y-6">
@@ -80,9 +87,9 @@ jobs:
               <p className="mb-1 text-xs font-medium text-muted-foreground">Base URL</p>
               <div className="flex items-center gap-2">
                 <code className="rounded-md bg-muted/50 border border-border/50 px-2 py-1 text-sm font-mono text-primary">
-                  {API_BASE}
+                  {apiBase}
                 </code>
-                <CopyButton text={API_BASE} id="api-url" />
+                <CopyButton text={apiBase} id="api-url" />
               </div>
             </div>
             <div>

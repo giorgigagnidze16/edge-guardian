@@ -39,6 +39,8 @@ spec:
           env:
             - name: INTERNAL_API_URL
               value: http://controller:8443
+            - name: NEXT_PUBLIC_API_URL
+              value: {{ coalesce .Values.ui.publicApiUrl (include "edgeguardian.controllerPublicUrl" .) "" | quote }}
             - name: KEYCLOAK_ISSUER
               valueFrom:
                 configMapKeyRef: { name: edgeguardian-runtime-urls, key: KEYCLOAK_ISSUER_URL }

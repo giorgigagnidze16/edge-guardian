@@ -10,6 +10,9 @@ import {
   deleteDevice,
   updateDeviceManifest,
   updateDeviceLabels,
+  getDeviceTelemetry,
+  type TelemetryBucket,
+  type TelemetryDataPoint,
 } from "@/lib/api/devices";
 import { usePollingHistory } from "@/lib/hooks/use-polling-history";
 import { MetricCard } from "@/components/metric-card";
@@ -161,21 +164,20 @@ export default function DeviceDetailPage() {
     onError: (err: Error) => toast.error(err.message),
   });
 
-  // Logs state
+  const TIME_RANGE_MS: Record<string, number> = {
+    "15m": 15 * 60 * 1000,
+    "1h": 60 * 60 * 1000,
+    "6h": 6 * 60 * 60 * 1000,
+    "24h": 24 * 60 * 60 * 1000,
+    "7d": 7 * 24 * 60 * 60 * 1000,
+    "30d": 30 * 24 * 60 * 60 * 1000,
+  };
+  const rangeStartIso = (range: string) =>
+    new Date(Date.now() - (TIME_RANGE_MS[range] ?? TIME_RANGE_MS["1h"])).toISOString();
+
   const [logSearch, setLogSearch] = useState("");
   const [logLevel, setLogLevel] = useState("");
   const [logTimeRange, setLogTimeRange] = useState("1h");
-
-  const getLogTimeStart = () => {
-    const map: Record<string, number> = {
-      "15m": 15 * 60 * 1000,
-      "1h": 60 * 60 * 1000,
-      "6h": 6 * 60 * 60 * 1000,
-      "24h": 24 * 60 * 60 * 1000,
-      "7d": 7 * 24 * 60 * 60 * 1000,
-    };
-    return new Date(Date.now() - (map[logTimeRange] ?? map["1h"])).toISOString();
-  };
 
   const { data: logsResponse, isLoading: logsLoading } = useQuery({
     queryKey: ["device-logs", id, logLevel, logSearch, logTimeRange],
@@ -184,11 +186,34 @@ export default function DeviceDetailPage() {
         limit: 200,
         level: logLevel || undefined,
         search: logSearch || undefined,
-        start: getLogTimeStart(),
+        start: rangeStartIso(logTimeRange),
       }),
     enabled: !!token && !!id,
     refetchInterval: 10_000,
   });
+
+  const [telemetryRange, setTelemetryRange] = useState("1h");
+  const telemetryBucket: TelemetryBucket =
+    TIME_RANGE_MS[telemetryRange] > TIME_RANGE_MS["6h"] ? "hourly" : "raw";
+
+  const { data: telemetry = [] } = useQuery({
+    queryKey: ["device-telemetry", id, telemetryRange],
+    queryFn: () =>
+      getDeviceTelemetry(token, id, {
+        start: rangeStartIso(telemetryRange),
+        end: new Date().toISOString(),
+        bucket: telemetryBucket,
+      }),
+    enabled: !!token && !!id,
+    refetchInterval: telemetryBucket === "raw" ? 30_000 : 5 * 60_000,
+  });
+
+  const resourceChartData = telemetry.map((p: TelemetryDataPoint) => ({
+    time: p.time,
+    cpu: p.cpuUsagePercent ?? 0,
+    memory: p.memoryTotalBytes ? (p.memoryUsedBytes / p.memoryTotalBytes) * 100 : 0,
+    temperature: p.temperatureCelsius,
+  }));
 
   const logLines: { timestamp: string; line: string }[] = [];
   if (logsResponse && typeof logsResponse === "object") {
@@ -254,13 +279,6 @@ export default function DeviceDetailPage() {
   const diskPercent = status?.diskTotalBytes
     ? Math.round((status.diskUsedBytes / status.diskTotalBytes) * 100)
     : 0;
-
-  // Build chart data from history
-  const chartData = history.get("cpu").map((cpu, i) => ({
-    index: i,
-    cpu,
-    memory: history.get("memory")[i] ?? 0,
-  }));
 
   return (
     <div className="space-y-6">
@@ -375,15 +393,35 @@ export default function DeviceDetailPage() {
         {/* Overview Tab */}
         <TabsContent value="overview" className="space-y-4">
           <div className="grid gap-4 lg:grid-cols-2">
-            {/* Resource chart */}
             <Card>
-              <CardHeader>
+              <CardHeader className="flex flex-row items-center justify-between">
                 <CardTitle>Resource Usage</CardTitle>
+                <Select value={telemetryRange} onValueChange={setTelemetryRange}>
+                  <SelectTrigger className="h-8 w-32">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="15m">Last 15 min</SelectItem>
+                    <SelectItem value="1h">Last 1 hour</SelectItem>
+                    <SelectItem value="6h">Last 6 hours</SelectItem>
+                    <SelectItem value="24h">Last 24 hours</SelectItem>
+                    <SelectItem value="7d">Last 7 days</SelectItem>
+                    <SelectItem value="30d">Last 30 days</SelectItem>
+                  </SelectContent>
+                </Select>
               </CardHeader>
               <CardContent>
-                <DeviceResourceChart
-                  data={chartData.length > 1 ? chartData : [{ index: 0, cpu: status?.cpuUsagePercent ?? 0, memory: memPercent }]}
-                />
+                {resourceChartData.length > 0 ? (
+                  <DeviceResourceChart
+                    data={resourceChartData}
+                    showTemperature={supportsTemperature}
+                    axisFormat={telemetryBucket === "hourly" ? "day" : "hour"}
+                  />
+                ) : (
+                  <div className="flex h-[260px] items-center justify-center text-sm text-muted-foreground">
+                    No telemetry in selected range
+                  </div>
+                )}
               </CardContent>
             </Card>
 

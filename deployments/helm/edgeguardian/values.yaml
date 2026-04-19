@@ -11,6 +11,7 @@ ui:
     pullPolicy: IfNotPresent
   keycloakClientId: edgeguardian-ui
   internalKeycloakUrl: http://keycloak:9090
+  publicApiUrl: ""
   # Explicit UI URL. When empty and ingress.enabled, computed as
   # "{scheme}://ui.{ingress.baseDomain}" in _helpers.tpl.
   nextAuthUrl: ""

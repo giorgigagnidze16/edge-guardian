@@ -8,6 +8,7 @@ ui:
   # a different URL scheme than ui.<baseDomain> / keycloak.<baseDomain>.
   keycloakIssuerUrl: ""
   nextAuthUrl: ""
+  publicApiUrl: ""
 
 externalAccess:
   mode: clusterIP

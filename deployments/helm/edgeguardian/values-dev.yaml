@@ -8,6 +8,7 @@ ui:
   nextAuthUrl: http://localhost:30080
   nextAuthSecret: ZGV2LW9ubHktbmV4dGF1dGgtc2VjcmV0LWFkbWluLWFkbWluLS0=
   keycloakClientSecret: edgeguardian-ui-secret
+  publicApiUrl: http://127.0.0.1:30443
 
 externalAccess:
   mode: loadBalancer
