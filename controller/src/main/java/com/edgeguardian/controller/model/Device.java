@@ -90,6 +90,7 @@ public class Device {
         this.agentVersion = agentVersion;
         this.labels = new HashMap<>();
         this.state = DeviceState.ONLINE;
+        this.lastHeartbeat = Instant.now();
     }
 
     @PrePersist

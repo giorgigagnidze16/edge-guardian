@@ -24,7 +24,8 @@ public class DeviceHealthScheduler {
 
     public DeviceHealthScheduler(
             DeviceRepository deviceRepository,
-            @Value("${edgeguardian.controller.device.offline-threshold-minutes:5}") long offlineThresholdMinutes) {
+            @Value("${edgeguardian.controller.device.offline-threshold-minutes:5}")
+            long offlineThresholdMinutes) {
         this.deviceRepository = deviceRepository;
         this.offlineThresholdMinutes = offlineThresholdMinutes;
     }
@@ -37,7 +38,7 @@ public class DeviceHealthScheduler {
 
         int count = 0;
         for (Device device : onlineDevices) {
-            if (device.getLastHeartbeat() != null && device.getLastHeartbeat().isBefore(threshold)) {
+            if (lastSeen(device).isBefore(threshold)) {
                 device.setState(Device.DeviceState.OFFLINE);
                 deviceRepository.save(device);
                 count++;
@@ -47,5 +48,11 @@ public class DeviceHealthScheduler {
         if (count > 0) {
             log.info("Marked {} device(s) as OFFLINE (no heartbeat for {} min)", count, offlineThresholdMinutes);
         }
+    }
+
+    private Instant lastSeen(Device device) {
+        if (device.getLastHeartbeat() != null) return device.getLastHeartbeat();
+        if (device.getCreatedAt() != null) return device.getCreatedAt();
+        return Instant.EPOCH;
     }
 }

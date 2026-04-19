@@ -62,7 +62,7 @@ func NewMQTTClient(cfg MQTTConfig, logger *zap.Logger) (*MQTTClient, error) {
 
 	opts := mqtt.NewClientOptions().
 		AddBroker(cfg.BrokerURL).
-		SetClientID("eg-agent-" + cfg.DeviceID).
+		SetClientID(cfg.DeviceID).
 		SetAutoReconnect(true).
 		SetMaxReconnectInterval(30 * time.Second).
 		SetKeepAlive(60 * time.Second).
@@ -181,8 +181,19 @@ func (mc *MQTTClient) PublishHeartbeat(msg *model.HeartbeatMessage) error {
 	return mc.publishWithQueue(mc.topic("heartbeat"), msg)
 }
 
-// RunHeartbeatLoop publishes heartbeats at the given interval until ctx is cancelled.
+// RunHeartbeatLoop publishes a heartbeat immediately then every interval until
+// ctx is cancelled. The first beat fires straight away so the controller
+// transitions the device to ONLINE right after connect instead of waiting a
+// full tick (otherwise a fresh agent looks dead until the next interval).
 func (mc *MQTTClient) RunHeartbeatLoop(ctx context.Context, interval time.Duration, msgFn func() *model.HeartbeatMessage) {
+	publish := func() {
+		if err := mc.PublishHeartbeat(msgFn()); err != nil {
+			mc.logger.Warn("heartbeat publish failed", zap.Error(err))
+		}
+	}
+
+	publish()
+
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
 
@@ -191,10 +202,7 @@ func (mc *MQTTClient) RunHeartbeatLoop(ctx context.Context, interval time.Durati
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			msg := msgFn()
-			if err := mc.PublishHeartbeat(msg); err != nil {
-				mc.logger.Warn("heartbeat publish failed", zap.Error(err))
-			}
+			publish()
 		}
 	}
 }

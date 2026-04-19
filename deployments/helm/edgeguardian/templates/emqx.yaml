@@ -269,10 +269,6 @@ spec:
               value: "true"
             - name: EMQX_LISTENERS__SSL__DEFAULT__SSL_OPTIONS__ENABLE_CRL_CHECK
               value: "true"
-            - name: EMQX_LISTENERS__SSL__DEFAULT__PEER_CERT_AS_CLIENTID
-              value: cn
-            - name: EMQX_LISTENERS__SSL__DEFAULT__PEER_CERT_AS_USERNAME
-              value: cn
             - name: EMQX_CRL_CACHE__REFRESH_INTERVAL
               value: 300s
             - name: EMQX_CRL_CACHE__HTTP_TIMEOUT
