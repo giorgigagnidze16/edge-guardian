@@ -121,4 +121,5 @@ spec:
 
               kubectl -n "$NS" rollout restart deployment/ui
               kubectl -n "$NS" rollout restart deployment/keycloak
+              kubectl -n "$NS" rollout restart deployment/controller
 {{- end }}
