@@ -1,9 +1,12 @@
 package com.edgeguardian.controller.service;
 
+import com.edgeguardian.controller.api.ApiPaths;
 import com.edgeguardian.controller.config.AgentInstallerProperties;
 import com.edgeguardian.controller.exception.NotFoundException;
 import com.edgeguardian.controller.model.EnrollmentToken;
 import com.edgeguardian.controller.repository.EnrollmentTokenRepository;
+import com.edgeguardian.controller.service.installer.InstallerFormat;
+import com.edgeguardian.controller.service.installer.Os;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
@@ -15,7 +18,6 @@ import org.springframework.web.util.UriComponentsBuilder;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
-import java.util.Arrays;
 import java.util.Base64;
 import java.util.Map;
 
@@ -32,13 +34,26 @@ public class AgentInstallerService {
     private final ArtifactStorageService storage;
     private final EnrollmentTokenRepository tokenRepository;
 
-    public String renderInstaller(Os os, InstallerFormat format, String tokenSecret) throws IOException {
+    private static String stripTrailingNewline(String s) {
+        if (s == null || s.isEmpty()) {
+            return s;
+        }
+        if (s.endsWith("\r\n")) {
+            return s.substring(0, s.length() - 2);
+        }
+        if (s.endsWith("\n") || s.endsWith("\r")) {
+            return s.substring(0, s.length() - 1);
+        }
+        return s;
+    }
+
+    public String renderInstaller(Os os, InstallerFormat format, String tokenSecret, String arch) throws IOException {
         format.validateFor(os);
         EnrollmentToken token = tokenRepository.findByToken(tokenSecret)
-                .filter(EnrollmentToken::isValid)
-                .orElseThrow(() -> new NotFoundException("Enrollment token not found"));
+            .filter(EnrollmentToken::isValid)
+            .orElseThrow(() -> new NotFoundException("Enrollment token not found"));
 
-        Map<String, String> vars = payloadVars(os, token);
+        Map<String, String> vars = payloadVars(os, token, arch);
         return switch (format) {
             case SHELL, PS1 -> render(format.templatePath, vars);
             case CMD -> wrapAsSelfElevatingCmd(render(InstallerFormat.PS1.templatePath, vars));
@@ -54,33 +69,26 @@ public class AgentInstallerService {
         }
     }
 
-    private Map<String, String> payloadVars(Os os, EnrollmentToken token) throws IOException {
+    private Map<String, String> payloadVars(Os os, EnrollmentToken token, String arch) throws IOException {
         String binaryUrl = UriComponentsBuilder.fromUriString(props.controllerUrl())
-                .path("/api/v1/agent/binary")
-                .queryParam("os", os.slug)
-                .queryParam("arch", "amd64")
-                .build().toUriString();
+            .path(ApiPaths.AGENT_BINARY)
+            .queryParam("os", os.slug)
+            .queryParam("arch", arch)
+            .build().toUriString();
         String systemdUnit = os == Os.LINUX ? loadResource("installers/edgeguardian-agent.service.tmpl") : "";
         String logo = loadResource("installers/logo.txt");
 
         return Map.of(
-                "CONTROLLER_URL", props.controllerUrl(),
-                "BROKER_URL", props.brokerUrl(),
-                "MTLS_BROKER_URL", props.mtlsBrokerUrl(),
-                "BOOTSTRAP_PASSWORD", props.bootstrapPassword(),
-                "ENROLLMENT_TOKEN", token.getToken(),
-                "BINARY_URL", binaryUrl,
-                "SYSTEMD_UNIT", systemdUnit,
-                "AGENT_VERSION", props.agentVersion() == null ? "unknown" : props.agentVersion(),
-                "LOGO", stripTrailingNewline(logo)
+            "CONTROLLER_URL", props.controllerUrl(),
+            "BROKER_URL", props.brokerUrl(),
+            "MTLS_BROKER_URL", props.mtlsBrokerUrl(),
+            "BOOTSTRAP_PASSWORD", props.bootstrapPassword(),
+            "ENROLLMENT_TOKEN", token.getToken(),
+            "BINARY_URL", binaryUrl,
+            "SYSTEMD_UNIT", systemdUnit,
+            "AGENT_VERSION", props.agentVersion() == null ? "unknown" : props.agentVersion(),
+            "LOGO", stripTrailingNewline(logo)
         );
-    }
-
-    private static String stripTrailingNewline(String s) {
-        if (s == null || s.isEmpty()) return s;
-        if (s.endsWith("\r\n")) return s.substring(0, s.length() - 2);
-        if (s.endsWith("\n") || s.endsWith("\r")) return s.substring(0, s.length() - 1);
-        return s;
     }
 
     /**
@@ -107,66 +115,6 @@ public class AgentInstallerService {
     private String loadResource(String path) throws IOException {
         try (InputStream in = new ClassPathResource(path).getInputStream()) {
             return StreamUtils.copyToString(in, StandardCharsets.UTF_8);
-        }
-    }
-
-    public enum Os {
-        LINUX("linux", "edgeguardian-agent"),
-        WINDOWS("windows", "edgeguardian-agent.exe");
-
-        public final String slug;
-        public final String binaryName;
-
-        Os(String slug, String binaryName) {
-            this.slug = slug;
-            this.binaryName = binaryName;
-        }
-
-        public static Os of(String slug) {
-            for (Os v : values()) {
-                if (v.slug.equalsIgnoreCase(slug)) return v;
-            }
-            throw new IllegalArgumentException("Unsupported os: " + slug);
-        }
-    }
-
-    public enum InstallerFormat {
-        SHELL("install.sh", "installers/install.sh.tmpl", Os.LINUX),
-        PS1("install.ps1", "installers/install.ps1.tmpl", Os.WINDOWS),
-        CMD("EdgeGuardianInstall.cmd", "installers/install.cmd.tmpl", Os.WINDOWS);
-
-        public final String filename;
-        public final String templatePath;
-        public final Os os;
-
-        InstallerFormat(String filename, String templatePath, Os os) {
-            this.filename = filename;
-            this.templatePath = templatePath;
-            this.os = os;
-        }
-
-        public static InstallerFormat defaultFor(Os os) {
-            return switch (os) {
-                case LINUX -> SHELL;
-                case WINDOWS -> CMD;
-            };
-        }
-
-        public static InstallerFormat resolve(Os os, String name) {
-            if (name == null || name.isBlank()) return defaultFor(os);
-            InstallerFormat fmt = Arrays.stream(values())
-                    .filter(f -> f.name().equalsIgnoreCase(name))
-                    .findFirst()
-                    .orElseThrow(() -> new IllegalArgumentException("Unknown installer format: " + name));
-            fmt.validateFor(os);
-            return fmt;
-        }
-
-        void validateFor(Os os) {
-            if (this.os != os) {
-                throw new IllegalArgumentException(
-                        "Installer format " + this + " is not supported for os " + os.slug);
-            }
         }
     }
 }

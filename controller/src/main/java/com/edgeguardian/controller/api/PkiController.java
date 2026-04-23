@@ -5,6 +5,9 @@ import com.edgeguardian.controller.model.OrganizationCa;
 import com.edgeguardian.controller.repository.OrganizationCaRepository;
 import com.edgeguardian.controller.service.BrokerCaProvider;
 import com.edgeguardian.controller.service.CrlService;
+import java.nio.charset.StandardCharsets;
+import java.util.List;
+import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
@@ -14,23 +17,22 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-import java.nio.charset.StandardCharsets;
-import java.util.List;
-import java.util.stream.Collectors;
-
 @RestController
-@RequestMapping("/api/v1/pki")
+@RequestMapping(ApiPaths.PKI_BASE)
 @RequiredArgsConstructor
 public class PkiController {
 
-    private static final MediaType APPLICATION_PKIX_CRL = new MediaType("application", "pkix-crl");
-    private static final MediaType APPLICATION_X_PEM_FILE = new MediaType("application", "x-pem-file");
+    private static final MediaType APPLICATION_PKIX_CRL =
+        new MediaType("application", "pkix-crl");
+
+    private static final MediaType APPLICATION_X_PEM_FILE =
+        new MediaType("application", "x-pem-file");
 
     private final CrlService crlService;
     private final OrganizationCaRepository caRepository;
     private final BrokerCaProvider brokerCaProvider;
 
-    @GetMapping("/crl/{orgId}.crl")
+    @GetMapping(ApiPaths.PKI_CRL_FILE_PATH)
     public ResponseEntity<byte[]> getCrl(@PathVariable Long orgId) {
         CertificateRevocationList crl = crlService.getOrBuild(orgId);
         HttpHeaders headers = new HttpHeaders();
@@ -40,13 +42,13 @@ public class PkiController {
         return new ResponseEntity<>(crl.getCrlDer(), headers, 200);
     }
 
-    @GetMapping("/ca-bundle")
+    @GetMapping(ApiPaths.PKI_CA_BUNDLE_PATH)
     public ResponseEntity<byte[]> getCaBundle() {
         List<OrganizationCa> all = caRepository.findAll();
         String concatenated = all.stream()
-                .map(OrganizationCa::getCaCertPem)
-                .map(pem -> pem.endsWith("\n") ? pem : pem + "\n")
-                .collect(Collectors.joining());
+            .map(OrganizationCa::getCaCertPem)
+            .map(pem -> pem.endsWith("\n") ? pem : pem + "\n")
+            .collect(Collectors.joining());
 
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(APPLICATION_X_PEM_FILE);
@@ -55,7 +57,7 @@ public class PkiController {
         return new ResponseEntity<>(concatenated.getBytes(StandardCharsets.UTF_8), headers, 200);
     }
 
-    @GetMapping(value = "/broker-ca", produces = "application/x-pem-file")
+    @GetMapping(value = ApiPaths.PKI_BROKER_CA_PATH, produces = "application/x-pem-file")
     public ResponseEntity<byte[]> getBrokerCa() {
         String pem = brokerCaProvider.getPem();
         if (pem.isEmpty()) {

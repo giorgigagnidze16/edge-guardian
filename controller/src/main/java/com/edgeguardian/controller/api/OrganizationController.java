@@ -38,7 +38,7 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 
 @RestController
-@RequestMapping("/api/v1/organization")
+@RequestMapping(ApiPaths.ORGANIZATION_BASE)
 @RequiredArgsConstructor
 public class OrganizationController {
 

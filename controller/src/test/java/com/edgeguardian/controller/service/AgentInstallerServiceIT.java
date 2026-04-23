@@ -4,8 +4,8 @@ import com.edgeguardian.controller.AbstractIntegrationTest;
 import com.edgeguardian.controller.exception.NotFoundException;
 import com.edgeguardian.controller.model.EnrollmentToken;
 import com.edgeguardian.controller.repository.EnrollmentTokenRepository;
-import com.edgeguardian.controller.service.AgentInstallerService.InstallerFormat;
-import com.edgeguardian.controller.service.AgentInstallerService.Os;
+import com.edgeguardian.controller.service.installer.InstallerFormat;
+import com.edgeguardian.controller.service.installer.Os;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
@@ -68,7 +68,7 @@ class AgentInstallerServiceIT extends AbstractIntegrationTest {
     @Test
     void renderInstaller_ps1_substitutesPlaceholders() throws Exception {
         EnrollmentToken token = tokenRepository.save(freshToken().build());
-        String script = installers.renderInstaller(Os.WINDOWS, InstallerFormat.PS1, token.getToken());
+        String script = installers.renderInstaller(Os.WINDOWS, InstallerFormat.PS1, token.getToken(), "amd64");
 
         assertThat(script)
                 .doesNotContain("{{CONTROLLER_URL}}")
@@ -81,7 +81,7 @@ class AgentInstallerServiceIT extends AbstractIntegrationTest {
     @Test
     void renderInstaller_cmd_embedsBase64Ps1Payload() throws Exception {
         EnrollmentToken token = tokenRepository.save(freshToken().build());
-        String cmd = installers.renderInstaller(Os.WINDOWS, InstallerFormat.CMD, token.getToken());
+        String cmd = installers.renderInstaller(Os.WINDOWS, InstallerFormat.CMD, token.getToken(), "amd64");
 
         assertThat(cmd)
                 .doesNotContain("{{PS1_BASE64_LINES}}")
@@ -99,13 +99,23 @@ class AgentInstallerServiceIT extends AbstractIntegrationTest {
 
     @Test
     void renderInstaller_formatIncompatibleWithOs_rejected() {
-        assertThatThrownBy(() -> installers.renderInstaller(Os.LINUX, InstallerFormat.CMD, "x"))
+        assertThatThrownBy(() -> installers.renderInstaller(Os.LINUX, InstallerFormat.CMD, "x", "amd64"))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("not supported");
     }
 
+    @Test
+    void renderInstaller_linuxArm64_embedsArm64InBinaryUrl() throws Exception {
+        EnrollmentToken token = tokenRepository.save(freshToken().build());
+        String script = installers.renderInstaller(Os.LINUX, InstallerFormat.SHELL, token.getToken(), "arm64");
+
+        assertThat(script)
+                .contains("os=linux&arch=arm64")
+                .doesNotContain("arch=amd64");
+    }
+
     private void assertRejected(String tokenSecret) {
-        assertThatThrownBy(() -> installers.renderInstaller(Os.WINDOWS, InstallerFormat.PS1, tokenSecret))
+        assertThatThrownBy(() -> installers.renderInstaller(Os.WINDOWS, InstallerFormat.PS1, tokenSecret, "amd64"))
                 .isInstanceOf(NotFoundException.class)
                 .hasMessageContaining("Enrollment token not found");
     }

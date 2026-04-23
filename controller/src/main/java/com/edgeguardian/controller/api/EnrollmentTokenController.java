@@ -20,7 +20,7 @@ import org.springframework.web.bind.annotation.RestController;
 import java.util.List;
 
 @RestController
-@RequestMapping("/api/v1/enrollment-tokens")
+@RequestMapping(ApiPaths.ENROLLMENT_TOKENS_BASE)
 @RequiredArgsConstructor
 public class EnrollmentTokenController {
 

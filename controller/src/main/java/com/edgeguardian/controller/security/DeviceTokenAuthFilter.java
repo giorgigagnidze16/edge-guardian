@@ -1,5 +1,6 @@
 package com.edgeguardian.controller.security;
 
+import com.edgeguardian.controller.api.ApiPaths;
 import com.edgeguardian.controller.model.Device;
 import com.edgeguardian.controller.model.DeviceToken;
 import com.edgeguardian.controller.repository.DeviceTokenRepository;
@@ -31,9 +32,9 @@ public class DeviceTokenAuthFilter extends OncePerRequestFilter {
 
     private static final String DEVICE_TOKEN_HEADER = "X-Device-Token";
     private static final Set<String> PUBLIC_AGENT_PATHS = Set.of(
-            "/api/v1/agent/enroll",
-            "/api/v1/agent/installer",
-            "/api/v1/agent/binary"
+            ApiPaths.AGENT_ENROLL,
+            ApiPaths.AGENT_INSTALLER,
+            ApiPaths.AGENT_BINARY
     );
 
     private final DeviceTokenRepository deviceTokenRepository;
@@ -42,7 +43,7 @@ public class DeviceTokenAuthFilter extends OncePerRequestFilter {
     @Override
     protected boolean shouldNotFilter(HttpServletRequest request) {
         String path = request.getServletPath();
-        if (!path.startsWith("/api/v1/agent/")) {
+        if (!path.startsWith(ApiPaths.AGENT_PREFIX)) {
             return true;
         }
         return PUBLIC_AGENT_PATHS.contains(path);

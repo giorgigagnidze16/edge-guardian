@@ -36,7 +36,7 @@ import org.springframework.web.server.ResponseStatusException;
 import lombok.RequiredArgsConstructor;
 
 @RestController
-@RequestMapping("/api/v1/devices")
+@RequestMapping(ApiPaths.DEVICES_BASE)
 @RequiredArgsConstructor
 public class DeviceController {
 

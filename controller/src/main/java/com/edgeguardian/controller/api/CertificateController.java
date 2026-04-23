@@ -24,7 +24,7 @@ import org.springframework.web.bind.annotation.RestController;
 import java.util.List;
 
 @RestController
-@RequestMapping("/api/v1/certificates")
+@RequestMapping(ApiPaths.CERTIFICATES_BASE)
 @RequiredArgsConstructor
 public class CertificateController {
 

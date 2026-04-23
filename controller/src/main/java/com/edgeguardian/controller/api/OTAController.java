@@ -26,7 +26,7 @@ import java.io.IOException;
 import java.util.List;
 
 @RestController
-@RequestMapping("/api/v1/ota")
+@RequestMapping(ApiPaths.OTA_BASE)
 @RequiredArgsConstructor
 public class OTAController {
 

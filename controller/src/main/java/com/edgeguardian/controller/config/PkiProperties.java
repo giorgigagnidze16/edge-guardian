@@ -1,5 +1,6 @@
 package com.edgeguardian.controller.config;
 
+import com.edgeguardian.controller.api.ApiPaths;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
 @ConfigurationProperties(prefix = "edgeguardian.controller.pki")
@@ -13,7 +14,7 @@ public record PkiProperties(
             crlValidityHours = 24;
         }
         if (crlDistributionBaseUrl == null || crlDistributionBaseUrl.isBlank()) {
-            crlDistributionBaseUrl = "http://localhost:8443/api/v1/pki/crl";
+            crlDistributionBaseUrl = ApiPaths.DEFAULT_CRL_DISTRIBUTION_BASE_URL;
         }
     }
 

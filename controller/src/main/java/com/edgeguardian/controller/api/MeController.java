@@ -25,7 +25,7 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 
 @RestController
-@RequestMapping("/api/v1/me")
+@RequestMapping(ApiPaths.ME_BASE)
 @RequiredArgsConstructor
 public class MeController {
 

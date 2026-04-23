@@ -1,5 +1,6 @@
 package com.edgeguardian.controller.config;
 
+import com.edgeguardian.controller.api.ApiPaths;
 import com.edgeguardian.controller.security.ApiKeyAuthenticationFilter;
 import com.edgeguardian.controller.security.DeviceTokenAuthFilter;
 import com.edgeguardian.controller.security.JwtTenantConverter;
@@ -62,12 +63,13 @@ public class SecurityConfig {
                 .addFilterBefore(deviceTokenAuthFilter, BearerTokenAuthenticationFilter.class)
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/actuator/health/**", "/actuator/info").permitAll()
-                        .requestMatchers("/api/v1/agent/enroll",
-                                "/api/v1/agent/installer",
-                                "/api/v1/agent/binary").permitAll()
-                        .requestMatchers("/api/v1/pki/crl/**", "/api/v1/pki/ca-bundle",
-                                "/api/v1/pki/broker-ca").permitAll()
-                        .requestMatchers("/api/v1/**").authenticated()
+                        .requestMatchers(ApiPaths.AGENT_ENROLL,
+                                ApiPaths.AGENT_INSTALLER,
+                                ApiPaths.AGENT_BINARY).permitAll()
+                        .requestMatchers(ApiPaths.PKI_CRL_PATTERN,
+                                ApiPaths.PKI_CA_BUNDLE,
+                                ApiPaths.PKI_BROKER_CA).permitAll()
+                        .requestMatchers(ApiPaths.API_V1_PATTERN).authenticated()
                         .anyRequest().denyAll()
                 )
                 .oauth2ResourceServer(oauth2 -> oauth2

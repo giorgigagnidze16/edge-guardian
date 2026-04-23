@@ -22,7 +22,7 @@ import org.springframework.web.bind.annotation.RestController;
 import java.util.List;
 
 @RestController
-@RequestMapping("/api/v1/api-keys")
+@RequestMapping(ApiPaths.API_KEYS_BASE)
 @RequiredArgsConstructor
 public class ApiKeyController {
 
