@@ -19,10 +19,8 @@ CONFIG_PATH="$CONFIG_DIR/agent.yaml"
 UNIT_PATH="/etc/systemd/system/${SERVICE_NAME}.service"
 TOTAL_STEPS=5
 
-LOGO=$(cat <<'EGLOGO'
-{{LOGO}}
-EGLOGO
-)
+# base64-encoded to avoid heredoc/quoting hazards with ASCII-art backslashes.
+LOGO="$(echo '{{LOGO_BASE64}}' | base64 -d 2>/dev/null || echo '{{LOGO_BASE64}}' | base64 --decode 2>/dev/null)"
 
 if [[ -t 1 ]]; then
   C_RESET='\033[0m'; C_GREEN='\033[1;32m'; C_CYAN='\033[1;36m'

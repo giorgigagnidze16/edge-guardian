@@ -78,6 +78,8 @@ public class AgentInstallerService {
         String systemdUnit  = os == Os.LINUX  ? loadResource("installers/edgeguardian-agent.service.tmpl") : "";
         String launchdPlist = os == Os.DARWIN ? loadResource("installers/com.edgeguardian.agent.plist.tmpl") : "";
         String logo = loadResource("installers/logo.txt");
+        String logoBase64 = Base64.getEncoder().encodeToString(
+            stripTrailingNewline(logo).getBytes(StandardCharsets.UTF_8));
 
         return Map.ofEntries(
             Map.entry("CONTROLLER_URL",     props.controllerUrl()),
@@ -89,7 +91,8 @@ public class AgentInstallerService {
             Map.entry("SYSTEMD_UNIT",       systemdUnit),
             Map.entry("LAUNCHD_PLIST",      launchdPlist),
             Map.entry("AGENT_VERSION",      props.agentVersion() == null ? "unknown" : props.agentVersion()),
-            Map.entry("LOGO",               stripTrailingNewline(logo))
+            Map.entry("LOGO",               stripTrailingNewline(logo)),
+            Map.entry("LOGO_BASE64",        logoBase64)
         );
     }
 

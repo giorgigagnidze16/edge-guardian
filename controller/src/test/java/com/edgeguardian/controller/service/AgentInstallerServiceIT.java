@@ -130,6 +130,34 @@ class AgentInstallerServiceIT extends AbstractIntegrationTest {
                 .contains("<string>com.edgeguardian.agent</string>");
     }
 
+    // Guards against ASCII-art hazards in embedded logos, heredoc quoting bugs, and
+    // unsubstituted template tokens. `bash -n` parses without executing, so this
+    // catches syntax errors without requiring bash-on-Linux vs bash-on-mac parity.
+    @Test
+    void renderInstaller_shellTemplates_areValidBashSyntax() throws Exception {
+        EnrollmentToken token = tokenRepository.save(freshToken().build());
+        assertBashSyntaxValid(installers.renderInstaller(
+                Os.LINUX, InstallerFormat.SHELL, token.getToken(), "amd64"));
+        assertBashSyntaxValid(installers.renderInstaller(
+                Os.DARWIN, InstallerFormat.SHELL_DARWIN, token.getToken(), "arm64"));
+    }
+
+    private static void assertBashSyntaxValid(String script) throws Exception {
+        java.nio.file.Path tmp = java.nio.file.Files.createTempFile("eg-installer-", ".sh");
+        try {
+            java.nio.file.Files.writeString(tmp, script);
+            Process p = new ProcessBuilder("bash", "-n", tmp.toString())
+                    .redirectErrorStream(true).start();
+            String output = new String(p.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
+            int exit = p.waitFor();
+            assertThat(exit)
+                    .as("bash -n output:\n%s", output)
+                    .isEqualTo(0);
+        } finally {
+            java.nio.file.Files.deleteIfExists(tmp);
+        }
+    }
+
     private void assertRejected(String tokenSecret) {
         assertThatThrownBy(() -> installers.renderInstaller(Os.WINDOWS, InstallerFormat.PS1, tokenSecret, "amd64"))
                 .isInstanceOf(NotFoundException.class)
