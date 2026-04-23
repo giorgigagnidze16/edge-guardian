@@ -315,7 +315,7 @@ export default function DeviceDetailPage() {
       </div>
 
       {/* Metric cards */}
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <MetricCard
           title="CPU Usage"
           value={`${status?.cpuUsagePercent?.toFixed(1) ?? "--"}%`}
