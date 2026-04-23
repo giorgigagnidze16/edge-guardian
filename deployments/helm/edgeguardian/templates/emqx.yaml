@@ -29,6 +29,101 @@ stringData:
 apiVersion: v1
 kind: ConfigMap
 metadata:
+  name: emqx-ca-reloader
+  labels:
+    {{- include "edgeguardian.componentLabels" (dict "ctx" . "component" "emqx") | nindent 4 }}
+data:
+  # Sidecar loop: poll controller's /api/v1/pki/ca-bundle, detect changes, atomically
+  # overwrite the mounted bundle file, and restart ONLY the ssl listener (not the
+  # node) so EMQX re-reads cacertfile without disturbing the password listener.
+  # Scoped listener restart keeps existing TCP connections alive on port 1883.
+  ca-reloader.sh: |
+    #!/bin/sh
+    set -eu
+
+    EMQX_API="${EMQX_API:-http://emqx:18083/api/v5}"
+    BUNDLE_URL="${BUNDLE_URL:-http://controller:8443/api/v1/pki/ca-bundle}"
+    BUNDLE_PATH="${BUNDLE_PATH:-/client-ca/client-ca-bundle.pem}"
+    LISTENER_ID="${LISTENER_ID:-ssl%3Adefault}"
+    INTERVAL="${INTERVAL:-15}"
+
+    apk add --no-cache curl >/dev/null
+
+    log() { printf '%s ca-reloader: %s\n' "$(date -u '+%Y-%m-%dT%H:%M:%SZ')" "$*"; }
+
+    hash_of() {
+      [ -f "$1" ] && sha256sum "$1" | awk '{print $1}' || echo ""
+    }
+
+    admin_token() {
+      curl -sf -X POST "$EMQX_API/login" \
+        -H 'Content-Type: application/json' \
+        -d "{\"username\":\"$EMQX_API_USER\",\"password\":\"$EMQX_API_PASS\"}" \
+        | sed 's/.*"token":"\([^"]*\)".*/\1/'
+    }
+
+    restart_listener() {
+      token="$(admin_token)"
+      if [ -z "$token" ]; then
+        log "admin login failed"
+        return 1
+      fi
+      code="$(curl -s -o /dev/null -w '%{http_code}' \
+        -X POST "$EMQX_API/listeners/$LISTENER_ID/restart" \
+        -H "Authorization: Bearer $token")"
+      case "$code" in
+        200|204) return 0 ;;
+        *) log "listener restart returned HTTP $code"; return 1 ;;
+      esac
+    }
+
+    # EMQX may still be booting when the sidecar starts; hold off the first
+    # probe until the API answers rather than logging a cascade of errors.
+    wait_for_emqx() {
+      i=1
+      while [ $i -le 120 ]; do
+        if curl -sf -o /dev/null "$EMQX_API/status"; then return 0; fi
+        sleep 2
+        i=$((i + 1))
+      done
+      log "EMQX API never became reachable"
+      return 1
+    }
+
+    wait_for_emqx
+
+    prev_hash="$(hash_of "$BUNDLE_PATH")"
+    log "starting; current bundle sha256=${prev_hash:-<empty>} poll=${INTERVAL}s"
+
+    while true; do
+      tmp="$(mktemp)"
+      status="$(curl -s -o "$tmp" -w '%{http_code}' "$BUNDLE_URL" || echo '000')"
+      if [ "$status" != '200' ] || [ ! -s "$tmp" ]; then
+        rm -f "$tmp"
+        sleep "$INTERVAL"
+        continue
+      fi
+
+      new_hash="$(hash_of "$tmp")"
+      if [ "$new_hash" != "$prev_hash" ]; then
+        log "bundle changed ${prev_hash:-<empty>} -> $new_hash"
+        mv "$tmp" "$BUNDLE_PATH"
+        if restart_listener; then
+          log "ssl:default restarted; new org CA(s) now trusted"
+          prev_hash="$new_hash"
+        else
+          log "listener restart failed; will retry next tick (bundle file already updated on disk)"
+        fi
+      else
+        rm -f "$tmp"
+      fi
+
+      sleep "$INTERVAL"
+    done
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
   name: emqx-acl
   labels:
     {{- include "edgeguardian.componentLabels" (dict "ctx" . "component" "emqx") | nindent 4 }}
@@ -297,6 +392,28 @@ spec:
           resources:
             requests: { cpu: 200m, memory: 512Mi }
             limits: { memory: 1Gi }
+        - name: ca-reloader
+          # Self-heals the client-CA trust bundle. Without this sidecar, a new
+          # org CA issued after EMQX boot is not trusted until the pod restarts,
+          # which would drop every tenant's MQTT connections for ~5s.
+          image: alpine:3.20
+          command: ["/bin/sh", "/scripts/ca-reloader.sh"]
+          env:
+            - name: EMQX_API_USER
+              valueFrom: { secretKeyRef: { name: emqx-admin, key: username } }
+            - name: EMQX_API_PASS
+              valueFrom: { secretKeyRef: { name: emqx-admin, key: password } }
+            - name: INTERVAL
+              value: "15"
+          volumeMounts:
+            - name: client-ca-bundle
+              mountPath: /client-ca
+            - name: ca-reloader-script
+              mountPath: /scripts
+              readOnly: true
+          resources:
+            requests: { cpu: 10m, memory: 32Mi }
+            limits: { memory: 64Mi }
       volumes:
         - name: acl
           configMap:
@@ -306,6 +423,10 @@ spec:
             secretName: emqx-server-tls
         - name: client-ca-bundle
           emptyDir: {}
+        - name: ca-reloader-script
+          configMap:
+            name: emqx-ca-reloader
+            defaultMode: 0555
   volumeClaimTemplates:
     - metadata:
         name: data

@@ -10,7 +10,8 @@ import java.util.Arrays;
 public enum InstallerFormat {
     SHELL("install.sh", "installers/install.sh.tmpl", Os.LINUX),
     PS1("install.ps1", "installers/install.ps1.tmpl", Os.WINDOWS),
-    CMD("EdgeGuardianInstall.cmd", "installers/install.cmd.tmpl", Os.WINDOWS);
+    CMD("EdgeGuardianInstall.cmd", "installers/install.cmd.tmpl", Os.WINDOWS),
+    SHELL_DARWIN("install-macos.sh", "installers/install-macos.sh.tmpl", Os.DARWIN);
 
     public final String filename;
     public final String templatePath;
@@ -26,6 +27,7 @@ public enum InstallerFormat {
         return switch (os) {
             case LINUX -> SHELL;
             case WINDOWS -> CMD;
+            case DARWIN -> SHELL_DARWIN;
         };
     }
 

@@ -114,6 +114,22 @@ class AgentInstallerServiceIT extends AbstractIntegrationTest {
                 .doesNotContain("arch=amd64");
     }
 
+    @Test
+    void renderInstaller_darwinArm64_embedsLaunchdPlistAndArm64Binary() throws Exception {
+        EnrollmentToken token = tokenRepository.save(freshToken().build());
+        String script = installers.renderInstaller(
+                Os.DARWIN, InstallerFormat.SHELL_DARWIN, token.getToken(), "arm64");
+
+        assertThat(script)
+                .doesNotContain("{{LAUNCHD_PLIST}}")
+                .doesNotContain("{{BINARY_URL}}")
+                .contains("os=darwin&arch=arm64")
+                .contains("/Library/LaunchDaemons/com.edgeguardian.agent.plist")
+                .contains("launchctl bootstrap system")
+                .contains("<key>Label</key>")
+                .contains("<string>com.edgeguardian.agent</string>");
+    }
+
     private void assertRejected(String tokenSecret) {
         assertThatThrownBy(() -> installers.renderInstaller(Os.WINDOWS, InstallerFormat.PS1, tokenSecret, "amd64"))
                 .isInstanceOf(NotFoundException.class)

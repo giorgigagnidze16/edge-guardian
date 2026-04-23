@@ -17,6 +17,8 @@ PLATFORMS=(
   "linux amd64 edgeguardian-agent"
   "linux arm64 edgeguardian-agent"
   "windows amd64 edgeguardian-agent.exe"
+  "darwin amd64 edgeguardian-agent"
+  "darwin arm64 edgeguardian-agent"
 )
 
 mkdir -p "$ROOT/build"

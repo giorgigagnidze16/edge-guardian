@@ -7,7 +7,8 @@ package com.edgeguardian.controller.service.installer;
  */
 public enum Os {
     LINUX("linux", "edgeguardian-agent"),
-    WINDOWS("windows", "edgeguardian-agent.exe");
+    WINDOWS("windows", "edgeguardian-agent.exe"),
+    DARWIN("darwin", "edgeguardian-agent");
 
     public final String slug;
     public final String binaryName;

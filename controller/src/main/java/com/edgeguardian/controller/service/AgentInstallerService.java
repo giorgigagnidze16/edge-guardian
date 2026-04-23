@@ -55,7 +55,7 @@ public class AgentInstallerService {
 
         Map<String, String> vars = payloadVars(os, token, arch);
         return switch (format) {
-            case SHELL, PS1 -> render(format.templatePath, vars);
+            case SHELL, SHELL_DARWIN, PS1 -> render(format.templatePath, vars);
             case CMD -> wrapAsSelfElevatingCmd(render(InstallerFormat.PS1.templatePath, vars));
         };
     }
@@ -75,19 +75,21 @@ public class AgentInstallerService {
             .queryParam("os", os.slug)
             .queryParam("arch", arch)
             .build().toUriString();
-        String systemdUnit = os == Os.LINUX ? loadResource("installers/edgeguardian-agent.service.tmpl") : "";
+        String systemdUnit  = os == Os.LINUX  ? loadResource("installers/edgeguardian-agent.service.tmpl") : "";
+        String launchdPlist = os == Os.DARWIN ? loadResource("installers/com.edgeguardian.agent.plist.tmpl") : "";
         String logo = loadResource("installers/logo.txt");
 
-        return Map.of(
-            "CONTROLLER_URL", props.controllerUrl(),
-            "BROKER_URL", props.brokerUrl(),
-            "MTLS_BROKER_URL", props.mtlsBrokerUrl(),
-            "BOOTSTRAP_PASSWORD", props.bootstrapPassword(),
-            "ENROLLMENT_TOKEN", token.getToken(),
-            "BINARY_URL", binaryUrl,
-            "SYSTEMD_UNIT", systemdUnit,
-            "AGENT_VERSION", props.agentVersion() == null ? "unknown" : props.agentVersion(),
-            "LOGO", stripTrailingNewline(logo)
+        return Map.ofEntries(
+            Map.entry("CONTROLLER_URL",     props.controllerUrl()),
+            Map.entry("BROKER_URL",         props.brokerUrl()),
+            Map.entry("MTLS_BROKER_URL",    props.mtlsBrokerUrl()),
+            Map.entry("BOOTSTRAP_PASSWORD", props.bootstrapPassword()),
+            Map.entry("ENROLLMENT_TOKEN",   token.getToken()),
+            Map.entry("BINARY_URL",         binaryUrl),
+            Map.entry("SYSTEMD_UNIT",       systemdUnit),
+            Map.entry("LAUNCHD_PLIST",      launchdPlist),
+            Map.entry("AGENT_VERSION",      props.agentVersion() == null ? "unknown" : props.agentVersion()),
+            Map.entry("LOGO",               stripTrailingNewline(logo))
         );
     }
 

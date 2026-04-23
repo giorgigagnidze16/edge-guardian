@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# EdgeGuardian agent installer (Linux). Generated per-token.
+# EdgeGuardian agent installer (macOS). Generated per-token.
 set -euo pipefail
 
 CONTROLLER_URL="{{CONTROLLER_URL}}"
@@ -13,10 +13,11 @@ AGENT_VERSION="{{AGENT_VERSION}}"
 INSTALL_DIR="/usr/local/bin"
 CONFIG_DIR="/etc/edgeguardian"
 DATA_DIR="/var/lib/edgeguardian"
-SERVICE_NAME="edgeguardian-agent"
+LOG_FILE="/var/log/edgeguardian-agent.log"
+PLIST_PATH="/Library/LaunchDaemons/com.edgeguardian.agent.plist"
+SERVICE_LABEL="com.edgeguardian.agent"
 BINARY_PATH="$INSTALL_DIR/edgeguardian-agent"
 CONFIG_PATH="$CONFIG_DIR/agent.yaml"
-UNIT_PATH="/etc/systemd/system/${SERVICE_NAME}.service"
 TOTAL_STEPS=5
 
 LOGO=$(cat <<'EGLOGO'
@@ -39,9 +40,9 @@ ok()      { printf "        ${C_GREEN}OK${C_RESET} %s\n" "$1"; }
 on_error() {
   local ec=$?
   printf "\n  ${C_RED}*** INSTALL FAILED ***${C_RESET} (exit %s)\n" "$ec"
-  if systemctl list-unit-files "${SERVICE_NAME}.service" >/dev/null 2>&1; then
-    printf "\n  ${C_YELLOW}Last 20 lines of journalctl -u %s:${C_RESET}\n" "$SERVICE_NAME"
-    journalctl -u "$SERVICE_NAME" --no-pager -n 20 2>/dev/null | sed 's/^/    /' || true
+  if [[ -f "$LOG_FILE" ]]; then
+    printf "\n  ${C_YELLOW}Last 20 lines of %s:${C_RESET}\n" "$LOG_FILE"
+    tail -n 20 "$LOG_FILE" 2>/dev/null | sed 's/^/    /' || true
   fi
   exit "$ec"
 }
@@ -56,22 +57,25 @@ banner
 
 step 1 "Preparing installation directories"
 mkdir -p "$INSTALL_DIR" "$CONFIG_DIR" "$DATA_DIR"
+touch "$LOG_FILE"
+chown root:wheel "$LOG_FILE"
+chmod 0640 "$LOG_FILE"
 substep "$INSTALL_DIR"
 substep "$CONFIG_DIR"
 substep "$DATA_DIR"
+substep "$LOG_FILE"
 ok "Directories ready"
 
 step 2 "Downloading agent binary"
 substep "Source:      $BINARY_URL"
 substep "Destination: $BINARY_PATH"
-# Retry handles flaky kubectl port-forward tunnels on the PowerShell equivalent;
-# mirror that so curl doesn't give up on the first TCP reset.
+# Retry absorbs the occasional port-forward hiccup instead of aborting the install.
 curl -fsSL --retry 4 --retry-delay 2 --retry-connrefused "$BINARY_URL" -o "$BINARY_PATH"
 chmod 0755 "$BINARY_PATH"
-ok "Downloaded $(du -h "$BINARY_PATH" | cut -f1)"
+ok "Downloaded $(du -h "$BINARY_PATH" | awk '{print $1}')"
 
 step 3 "Writing configuration"
-DEVICE_ID="$(hostname)-$(date +%s)"
+DEVICE_ID="$(scutil --get ComputerName 2>/dev/null | tr -d ' ' || hostname)-$(date +%s)"
 CONTROLLER_HOST="$(echo "$CONTROLLER_URL" | sed -E 's#https?://##; s#:[0-9]+$##; s#/.*$##')"
 CONTROLLER_PORT="$(echo "$CONTROLLER_URL" | sed -nE 's#.*:([0-9]+).*#\1#p')"
 CONTROLLER_PORT="${CONTROLLER_PORT:-443}"
@@ -102,30 +106,34 @@ EOF
 chmod 0600 "$CONFIG_PATH"
 ok "Configuration written"
 
-step 4 "Registering systemd unit"
-substep "Unit path:   $UNIT_PATH"
-substep "StartupType: enabled"
-cat > "$UNIT_PATH" <<'EOF'
-{{SYSTEMD_UNIT}}
+step 4 "Installing LaunchDaemon"
+substep "Label:     $SERVICE_LABEL"
+substep "Plist:     $PLIST_PATH"
+cat > "$PLIST_PATH" <<'EOF'
+{{LAUNCHD_PLIST}}
 EOF
-systemctl daemon-reload
-systemctl enable "$SERVICE_NAME" >/dev/null
-ok "Unit registered"
+chown root:wheel "$PLIST_PATH"
+chmod 0644 "$PLIST_PATH"
+ok "LaunchDaemon registered"
 
 step 5 "Starting service"
-systemctl restart "$SERVICE_NAME"
+# bootout first so re-installs don't fail with "service already loaded".
+launchctl bootout system "$PLIST_PATH" 2>/dev/null || true
+launchctl bootstrap system "$PLIST_PATH"
+launchctl enable "system/${SERVICE_LABEL}"
+launchctl kickstart -k "system/${SERVICE_LABEL}"
 sleep 2
-state="$(systemctl is-active "$SERVICE_NAME" 2>/dev/null || true)"
-substep "Status: $state"
-if [[ "$state" != "active" ]]; then
-  echo "Service failed to reach active state (last: $state)" >&2
+pid="$(launchctl print "system/${SERVICE_LABEL}" 2>/dev/null | awk -F '= ' '/pid =/{print $2; exit}' || true)"
+substep "PID: ${pid:-<not running>}"
+if [[ -z "${pid:-}" || "$pid" == "0" ]]; then
+  echo "Service failed to start" >&2
   false
 fi
 ok "Agent is running"
 
 printf "\n  ${C_GRAY}----------------------------------------------------${C_RESET}\n"
 printf "  ${C_GREEN}Install succeeded. EdgeGuardian Agent v%s is running.${C_RESET}\n" "$AGENT_VERSION"
-printf "  ${C_GRAY}Service:  %s${C_RESET}\n" "$SERVICE_NAME"
+printf "  ${C_GRAY}Service:  %s${C_RESET}\n" "$SERVICE_LABEL"
 printf "  ${C_GRAY}Config:   %s${C_RESET}\n" "$CONFIG_PATH"
 printf "  ${C_GRAY}Data dir: %s${C_RESET}\n" "$DATA_DIR"
-printf "  ${C_GRAY}Logs:     journalctl -u %s -f${C_RESET}\n\n" "$SERVICE_NAME"
+printf "  ${C_GRAY}Logs:     tail -f %s${C_RESET}\n\n" "$LOG_FILE"

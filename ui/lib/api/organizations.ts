@@ -113,7 +113,7 @@ export async function deleteEnrollmentToken(token: string, tokenId: number): Pro
 }
 
 export function buildInstallerUrl(
-  os: "windows" | "linux",
+  os: "windows" | "linux" | "darwin",
   arch: "amd64" | "arm64",
   tokenSecret: string,
 ): string {
