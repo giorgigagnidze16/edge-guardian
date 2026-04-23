@@ -107,6 +107,7 @@ data:
       new_hash="$(hash_of "$tmp")"
       if [ "$new_hash" != "$prev_hash" ]; then
         log "bundle changed ${prev_hash:-<empty>} -> $new_hash"
+        chmod 0644 "$tmp"
         mv "$tmp" "$BUNDLE_PATH"
         if restart_listener; then
           log "ssl:default restarted; new org CA(s) now trusted"
