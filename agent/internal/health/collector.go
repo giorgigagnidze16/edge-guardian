@@ -32,7 +32,6 @@ func (c *Collector) Collect() *model.DeviceStatus {
 	c.collectCPU(status)
 	c.collectMemory(status)
 	c.collectDisk(status)
-	c.collectTemperature(status)
 	c.collectUptime(status)
 	c.computeState(status)
 
@@ -41,9 +40,6 @@ func (c *Collector) Collect() *model.DeviceStatus {
 
 // computeState checks resource thresholds and sets degraded state.
 func (c *Collector) computeState(status *model.DeviceStatus) {
-	if status.TemperatureCelsius > 80 {
-		status.State = "degraded"
-	}
 	if status.MemoryTotalBytes > 0 {
 		memPct := float64(status.MemoryUsedBytes) / float64(status.MemoryTotalBytes) * 100
 		if memPct > 95 {
@@ -60,11 +56,10 @@ func (c *Collector) computeState(status *model.DeviceStatus) {
 
 // FormatMetrics returns a human-readable summary of metrics (for logging).
 func FormatMetrics(s *model.DeviceStatus) string {
-	return fmt.Sprintf("cpu=%.1f%% mem=%d/%dMB disk=%d/%dGB temp=%.1fC uptime=%ds state=%s",
+	return fmt.Sprintf("cpu=%.1f%% mem=%d/%dMB disk=%d/%dGB uptime=%ds state=%s",
 		s.CPUUsagePercent,
 		s.MemoryUsedBytes/(1024*1024), s.MemoryTotalBytes/(1024*1024),
 		s.DiskUsedBytes/(1024*1024*1024), s.DiskTotalBytes/(1024*1024*1024),
-		s.TemperatureCelsius,
 		s.UptimeSeconds,
 		s.State,
 	)

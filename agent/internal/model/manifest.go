@@ -76,7 +76,6 @@ type DeviceStatus struct {
 	MemoryTotalBytes   int64   `json:"memoryTotalBytes"`
 	DiskUsedBytes      int64   `json:"diskUsedBytes"`
 	DiskTotalBytes     int64   `json:"diskTotalBytes"`
-	TemperatureCelsius float64 `json:"temperatureCelsius"`
 	UptimeSeconds      int64   `json:"uptimeSeconds"`
 	LastReconcile      string  `json:"lastReconcile,omitempty"` // RFC3339
 	ReconcileStatus    string  `json:"reconcileStatus"`         // "converged", "drifted", "error"

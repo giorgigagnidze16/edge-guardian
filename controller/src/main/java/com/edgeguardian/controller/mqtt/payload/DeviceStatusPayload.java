@@ -12,7 +12,6 @@ public record DeviceStatusPayload(
         long memoryTotalBytes,
         long diskUsedBytes,
         long diskTotalBytes,
-        double temperatureCelsius,
         long uptimeSeconds,
         String lastReconcile,
         String reconcileStatus
@@ -24,7 +23,6 @@ public record DeviceStatusPayload(
         s.setMemoryTotalBytes(memoryTotalBytes);
         s.setDiskUsedBytes(diskUsedBytes);
         s.setDiskTotalBytes(diskTotalBytes);
-        s.setTemperatureCelsius(temperatureCelsius);
         s.setUptimeSeconds(uptimeSeconds);
         if (lastReconcile != null && !lastReconcile.isEmpty()) {
             try {

@@ -52,7 +52,6 @@ public interface DeviceTelemetryRepository extends JpaRepository<DeviceTelemetry
                    avg_memory_total AS memory_total_bytes,
                    avg_disk AS disk_used_bytes,
                    avg_disk_total AS disk_total_bytes,
-                   avg_temperature AS temperature_celsius,
                    max_uptime AS uptime_seconds,
                    NULL AS last_reconcile,
                    NULL AS reconcile_status

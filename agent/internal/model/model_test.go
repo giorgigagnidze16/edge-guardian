@@ -8,15 +8,14 @@ import (
 
 func TestDeviceStatus_JSONRoundTrip(t *testing.T) {
 	original := DeviceStatus{
-		State:              "online",
-		CPUUsagePercent:    42.5,
-		MemoryUsedBytes:    2_147_483_648,
-		MemoryTotalBytes:   4_294_967_296,
-		DiskUsedBytes:      50_000_000_000,
-		DiskTotalBytes:     100_000_000_000,
-		TemperatureCelsius: 55.3,
-		UptimeSeconds:      86400,
-		ReconcileStatus:    "converged",
+		State:            "online",
+		CPUUsagePercent:  42.5,
+		MemoryUsedBytes:  2_147_483_648,
+		MemoryTotalBytes: 4_294_967_296,
+		DiskUsedBytes:    50_000_000_000,
+		DiskTotalBytes:   100_000_000_000,
+		UptimeSeconds:    86400,
+		ReconcileStatus:  "converged",
 	}
 
 	data, err := json.Marshal(original)

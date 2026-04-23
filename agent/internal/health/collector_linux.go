@@ -109,30 +109,6 @@ func (c *Collector) collectDisk(status *model.DeviceStatus) {
 	status.DiskUsedBytes = int64(total - free)
 }
 
-// collectTemperature reads the CPU thermal zone from sysfs.
-func (c *Collector) collectTemperature(status *model.DeviceStatus) {
-	// Try common thermal zone paths.
-	paths := []string{
-		"/sys/class/thermal/thermal_zone0/temp",
-		"/sys/class/hwmon/hwmon0/temp1_input",
-	}
-
-	for _, path := range paths {
-		data, err := os.ReadFile(path)
-		if err != nil {
-			continue
-		}
-		raw := strings.TrimSpace(string(data))
-		milliC, err := strconv.ParseFloat(raw, 64)
-		if err != nil {
-			continue
-		}
-		// Value is in millidegrees Celsius.
-		status.TemperatureCelsius = milliC / 1000.0
-		return
-	}
-}
-
 // collectUptime reads /proc/uptime.
 func (c *Collector) collectUptime(status *model.DeviceStatus) {
 	data, err := os.ReadFile("/proc/uptime")

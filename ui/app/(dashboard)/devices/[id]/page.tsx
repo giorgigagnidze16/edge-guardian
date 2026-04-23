@@ -61,7 +61,6 @@ import {
   Cpu,
   HardDrive,
   MemoryStick,
-  Thermometer,
   Clock,
   ArrowLeft,
   MoreVertical,
@@ -117,8 +116,6 @@ export default function DeviceDetailPage() {
     refetchInterval: 10_000,
   });
 
-  const supportsTemperature = device?.os !== "windows";
-
   useEffect(() => {
     if (device?.status) {
       history.push("cpu", device.status.cpuUsagePercent);
@@ -126,11 +123,8 @@ export default function DeviceDetailPage() {
         ? (device.status.memoryUsedBytes / device.status.memoryTotalBytes) * 100
         : null;
       history.push("memory", memPct);
-      if (supportsTemperature) {
-        history.push("temp", device.status.temperatureCelsius);
-      }
     }
-  }, [device, history, supportsTemperature]);
+  }, [device, history]);
 
   // Delete
   const [deleteOpen, setDeleteOpen] = useState(false);
@@ -212,7 +206,6 @@ export default function DeviceDetailPage() {
     time: p.time,
     cpu: p.cpuUsagePercent ?? 0,
     memory: p.memoryTotalBytes ? (p.memoryUsedBytes / p.memoryTotalBytes) * 100 : 0,
-    temperature: p.temperatureCelsius,
   }));
 
   const logLines: { timestamp: string; line: string }[] = [];
@@ -354,20 +347,6 @@ export default function DeviceDetailPage() {
           icon={HardDrive}
           iconColor="text-orange-500"
         />
-        {supportsTemperature && (
-          <MetricCard
-            title="Temperature"
-            value={
-              status?.temperatureCelsius != null
-                ? `${status.temperatureCelsius.toFixed(1)}C`
-                : "--"
-            }
-            description="Board sensor"
-            icon={Thermometer}
-            iconColor="text-red-500"
-            chart={<Sparkline data={history.get("temp")} color="#ef4444" />}
-          />
-        )}
         <MetricCard
           title="Uptime"
           value={status?.uptimeSeconds ? formatUptime(status.uptimeSeconds) : "--"}
@@ -414,7 +393,6 @@ export default function DeviceDetailPage() {
                 {resourceChartData.length > 0 ? (
                   <DeviceResourceChart
                     data={resourceChartData}
-                    showTemperature={supportsTemperature}
                     axisFormat={telemetryBucket === "hourly" ? "day" : "hour"}
                   />
                 ) : (

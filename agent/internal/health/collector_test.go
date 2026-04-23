@@ -24,13 +24,12 @@ func TestNew_EmptyDiskPath(t *testing.T) {
 func TestComputeState_Healthy(t *testing.T) {
 	c := New("/")
 	status := &model.DeviceStatus{
-		State:              "online",
-		CPUUsagePercent:    30,
-		MemoryUsedBytes:    500_000_000,
-		MemoryTotalBytes:   4_000_000_000,
-		DiskUsedBytes:      20_000_000_000,
-		DiskTotalBytes:     100_000_000_000,
-		TemperatureCelsius: 45.0,
+		State:            "online",
+		CPUUsagePercent:  30,
+		MemoryUsedBytes:  500_000_000,
+		MemoryTotalBytes: 4_000_000_000,
+		DiskUsedBytes:    20_000_000_000,
+		DiskTotalBytes:   100_000_000_000,
 	}
 	c.computeState(status)
 	if status.State != "online" {
@@ -64,27 +63,14 @@ func TestComputeState_HighDisk(t *testing.T) {
 	}
 }
 
-func TestComputeState_HighTemperature(t *testing.T) {
-	c := New("/")
-	status := &model.DeviceStatus{
-		State:              "online",
-		TemperatureCelsius: 85.0,
-	}
-	c.computeState(status)
-	if status.State != "degraded" {
-		t.Fatalf("expected state=degraded for high temp, got %q", status.State)
-	}
-}
-
 func TestComputeState_BelowThresholds(t *testing.T) {
 	c := New("/")
 	status := &model.DeviceStatus{
-		State:              "online",
-		MemoryUsedBytes:    2_000_000_000,
-		MemoryTotalBytes:   4_000_000_000, // 50%
-		DiskUsedBytes:      50_000_000_000,
-		DiskTotalBytes:     100_000_000_000, // 50%
-		TemperatureCelsius: 79.9,
+		State:            "online",
+		MemoryUsedBytes:  2_000_000_000,
+		MemoryTotalBytes: 4_000_000_000, // 50%
+		DiskUsedBytes:    50_000_000_000,
+		DiskTotalBytes:   100_000_000_000, // 50%
 	}
 	c.computeState(status)
 	if status.State != "online" {
@@ -94,19 +80,18 @@ func TestComputeState_BelowThresholds(t *testing.T) {
 
 func TestFormatMetrics_ProducesValidString(t *testing.T) {
 	status := &model.DeviceStatus{
-		State:              "online",
-		CPUUsagePercent:    42.5,
-		MemoryUsedBytes:    2 * 1024 * 1024 * 1024,
-		MemoryTotalBytes:   4 * 1024 * 1024 * 1024,
-		DiskUsedBytes:      50 * 1024 * 1024 * 1024,
-		DiskTotalBytes:     100 * 1024 * 1024 * 1024,
-		TemperatureCelsius: 55.3,
-		UptimeSeconds:      3600,
+		State:            "online",
+		CPUUsagePercent:  42.5,
+		MemoryUsedBytes:  2 * 1024 * 1024 * 1024,
+		MemoryTotalBytes: 4 * 1024 * 1024 * 1024,
+		DiskUsedBytes:    50 * 1024 * 1024 * 1024,
+		DiskTotalBytes:   100 * 1024 * 1024 * 1024,
+		UptimeSeconds:    3600,
 	}
 
 	out := FormatMetrics(status)
 
-	for _, want := range []string{"cpu=", "mem=", "disk=", "temp=", "uptime=", "state=online"} {
+	for _, want := range []string{"cpu=", "mem=", "disk=", "uptime=", "state=online"} {
 		if !strings.Contains(out, want) {
 			t.Errorf("FormatMetrics output missing %q: %s", want, out)
 		}

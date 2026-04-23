@@ -66,7 +66,6 @@ for round in $(seq 1 $HEARTBEAT_ROUNDS); do
     disk_total=34359738368  # 32GB
     disk_pct=$(( (RANDOM % 40) + 15 ))
     disk_used=$(( disk_total * disk_pct / 100 ))
-    temp=$(( (RANDOM % 25) + 35 ))
     uptime=$(( (RANDOM % 86400) + 3600 ))
 
     # Make some devices degraded
@@ -81,7 +80,7 @@ for round in $(seq 1 $HEARTBEAT_ROUNDS); do
       mem_used=$(( mem_total * mem_pct / 100 ))
     fi
 
-    echo -n "  $device_id: cpu=${cpu}% mem=${mem_pct}% temp=${temp}C... "
+    echo -n "  $device_id: cpu=${cpu}% mem=${mem_pct}%... "
     response=$(curl -s -w "\n%{http_code}" -X POST "$CONTROLLER/api/v1/agent/heartbeat" \
       -H "Content-Type: application/json" \
       -d "{
@@ -94,7 +93,6 @@ for round in $(seq 1 $HEARTBEAT_ROUNDS); do
           \"memoryTotalBytes\": $mem_total,
           \"diskUsedBytes\": $disk_used,
           \"diskTotalBytes\": $disk_total,
-          \"temperatureCelsius\": $temp.$(( RANDOM % 10 )),
           \"uptimeSeconds\": $uptime,
           \"lastReconcile\": \"$(date -u +%Y-%m-%dT%H:%M:%SZ)\",
           \"reconcileStatus\": \"converged\"

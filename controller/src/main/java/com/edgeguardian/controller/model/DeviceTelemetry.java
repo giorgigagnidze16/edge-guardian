@@ -50,9 +50,6 @@ public class DeviceTelemetry {
     @Column(name = "disk_total_bytes")
     private long diskTotalBytes;
 
-    @Column(name = "temperature_celsius")
-    private double temperatureCelsius;
-
     @Column(name = "uptime_seconds")
     private long uptimeSeconds;
 
@@ -75,7 +72,6 @@ public class DeviceTelemetry {
                 .memoryTotalBytes(status.getMemoryTotalBytes())
                 .diskUsedBytes(status.getDiskUsedBytes())
                 .diskTotalBytes(status.getDiskTotalBytes())
-                .temperatureCelsius(status.getTemperatureCelsius())
                 .uptimeSeconds(status.getUptimeSeconds())
                 .lastReconcile(status.getLastReconcile())
                 .reconcileStatus(status.getReconcileStatus())
@@ -92,7 +88,6 @@ public class DeviceTelemetry {
                 .memoryTotalBytes(this.memoryTotalBytes)
                 .diskUsedBytes(this.diskUsedBytes)
                 .diskTotalBytes(this.diskTotalBytes)
-                .temperatureCelsius(this.temperatureCelsius)
                 .uptimeSeconds(this.uptimeSeconds)
                 .lastReconcile(this.lastReconcile)
                 .reconcileStatus(this.reconcileStatus)

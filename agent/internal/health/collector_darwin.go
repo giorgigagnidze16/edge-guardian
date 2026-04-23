@@ -125,10 +125,6 @@ func (c *Collector) collectDisk(status *model.DeviceStatus) {
 	status.DiskUsedBytes = int64(total - free)
 }
 
-// collectTemperature is a no-op on macOS.
-// Reading SMC temperature sensors requires IOKit and cgo.
-func (c *Collector) collectTemperature(status *model.DeviceStatus) {}
-
 // collectUptime uses sysctl kern.boottime to calculate uptime.
 func (c *Collector) collectUptime(status *model.DeviceStatus) {
 	tv, err := unix.SysctlTimeval("kern.boottime")

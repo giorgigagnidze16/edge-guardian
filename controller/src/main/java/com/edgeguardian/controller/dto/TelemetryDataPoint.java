@@ -14,7 +14,6 @@ public record TelemetryDataPoint(
         long memoryTotalBytes,
         long diskUsedBytes,
         long diskTotalBytes,
-        double temperatureCelsius,
         long uptimeSeconds,
         String reconcileStatus
 ) {
@@ -26,7 +25,6 @@ public record TelemetryDataPoint(
                 t.getMemoryTotalBytes(),
                 t.getDiskUsedBytes(),
                 t.getDiskTotalBytes(),
-                t.getTemperatureCelsius(),
                 t.getUptimeSeconds(),
                 t.getReconcileStatus()
         );

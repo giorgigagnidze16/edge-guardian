@@ -9,7 +9,6 @@ CREATE TABLE device_telemetry (
     memory_total_bytes  BIGINT           DEFAULT 0,
     disk_used_bytes     BIGINT           DEFAULT 0,
     disk_total_bytes    BIGINT           DEFAULT 0,
-    temperature_celsius DOUBLE PRECISION DEFAULT 0,
     uptime_seconds      BIGINT           DEFAULT 0,
     last_reconcile      TIMESTAMPTZ,
     reconcile_status    VARCHAR(32) DEFAULT 'converged'
@@ -33,8 +32,6 @@ SELECT
     AVG(disk_used_bytes)     AS avg_disk,
     MAX(disk_used_bytes)     AS max_disk,
     AVG(disk_total_bytes)    AS avg_disk_total,
-    AVG(temperature_celsius) AS avg_temperature,
-    MAX(temperature_celsius) AS max_temperature,
     MAX(uptime_seconds)      AS max_uptime,
     COUNT(*)                 AS sample_count
 FROM device_telemetry

@@ -16,18 +16,15 @@ export interface DeviceResourcePoint {
   time: string;
   cpu: number;
   memory: number;
-  temperature?: number;
 }
 
 interface DeviceResourceChartProps {
   data: DeviceResourcePoint[];
-  showTemperature?: boolean;
   axisFormat?: "hour" | "day";
 }
 
 export function DeviceResourceChart({
   data,
-  showTemperature = false,
   axisFormat = "hour",
 }: DeviceResourceChartProps) {
   const formatAxisTime = (iso: string) =>
@@ -53,21 +50,9 @@ export function DeviceResourceChart({
           tick={{ fontSize: 11 }}
           width={42}
         />
-        {showTemperature && (
-          <YAxis
-            yAxisId="temp"
-            orientation="right"
-            tickFormatter={(v) => `${v}°C`}
-            tick={{ fontSize: 11 }}
-            width={42}
-          />
-        )}
         <Tooltip
           labelFormatter={(label) => formatTooltipTime(label as string)}
-          formatter={(v: number, name) => {
-            if (name === "Temperature") return [`${v.toFixed(1)}°C`, name];
-            return [`${v.toFixed(1)}%`, name];
-          }}
+          formatter={(v: number, name) => [`${v.toFixed(1)}%`, name]}
         />
         <Legend iconType="line" />
         <Area
@@ -90,18 +75,6 @@ export function DeviceResourceChart({
           name="Memory"
           isAnimationActive={false}
         />
-        {showTemperature && (
-          <Area
-            yAxisId="temp"
-            type="monotone"
-            dataKey="temperature"
-            stroke="var(--color-chart-5, #ef4444)"
-            fill="var(--color-chart-5, #ef4444)"
-            fillOpacity={0.1}
-            name="Temperature"
-            isAnimationActive={false}
-          />
-        )}
       </AreaChart>
     </ResponsiveContainer>
   );

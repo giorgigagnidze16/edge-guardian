@@ -21,7 +21,6 @@ public class DeviceStatus {
     private long memoryTotalBytes;
     private long diskUsedBytes;
     private long diskTotalBytes;
-    private double temperatureCelsius;
     private long uptimeSeconds;
     private Instant lastReconcile;
     private String reconcileStatus;

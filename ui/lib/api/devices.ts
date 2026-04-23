@@ -7,7 +7,6 @@ export interface DeviceStatus {
   memoryTotalBytes: number;
   diskUsedBytes: number;
   diskTotalBytes: number;
-  temperatureCelsius: number;
   uptimeSeconds: number;
   lastReconcile: string | null;
   reconcileStatus: string;
@@ -91,7 +90,6 @@ export interface TelemetryDataPoint {
   memoryTotalBytes: number;
   diskUsedBytes: number;
   diskTotalBytes: number;
-  temperatureCelsius: number;
   uptimeSeconds: number;
   reconcileStatus: string;
 }
