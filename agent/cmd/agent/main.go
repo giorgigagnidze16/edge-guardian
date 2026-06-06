@@ -152,6 +152,9 @@ func runAgent(ctx context.Context, cfg *config.Config, logger *zap.Logger) error
 		}
 	})
 
+	shellManager := wireShell(mqttClient, logger)
+	defer shellManager.CloseAll()
+
 	checkPostUpdateStatus(updater, mqttClient, cfg.DeviceID, logger)
 
 	go startHealthServer(cfg.Health.Port, logger)

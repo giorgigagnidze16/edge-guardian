@@ -33,6 +33,7 @@ type MQTTClient struct {
 	cmdHandler          CommandHandler
 	desiredStateHandler DesiredStateHandler
 	certResponseHandler CertResponseHandler
+	shellOpenHandler    func(payload []byte)
 	enrollResponseCh    chan *model.RegisterResponse
 	mu                  sync.RWMutex
 }
@@ -110,6 +111,48 @@ func (mc *MQTTClient) SetCertResponseHandler(handler CertResponseHandler) {
 	mc.mu.Lock()
 	defer mc.mu.Unlock()
 	mc.certResponseHandler = handler
+}
+
+// SetShellOpenHandler registers the callback for shell-open requests. The
+// subscription is (re)established on every connect.
+func (mc *MQTTClient) SetShellOpenHandler(handler func(payload []byte)) {
+	mc.mu.Lock()
+	defer mc.mu.Unlock()
+	mc.shellOpenHandler = handler
+}
+
+// Subscribe subscribes to a device subtopic; the handler receives raw payloads.
+// Used for dynamic, per-session shell topics (in/ctl).
+func (mc *MQTTClient) Subscribe(suffix string, qos byte, handler func(payload []byte)) error {
+	token := mc.client.Subscribe(mc.topic(suffix), qos, func(_ mqtt.Client, msg mqtt.Message) {
+		handler(msg.Payload())
+	})
+	if !token.WaitTimeout(10*time.Second) || token.Error() != nil {
+		return fmt.Errorf("subscribe %s: %w", suffix, token.Error())
+	}
+	return nil
+}
+
+// Unsubscribe removes a subscription for a device subtopic.
+func (mc *MQTTClient) Unsubscribe(suffix string) error {
+	token := mc.client.Unsubscribe(mc.topic(suffix))
+	if !token.WaitTimeout(10*time.Second) || token.Error() != nil {
+		return fmt.Errorf("unsubscribe %s: %w", suffix, token.Error())
+	}
+	return nil
+}
+
+// PublishRaw publishes raw bytes to a device subtopic. Interactive shell data is
+// useless once stale, so it is never offline-queued.
+func (mc *MQTTClient) PublishRaw(suffix string, qos byte, payload []byte) error {
+	if !mc.client.IsConnected() {
+		return fmt.Errorf("publish %s: not connected", suffix)
+	}
+	token := mc.client.Publish(mc.topic(suffix), qos, false, payload)
+	if !token.WaitTimeout(5*time.Second) || token.Error() != nil {
+		return fmt.Errorf("publish %s: %w", suffix, token.Error())
+	}
+	return nil
 }
 
 // Connect establishes the MQTT connection.
@@ -353,6 +396,15 @@ func (mc *MQTTClient) onConnect(client mqtt.Client) {
 	mc.subscribeToTopic(client, mc.topic("command"), mc.handleCommand)
 	mc.subscribeToTopic(client, mc.topic("state/desired"), mc.handleDesiredState)
 	mc.subscribeToTopic(client, mc.topic("cert/response"), mc.handleCertResponse)
+
+	mc.mu.RLock()
+	shellOpen := mc.shellOpenHandler
+	mc.mu.RUnlock()
+	if shellOpen != nil {
+		mc.subscribeToTopic(client, mc.topic("shell/open"), func(_ mqtt.Client, msg mqtt.Message) {
+			shellOpen(msg.Payload())
+		})
+	}
 
 	go mc.DrainOfflineQueue()
 }

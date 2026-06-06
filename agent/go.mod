@@ -10,6 +10,8 @@ require (
 )
 
 require (
+	github.com/UserExistsError/conpty v0.1.4
+	github.com/creack/pty v1.1.24
 	github.com/testcontainers/testcontainers-go v0.40.0
 	golang.org/x/sys v0.40.0
 )
