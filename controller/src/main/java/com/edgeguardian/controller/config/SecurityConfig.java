@@ -69,6 +69,8 @@ public class SecurityConfig {
                         .requestMatchers(ApiPaths.PKI_CRL_PATTERN,
                                 ApiPaths.PKI_CA_BUNDLE,
                                 ApiPaths.PKI_BROKER_CA).permitAll()
+                        // Shell WebSocket: authenticated by a one-time ticket at the handshake.
+                        .requestMatchers(ApiPaths.SHELL_WS).permitAll()
                         .requestMatchers(ApiPaths.API_V1_PATTERN).authenticated()
                         .anyRequest().denyAll()
                 )
