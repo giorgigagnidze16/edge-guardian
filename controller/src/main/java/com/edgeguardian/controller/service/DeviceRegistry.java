@@ -20,9 +20,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * Database-backed device registry (Phase 2).
- * Replaces the Phase 1 in-memory ConcurrentHashMap implementation
- * with JPA repositories backed by PostgreSQL.
+ * Database-backed registry for devices and their manifests.
  */
 @Slf4j
 @Service
@@ -165,8 +163,6 @@ public class DeviceRegistry {
         log.info("Device removed: {}", deviceId);
         return true;
     }
-
-    // --- Manifest operations ---
 
     /**
      * Retrieve the manifest for a device, if one exists.

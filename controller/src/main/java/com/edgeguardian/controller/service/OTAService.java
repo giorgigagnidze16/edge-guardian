@@ -6,6 +6,7 @@ import com.edgeguardian.controller.model.Device;
 import com.edgeguardian.controller.model.OtaArtifact;
 import com.edgeguardian.controller.model.OtaDeployment;
 import com.edgeguardian.controller.model.OtaDeviceState;
+import com.edgeguardian.controller.model.RolloutStrategy;
 import com.edgeguardian.controller.mqtt.CommandPublisher;
 import com.edgeguardian.controller.repository.DeploymentDeviceStatusRepository;
 import com.edgeguardian.controller.repository.DeviceRepository;
@@ -43,8 +44,6 @@ public class OTAService {
     private final CommandPublisher commandPublisher;
     private final ArtifactStorageService artifactStorageService;
 
-    // --- Artifacts ---
-
     @Transactional
     public OtaArtifact createArtifact(Long orgId, String name, String version,
                                       String architecture, long size, String sha256,
@@ -75,28 +74,19 @@ public class OTAService {
         artifactRepository.deleteById(artifactId);
     }
 
-    // --- Deployments ---
-
-    // NOTE: The `strategy` parameter (rolling/canary/immediate) is descriptive-only and
-    // NOT YET IMPLEMENTED. This method always performs an immediate fan-out - every matching
-    // device receives the OTA command in the same transaction. The value is stored on the
-    // deployment row so a future staged-rollout implementation can hook in without API changes.
     @Transactional
-    public OtaDeployment createDeployment(Long orgId, Long artifactId, String strategy,
+    public OtaDeployment createDeployment(Long orgId, Long artifactId, RolloutStrategy strategy,
                                           Map<String, String> labelSelector, Long createdBy) {
         var artifact = getArtifact(artifactId, orgId);
 
         var deployment = deploymentRepository.save(OtaDeployment.builder()
                 .organizationId(orgId)
                 .artifactId(artifactId)
-                .strategy(strategy != null ? strategy : "rolling")
+                .strategy(strategy != null ? strategy : RolloutStrategy.ROLLING)
                 .labelSelector(labelSelector != null ? labelSelector : Map.of())
                 .createdBy(createdBy)
                 .build());
 
-        // Org-scoped lookup at the repository layer - was previously findAll() + in-memory
-        // filter which (a) leaks bytes proportional to total fleet size and (b) risked
-        // cross-tenant deployment if the filter clause ever got dropped in a refactor.
         var targetDevices = deviceRepository.findByOrganizationId(orgId).stream()
                 .filter(d -> matchesLabels(d, labelSelector))
                 .toList();
@@ -140,8 +130,6 @@ public class OTAService {
         getDeployment(deploymentId, expectedOrgId);
         return deviceStatusRepository.findByDeploymentId(deploymentId);
     }
-
-    // --- Status ---
 
     @Transactional
     public void updateDeviceOtaStatus(Long deploymentId, String deviceId,
@@ -198,8 +186,6 @@ public class OTAService {
 
         return commands;
     }
-
-    // --- Private helpers ---
 
     private void checkDeploymentCompletion(Long deploymentId) {
         var statuses = deviceStatusRepository.findByDeploymentId(deploymentId);

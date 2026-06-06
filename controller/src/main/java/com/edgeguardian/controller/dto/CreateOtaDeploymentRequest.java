@@ -1,19 +1,18 @@
 package com.edgeguardian.controller.dto;
 
+import com.edgeguardian.controller.model.RolloutStrategy;
+
 import java.util.Map;
 
 /**
  * Request body for creating a new OTA deployment.
  *
- * @param artifactId     ID of the artifact to deploy.
- * @param strategy       Rollout strategy hint (rolling/canary/immediate). <b>NOT YET
- *                       IMPLEMENTED</b> - the controller currently fans out to all
- *                       matching devices immediately regardless of this value. The
- *                       field is accepted and persisted for forward compatibility.
- * @param labelSelector  Device label selector for targeting.
+ * @param artifactId    ID of the artifact to deploy.
+ * @param strategy      Rollout strategy; defaults to {@code rolling} when omitted.
+ * @param labelSelector Device label selector for targeting.
  */
 public record CreateOtaDeploymentRequest(
         Long artifactId,
-        String strategy,
+        RolloutStrategy strategy,
         Map<String, String> labelSelector
 ) {}

@@ -10,12 +10,8 @@ public final class ApiPaths {
 
     private ApiPaths() {}
 
-    // --- Root ---------------------------------------------------------------
-
     public static final String API_V1          = "/api/v1";
     public static final String API_V1_PATTERN  = API_V1 + "/**";
-
-    // --- Agent (AgentInstallerController) -----------------------------------
 
     public static final String AGENT_BASE           = API_V1 + "/agent";
     public static final String AGENT_PREFIX         = AGENT_BASE + "/";
@@ -28,8 +24,6 @@ public final class ApiPaths {
     public static final String AGENT_BINARY        = AGENT_BASE + AGENT_BINARY_PATH;
     public static final String AGENT_ENROLL        = AGENT_BASE + AGENT_ENROLL_PATH;
 
-    // --- PKI (PkiController) ------------------------------------------------
-
     public static final String PKI_BASE             = API_V1 + "/pki";
 
     public static final String PKI_CRL_FILE_PATH    = "/crl/{orgId}.crl";
@@ -41,8 +35,6 @@ public final class ApiPaths {
 
     public static final String PKI_BROKER_CA_PATH   = "/broker-ca";
     public static final String PKI_BROKER_CA        = PKI_BASE + PKI_BROKER_CA_PATH;
-
-    // --- Other controllers (paths declared only on @RequestMapping) ---------
 
     public static final String DEVICES_BASE           = API_V1 + "/devices";
     public static final String TELEMETRY_BASE        = DEVICES_BASE + "/{deviceId}/telemetry";
