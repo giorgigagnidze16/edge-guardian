@@ -7,8 +7,9 @@ import jakarta.persistence.IdClass;
 import jakarta.persistence.Table;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
-import lombok.Data;
+import lombok.Getter;
 import lombok.NoArgsConstructor;
+import lombok.Setter;
 
 import java.time.Instant;
 
@@ -18,7 +19,8 @@ import java.time.Instant;
 @Entity
 @Table(name = "device_telemetry")
 @IdClass(DeviceTelemetryId.class)
-@Data
+@Getter
+@Setter
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder

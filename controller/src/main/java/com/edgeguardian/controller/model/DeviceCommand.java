@@ -2,15 +2,12 @@ package com.edgeguardian.controller.model;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
-import jakarta.persistence.GeneratedValue;
-import jakarta.persistence.GenerationType;
-import jakarta.persistence.Id;
-import jakarta.persistence.PrePersist;
 import jakarta.persistence.Table;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
-import lombok.Data;
+import lombok.Getter;
 import lombok.NoArgsConstructor;
+import lombok.Setter;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
 
@@ -22,15 +19,12 @@ import java.util.Map;
  */
 @Entity
 @Table(name = "device_commands")
-@Data
+@Getter
+@Setter
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-public class DeviceCommand {
-
-    @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private Long id;
+public class DeviceCommand extends AbstractCreatedEntity {
 
     @Column(name = "command_id", nullable = false, unique = true)
     private String commandId;
@@ -66,17 +60,9 @@ public class DeviceCommand {
     @Column(name = "created_by")
     private Long createdBy;
 
-    @Column(name = "created_at", nullable = false, updatable = false)
-    private Instant createdAt;
-
     @Column(name = "sent_at")
     private Instant sentAt;
 
     @Column(name = "completed_at")
     private Instant completedAt;
-
-    @PrePersist
-    protected void onCreate() {
-        this.createdAt = Instant.now();
-    }
 }

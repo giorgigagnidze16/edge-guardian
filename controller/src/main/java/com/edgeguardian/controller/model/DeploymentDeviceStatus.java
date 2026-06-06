@@ -2,30 +2,25 @@ package com.edgeguardian.controller.model;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
-import jakarta.persistence.GeneratedValue;
-import jakarta.persistence.GenerationType;
-import jakarta.persistence.Id;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
-import lombok.Data;
+import lombok.Getter;
 import lombok.NoArgsConstructor;
+import lombok.Setter;
 
 import java.time.Instant;
 
 @Entity
 @Table(name = "deployment_device_status")
-@Data
+@Getter
+@Setter
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-public class DeploymentDeviceStatus {
-
-    @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private Long id;
+public class DeploymentDeviceStatus extends AbstractEntity {
 
     @Column(name = "deployment_id", nullable = false)
     private Long deploymentId;
@@ -54,12 +49,8 @@ public class DeploymentDeviceStatus {
     private Instant updatedAt;
 
     @PrePersist
-    protected void onCreate() {
-        this.updatedAt = Instant.now();
-    }
-
     @PreUpdate
-    protected void onUpdate() {
-        this.updatedAt = Instant.now();
+    void touchUpdatedAt() {
+        updatedAt = Instant.now();
     }
 }

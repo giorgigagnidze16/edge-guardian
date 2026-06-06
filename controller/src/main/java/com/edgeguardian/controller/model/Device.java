@@ -4,43 +4,30 @@ import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
-import jakarta.persistence.GeneratedValue;
-import jakarta.persistence.GenerationType;
-import jakarta.persistence.Id;
 import jakarta.persistence.PrePersist;
-import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
 import java.time.Instant;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.Objects;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
-import lombok.ToString;
 import org.hibernate.annotations.JdbcTypeCode;
-import org.hibernate.proxy.HibernateProxy;
 import org.hibernate.type.SqlTypes;
 
 /**
  * JPA entity representing a registered edge device.
- * Backed by the 'devices' table in PostgreSQL.
  */
 @Entity
 @Table(name = "devices")
 @Getter
 @Setter
-@ToString
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-public class Device {
-
-    @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private Long id;
+public class Device extends AbstractAuditedEntity {
 
     @Column(name = "device_id", nullable = false, unique = true)
     private String deviceId;
@@ -76,12 +63,6 @@ public class Device {
     @Column(name = "organization_id", nullable = false)
     private Long organizationId;
 
-    @Column(name = "created_at", nullable = false, updatable = false)
-    private Instant createdAt;
-
-    @Column(name = "updated_at", nullable = false)
-    private Instant updatedAt;
-
     public Device(String deviceId, String hostname, String architecture, String os, String agentVersion) {
         this.deviceId = deviceId;
         this.hostname = hostname;
@@ -94,48 +75,13 @@ public class Device {
     }
 
     @PrePersist
-    protected void onCreate() {
-        Instant now = Instant.now();
-        this.createdAt = now;
-        this.updatedAt = now;
-        if (this.registeredAt == null) {
-            this.registeredAt = now;
+    void stampRegisteredAt() {
+        if (registeredAt == null) {
+            registeredAt = Instant.now();
         }
-    }
-
-    @PreUpdate
-    protected void onUpdate() {
-        this.updatedAt = Instant.now();
     }
 
     public enum DeviceState {
         ONLINE, DEGRADED, OFFLINE, SUSPENDED
-    }
-
-    @Override
-    public final boolean equals(Object o) {
-        if (this == o) {
-            return true;
-        }
-        if (o == null) {
-            return false;
-        }
-        Class<?> oEffectiveClass = o instanceof HibernateProxy ?
-            ((HibernateProxy) o).getHibernateLazyInitializer().getPersistentClass() : o.getClass();
-        Class<?> thisEffectiveClass = this instanceof HibernateProxy ?
-            ((HibernateProxy) this).getHibernateLazyInitializer().getPersistentClass() :
-            this.getClass();
-        if (thisEffectiveClass != oEffectiveClass) {
-            return false;
-        }
-        Device device = (Device) o;
-        return getId() != null && Objects.equals(getId(), device.getId());
-    }
-
-    @Override
-    public final int hashCode() {
-        return this instanceof HibernateProxy ?
-            ((HibernateProxy) this).getHibernateLazyInitializer().getPersistentClass().hashCode() :
-            getClass().hashCode();
     }
 }
