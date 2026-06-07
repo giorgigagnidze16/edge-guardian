@@ -235,8 +235,8 @@ export default async function LandingPage() {
               <SectionLabel>Zero-Trust Security</SectionLabel>
               <h3 className="text-2xl font-bold mb-3">Secured from day one.</h3>
               <p className="text-base text-muted-foreground leading-relaxed mb-8">
-                Mutual TLS on every connection. Encrypted VPN tunnels. Role-based
-                access control with comprehensive audit trail.
+                Mutual TLS on every connection. Encrypted, ticket-authenticated
+                remote shells. Role-based access control with a full audit trail.
               </p>
               <div className="flex items-center justify-center py-8">
                 <div className="relative">
