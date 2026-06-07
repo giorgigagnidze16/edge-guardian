@@ -4,8 +4,6 @@
     <#if section = "header">
         <#if messageHeader??>
             <p class="eg-subtitle">${messageHeader}</p>
-        <#else>
-            <p class="eg-subtitle">${message.summary}</p>
         </#if>
     <#elseif section = "form">
         <div class="eg-info-text" style="margin-top:1rem;">
