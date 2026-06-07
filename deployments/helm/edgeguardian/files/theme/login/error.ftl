@@ -2,7 +2,6 @@
 <@layout.registrationLayout displayMessage=true; section>
 
     <#if section = "header">
-        <p class="eg-subtitle">${kcSanitize(message.summary)?no_esc}</p>
     <#elseif section = "form">
         <#if skipLink??>
         <#else>
