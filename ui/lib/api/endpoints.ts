@@ -39,6 +39,10 @@ export const endpoints = {
     logs: (deviceId: string) => path(`/devices/${deviceId}/logs`),
     telemetry: (deviceId: string) => path(`/devices/${deviceId}/telemetry`),
     telemetryHourly: (deviceId: string) => path(`/devices/${deviceId}/telemetry/hourly`),
+    shell: {
+      sessions: (deviceId: string) => path(`/devices/${deviceId}/shell/sessions`),
+      ws: () => path("/devices/shell/ws"),
+    },
   },
 
   certificates: {

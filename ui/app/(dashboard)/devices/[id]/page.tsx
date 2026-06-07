@@ -70,10 +70,12 @@ import {
   RefreshCw,
   Plus,
   X,
+  SquareTerminal,
 } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { useState, useEffect, useCallback, useRef } from "react";
 import { toast } from "sonner";
+import { useOrganization } from "@/lib/hooks/use-organization";
 
 const Editor = dynamic(() => import("@monaco-editor/react"), { ssr: false });
 
@@ -106,6 +108,11 @@ export default function DeviceDetailPage() {
   const router = useRouter();
   const queryClient = useQueryClient();
   const token = session?.accessToken ?? "";
+
+  const { currentOrg } = useOrganization();
+  const canOpenShell = ["operator", "admin", "owner"].includes(
+    currentOrg?.role?.toLowerCase() ?? "",
+  );
 
   const history = usePollingHistory();
 
@@ -291,6 +298,12 @@ export default function DeviceDetailPage() {
             {device.deviceId}
           </p>
         </div>
+        {canOpenShell && (
+          <Button variant="outline" onClick={() => router.push(`/devices/${id}/terminal`)}>
+            <SquareTerminal className="mr-2 h-4 w-4" />
+            Terminal
+          </Button>
+        )}
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button variant="outline" size="icon">
