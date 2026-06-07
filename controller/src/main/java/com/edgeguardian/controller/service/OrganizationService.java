@@ -4,10 +4,13 @@ import com.edgeguardian.controller.exception.ConflictException;
 import com.edgeguardian.controller.exception.NotFoundException;
 import com.edgeguardian.controller.model.OrgRole;
 import com.edgeguardian.controller.model.Organization;
+import com.edgeguardian.controller.model.OrganizationInvitation;
 import com.edgeguardian.controller.model.OrganizationMember;
 import com.edgeguardian.controller.model.User;
+import com.edgeguardian.controller.repository.OrganizationInvitationRepository;
 import com.edgeguardian.controller.repository.OrganizationMemberRepository;
 import com.edgeguardian.controller.repository.OrganizationRepository;
+import com.edgeguardian.controller.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -30,6 +33,8 @@ public class OrganizationService {
 
     private final OrganizationRepository organizationRepository;
     private final OrganizationMemberRepository memberRepository;
+    private final OrganizationInvitationRepository invitationRepository;
+    private final UserRepository userRepository;
 
     @Transactional
     public Organization create(String name, String slug, String description, Long ownerUserId) {
@@ -121,6 +126,95 @@ public class OrganizationService {
                     "The organization owner cannot be removed - delete the organization instead");
         }
         memberRepository.delete(member);
+    }
+
+    /**
+     * Outcome of an invite: either the member added immediately (the email
+     * belongs to a registered user) or a pending invitation awaiting first login.
+     */
+    public record InviteResult(OrganizationMember member, User user, OrganizationInvitation invitation) {
+        public boolean wasAdded() {
+            return member != null;
+        }
+    }
+
+    /**
+     * Invites an email to the organization. If the email belongs to an existing
+     * user they are added immediately; otherwise a pending invitation is stored
+     * and resolved when that email first logs in. OWNER cannot be invited.
+     */
+    @Transactional
+    public InviteResult inviteMember(Long orgId, String rawEmail, OrgRole role, Long invitedByUserId) {
+        rejectOwnerRole(role);
+        String email = normalizeEmail(rawEmail);
+        if (email.isEmpty()) {
+            throw new ConflictException("Email is required");
+        }
+
+        Optional<User> existing = userRepository.findByEmail(email);
+        if (existing.isPresent()) {
+            OrganizationMember member = addMember(orgId, existing.get().getId(), role);
+            return new InviteResult(member, existing.get(), null);
+        }
+
+        OrganizationInvitation invitation = invitationRepository
+                .findByOrganizationIdAndEmail(orgId, email)
+                .map(inv -> {
+                    inv.setOrgRole(role);
+                    inv.setInvitedByUserId(invitedByUserId);
+                    return inv;
+                })
+                .orElseGet(() -> OrganizationInvitation.builder()
+                        .organizationId(orgId).email(email).orgRole(role)
+                        .invitedByUserId(invitedByUserId).build());
+        invitationRepository.save(invitation);
+        return new InviteResult(null, null, invitation);
+    }
+
+    /**
+     * Converts any pending invitations for this user's email into memberships.
+     * Called once when a user first registers (first login).
+     */
+    @Transactional
+    public void resolvePendingInvitations(User user) {
+        String email = normalizeEmail(user.getEmail());
+        if (email.isEmpty()) {
+            return;
+        }
+        for (OrganizationInvitation inv : invitationRepository.findByEmail(email)) {
+            if (!memberRepository.existsByOrganizationIdAndUserId(inv.getOrganizationId(), user.getId())) {
+                memberRepository.save(OrganizationMember.builder()
+                        .organizationId(inv.getOrganizationId())
+                        .userId(user.getId())
+                        .orgRole(inv.getOrgRole())
+                        .build());
+                log.info("Resolved invitation: {} joined org {} as {}",
+                        email, inv.getOrganizationId(), inv.getOrgRole());
+            }
+            invitationRepository.delete(inv);
+        }
+    }
+
+    @Transactional(readOnly = true)
+    public List<OrganizationInvitation> getInvitations(Long orgId) {
+        return invitationRepository.findByOrganizationId(orgId);
+    }
+
+    /**
+     * Revokes a pending invitation. Cross-tenant ids return "not found".
+     */
+    @Transactional
+    public void revokeInvitation(Long invitationId, Long orgId) {
+        OrganizationInvitation inv = invitationRepository.findById(invitationId)
+                .orElseThrow(() -> new NotFoundException("Invitation not found"));
+        if (!orgId.equals(inv.getOrganizationId())) {
+            throw new NotFoundException("Invitation not found");
+        }
+        invitationRepository.delete(inv);
+    }
+
+    private static String normalizeEmail(String email) {
+        return email == null ? "" : email.trim().toLowerCase();
     }
 
     private Organization requireOrg(Long orgId) {

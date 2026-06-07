@@ -6,8 +6,10 @@ import {
   getOrganization,
   updateOrganization,
   listMembers,
-  addMember,
+  inviteMember,
   removeMember,
+  listInvitations,
+  revokeInvitation,
   listEnrollmentTokens,
   createEnrollmentToken,
   deleteEnrollmentToken,
@@ -17,6 +19,7 @@ import {
   deleteApiKey,
   type Organization,
   type OrgMember,
+  type Invitation,
   type EnrollmentToken,
   type ApiKeyEntry,
 } from "@/lib/api/organizations";
@@ -56,7 +59,7 @@ import {
 } from "@/components/ui/table";
 import { Skeleton } from "@/components/ui/skeleton";
 import { EmptyState } from "@/components/empty-state";
-import { Users, Key, KeyRound, Plus, Copy, Trash2, Check, Download } from "lucide-react";
+import { Users, Key, KeyRound, Plus, Copy, Trash2, Check, Download, Mail } from "lucide-react";
 import { useState } from "react";
 import { formatDistanceToNow } from "date-fns";
 import { toast } from "sonner";
@@ -117,19 +120,33 @@ export default function SettingsPage() {
     queryFn: () => listMembers(token),
     enabled: !!token && !!orgId,
   });
+  const { data: invitations } = useQuery({
+    queryKey: ["org-invitations", orgId],
+    queryFn: () => listInvitations(token),
+    enabled: !!token && !!orgId,
+  });
   const [inviteOpen, setInviteOpen] = useState(false);
   const [inviteEmail, setInviteEmail] = useState("");
-  const [inviteRole, setInviteRole] = useState("member");
+  const [inviteRole, setInviteRole] = useState("VIEWER");
   const [removeMemberTarget, setRemoveMemberTarget] = useState<OrgMember | null>(null);
 
+  const invalidateMembership = () => {
+    queryClient.invalidateQueries({ queryKey: ["org-members", orgId] });
+    queryClient.invalidateQueries({ queryKey: ["org-invitations", orgId] });
+  };
+
   const addMemberMutation = useMutation({
-    mutationFn: () => addMember(token, { email: inviteEmail, role: inviteRole }),
-    onSuccess: () => {
-      toast.success("Member invited");
-      queryClient.invalidateQueries({ queryKey: ["org-members", orgId] });
+    mutationFn: () => inviteMember(token, { email: inviteEmail, role: inviteRole }),
+    onSuccess: (result) => {
+      toast.success(
+        result.status === "added"
+          ? "Member added to the organization"
+          : "Invitation sent — they'll join when they first sign in",
+      );
+      invalidateMembership();
       setInviteOpen(false);
       setInviteEmail("");
-      setInviteRole("member");
+      setInviteRole("VIEWER");
     },
     onError: (err: Error) => toast.error(err.message),
   });
@@ -140,6 +157,15 @@ export default function SettingsPage() {
       toast.success("Member removed");
       queryClient.invalidateQueries({ queryKey: ["org-members", orgId] });
       setRemoveMemberTarget(null);
+    },
+    onError: (err: Error) => toast.error(err.message),
+  });
+
+  const revokeInvitationMutation = useMutation({
+    mutationFn: (invitationId: number) => revokeInvitation(token, invitationId),
+    onSuccess: () => {
+      toast.success("Invitation revoked");
+      queryClient.invalidateQueries({ queryKey: ["org-invitations", orgId] });
     },
     onError: (err: Error) => toast.error(err.message),
   });
@@ -335,7 +361,7 @@ export default function SettingsPage() {
                               {formatDistanceToNow(new Date(m.joinedAt), { addSuffix: true })}
                             </TableCell>
                             <TableCell>
-                              {m.role !== "owner" && (
+                              {m.role !== "OWNER" && (
                                 <Button
                                   variant="ghost"
                                   size="icon"
@@ -355,6 +381,58 @@ export default function SettingsPage() {
               </div>
             </CardContent>
           </Card>
+
+          {invitations && invitations.length > 0 && (
+            <Card className="mt-4">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Mail className="h-5 w-5" />
+                  Pending Invitations
+                </CardTitle>
+                <CardDescription>
+                  These people will join automatically the first time they sign in.
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="rounded-xl border border-border/50 overflow-hidden">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Email</TableHead>
+                        <TableHead>Role</TableHead>
+                        <TableHead>Invited</TableHead>
+                        <TableHead className="w-10" />
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {invitations.map((inv: Invitation) => (
+                        <TableRow key={inv.id}>
+                          <TableCell className="text-sm">{inv.email}</TableCell>
+                          <TableCell>
+                            <Badge variant="secondary">{inv.role}</Badge>
+                          </TableCell>
+                          <TableCell className="text-sm text-muted-foreground">
+                            {formatDistanceToNow(new Date(inv.createdAt), { addSuffix: true })}
+                          </TableCell>
+                          <TableCell>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8 text-destructive"
+                              disabled={revokeInvitationMutation.isPending}
+                              onClick={() => revokeInvitationMutation.mutate(inv.id)}
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              </CardContent>
+            </Card>
+          )}
         </TabsContent>
 
         {/* Tokens Tab */}
@@ -553,8 +631,9 @@ export default function SettingsPage() {
               <Select value={inviteRole} onValueChange={setInviteRole}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="member">Member</SelectItem>
-                  <SelectItem value="admin">Admin</SelectItem>
+                  <SelectItem value="ADMIN">Admin — manage org, members, devices</SelectItem>
+                  <SelectItem value="OPERATOR">Operator — operate devices, open terminals</SelectItem>
+                  <SelectItem value="VIEWER">Viewer — read-only access</SelectItem>
                 </SelectContent>
               </Select>
             </div>

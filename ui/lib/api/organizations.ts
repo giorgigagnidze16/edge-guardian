@@ -71,18 +71,49 @@ export interface ApiKeyEntry {
   createdAt: string;
 }
 
+export interface Invitation {
+  id: number;
+  email: string;
+  role: string;
+  createdAt: string;
+}
+
+export interface InviteResult {
+  status: "added" | "invited";
+  member: OrgMember | null;
+  invitation: Invitation | null;
+}
+
 export async function listMembers(token: string): Promise<OrgMember[]> {
   return apiFetch<OrgMember[]>(endpoints.organization.members.list(), { token });
 }
 
-export async function addMember(token: string, data: { email: string; role: string }): Promise<void> {
-  return apiFetch(endpoints.organization.members.create(), {
+/**
+ * Invites someone by email. If they already have an account they're added
+ * immediately (status "added"); otherwise a pending invitation is created
+ * (status "invited") that resolves when they first sign in.
+ */
+export async function inviteMember(
+  token: string,
+  data: { email: string; role: string },
+): Promise<InviteResult> {
+  return apiFetch<InviteResult>(endpoints.organization.members.create(), {
     method: "POST", token, body: JSON.stringify(data),
   });
 }
 
 export async function removeMember(token: string, memberId: number): Promise<void> {
   return apiFetch(endpoints.organization.members.byId(memberId), { method: "DELETE", token });
+}
+
+export async function listInvitations(token: string): Promise<Invitation[]> {
+  return apiFetch<Invitation[]>(endpoints.organization.invitations.list(), { token });
+}
+
+export async function revokeInvitation(token: string, invitationId: number): Promise<void> {
+  return apiFetch(endpoints.organization.invitations.byId(invitationId), {
+    method: "DELETE", token,
+  });
 }
 
 export async function updateMemberRole(

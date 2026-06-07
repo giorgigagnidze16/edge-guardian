@@ -1,7 +1,9 @@
 package com.edgeguardian.controller.api;
 
-import com.edgeguardian.controller.dto.AddMemberRequest;
 import com.edgeguardian.controller.dto.AuditLogDto;
+import com.edgeguardian.controller.dto.InvitationDto;
+import com.edgeguardian.controller.dto.InviteMemberRequest;
+import com.edgeguardian.controller.dto.InviteResultDto;
 import com.edgeguardian.controller.dto.MemberDto;
 import com.edgeguardian.controller.dto.OrganizationDto;
 import com.edgeguardian.controller.dto.UpdateMemberRoleRequest;
@@ -84,13 +86,14 @@ public class OrganizationController {
     @PostMapping("/members")
     @PreAuthorize("@orgSecurity.hasMinRole(authentication, 'ADMIN')")
     @ResponseStatus(HttpStatus.CREATED)
-    public MemberDto addMember(@RequestBody AddMemberRequest request,
-                               @AuthenticationPrincipal TenantPrincipal principal) {
-        OrganizationMember member = organizationService.addMember(
-                principal.organizationId(), request.userId(), OrgRole.valueOf(request.role()));
-        User user = userRepository.findById(member.getUserId())
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "User not found"));
-        return MemberDto.from(member, user);
+    public InviteResultDto inviteMember(@RequestBody InviteMemberRequest request,
+                                        @AuthenticationPrincipal TenantPrincipal principal) {
+        var result = organizationService.inviteMember(
+                principal.organizationId(), request.email(), parseRole(request.role()), principal.userId());
+        if (result.wasAdded()) {
+            return InviteResultDto.added(MemberDto.from(result.member(), result.user()));
+        }
+        return InviteResultDto.invited(InvitationDto.from(result.invitation()));
     }
 
     @PatchMapping("/members/{memberId}")
@@ -99,7 +102,7 @@ public class OrganizationController {
                                       @RequestBody UpdateMemberRoleRequest request,
                                       @AuthenticationPrincipal TenantPrincipal principal) {
         OrganizationMember updated = organizationService.updateMemberRole(
-                memberId, principal.organizationId(), OrgRole.valueOf(request.role()));
+                memberId, principal.organizationId(), parseRole(request.role()));
         User user = userRepository.findById(updated.getUserId())
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "User not found"));
         return MemberDto.from(updated, user);
@@ -111,6 +114,30 @@ public class OrganizationController {
     public void removeMember(@PathVariable Long memberId,
                              @AuthenticationPrincipal TenantPrincipal principal) {
         organizationService.removeMemberById(memberId, principal.organizationId());
+    }
+
+    @GetMapping("/invitations")
+    @PreAuthorize("@orgSecurity.hasMinRole(authentication, 'ADMIN')")
+    public List<InvitationDto> listInvitations(@AuthenticationPrincipal TenantPrincipal principal) {
+        return organizationService.getInvitations(principal.organizationId()).stream()
+                .map(InvitationDto::from)
+                .toList();
+    }
+
+    @DeleteMapping("/invitations/{invitationId}")
+    @PreAuthorize("@orgSecurity.hasMinRole(authentication, 'ADMIN')")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void revokeInvitation(@PathVariable Long invitationId,
+                                 @AuthenticationPrincipal TenantPrincipal principal) {
+        organizationService.revokeInvitation(invitationId, principal.organizationId());
+    }
+
+    private static OrgRole parseRole(String role) {
+        try {
+            return OrgRole.valueOf(role == null ? "" : role.trim().toUpperCase());
+        } catch (IllegalArgumentException e) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid role: " + role);
+        }
     }
 
     @GetMapping("/audit-log")

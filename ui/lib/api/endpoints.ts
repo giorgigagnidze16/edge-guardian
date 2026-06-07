@@ -16,6 +16,10 @@ export const endpoints = {
       create: () => path("/organization/members"),
       byId: (memberId: number) => path(`/organization/members/${memberId}`),
     },
+    invitations: {
+      list: () => path("/organization/invitations"),
+      byId: (invitationId: number) => path(`/organization/invitations/${invitationId}`),
+    },
   },
 
   apiKeys: {

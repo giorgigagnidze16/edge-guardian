@@ -91,6 +91,7 @@ public class UserService {
                 .build());
         log.info("New user synced from Keycloak: {} ({})", email, user.getKeycloakId());
         organizationService.createPersonalOrganization(user);
+        organizationService.resolvePendingInvitations(user);
         return user;
     }
 }
