@@ -43,7 +43,7 @@ for p in "${PLATFORMS[@]}"; do
 
   echo ">> refresh install binary ${os}/${arch}"
   curl -fsS -X POST "$EG_CONTROLLER_URL/api/v1/agent/binaries?os=${os}&arch=${arch}" \
-    -H "X-API-Key: $EG_API_KEY" -F "file=@${bin}" >/dev/null
+    -H "X-API-Key: $EG_API_KEY" -F "file=@${bin}" -F "ed25519Sig=${sig_hex}" >/dev/null
 done
 
 : "${REFERENCE_ID:?no reference artifact uploaded}"

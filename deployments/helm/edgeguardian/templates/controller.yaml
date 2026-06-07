@@ -139,6 +139,8 @@ spec:
               value: {{ .Values.mail.starttls | quote }}
             - name: MAIL_APP_URL
               value: {{ .Values.mail.appUrl | default (include "edgeguardian.nextAuthUrl" .) | quote }}
+            - name: OTA_PUBLIC_KEY
+              value: {{ .Values.ota.publicKey | default "" | quote }}
           readinessProbe:
             httpGet:
               path: /actuator/health/readiness

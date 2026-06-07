@@ -39,6 +39,8 @@ edgeguardian:
   controller:
     device:
       offline-threshold-minutes: 5
+    ota:
+      public-key: ${OTA_PUBLIC_KEY:}
     mail:
       enabled: ${MAIL_ENABLED:true}
       from: ${MAIL_FROM:EdgeGuardian <no-reply@edgeguardian.local>}

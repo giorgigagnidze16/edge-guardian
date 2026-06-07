@@ -9,17 +9,25 @@ import com.edgeguardian.controller.service.installer.InstallerFormat;
 import com.edgeguardian.controller.service.installer.Os;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.bouncycastle.crypto.params.Ed25519PublicKeyParameters;
+import org.bouncycastle.crypto.signers.Ed25519Signer;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.core.io.ClassPathResource;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StreamUtils;
+import org.springframework.web.server.ResponseStatusException;
 import org.springframework.web.util.UriComponentsBuilder;
 
+import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.Base64;
+import java.util.HexFormat;
 import java.util.Map;
+import java.util.regex.Pattern;
 
 @Slf4j
 @Service
@@ -29,10 +37,14 @@ public class AgentInstallerService {
 
     private static final int CMD_CHUNK_SIZE = 4000;
     private static final String BINARY_OBJECT_PREFIX = "public/agent/";
+    private static final Pattern ARCH = Pattern.compile("^[a-z0-9]{1,16}$");
 
     private final AgentInstallerProperties props;
     private final ArtifactStorageService storage;
     private final EnrollmentTokenRepository tokenRepository;
+
+    @Value("${edgeguardian.controller.ota.public-key:}")
+    private String otaPublicKey;
 
     private static String stripTrailingNewline(String s) {
         if (s == null || s.isEmpty()) {
@@ -61,6 +73,7 @@ public class AgentInstallerService {
     }
 
     public InputStream openBinary(Os os, String arch) {
+        validateArch(arch);
         String key = BINARY_OBJECT_PREFIX + os.slug + "/" + arch + "/" + os.binaryName;
         try {
             return storage.load(key);
@@ -69,9 +82,44 @@ public class AgentInstallerService {
         }
     }
 
-    public void storeBinary(Os os, String arch, InputStream data, long size) throws IOException {
+    public void storeBinary(Os os, String arch, byte[] data, String signatureHex) throws IOException {
+        validateArch(arch);
+        verifySignature(data, signatureHex);
         String key = BINARY_OBJECT_PREFIX + os.slug + "/" + arch + "/" + os.binaryName;
-        storage.putRaw(key, data, size);
+        storage.putRaw(key, new ByteArrayInputStream(data), data.length);
+    }
+
+    private static void validateArch(String arch) {
+        if (arch == null || !ARCH.matcher(arch).matches()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid architecture");
+        }
+    }
+
+    private void verifySignature(byte[] data, String signatureHex) {
+        if (otaPublicKey == null || otaPublicKey.isBlank()) {
+            throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE,
+                    "Binary publishing is disabled: no OTA public key configured");
+        }
+        if (signatureHex == null || signatureHex.isBlank()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Missing signature");
+        }
+        byte[] pub;
+        byte[] sig;
+        try {
+            pub = HexFormat.of().parseHex(otaPublicKey.trim());
+            sig = HexFormat.of().parseHex(signatureHex.trim());
+        } catch (IllegalArgumentException e) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Malformed signature or key");
+        }
+        if (pub.length != 32) {
+            throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, "Invalid OTA public key");
+        }
+        Ed25519Signer signer = new Ed25519Signer();
+        signer.init(false, new Ed25519PublicKeyParameters(pub, 0));
+        signer.update(data, 0, data.length);
+        if (!signer.verifySignature(sig)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Signature verification failed");
+        }
     }
 
     private Map<String, String> payloadVars(Os os, EnrollmentToken token, String arch) throws IOException {

@@ -58,7 +58,8 @@ public class AgentInstallerController {
     @ResponseStatus(HttpStatus.CREATED)
     public void publishBinary(@RequestParam String os,
                               @RequestParam(defaultValue = "amd64") String arch,
+                              @RequestPart("ed25519Sig") String ed25519Sig,
                               @RequestPart("file") MultipartFile file) throws IOException {
-        installers.storeBinary(Os.of(os), arch, file.getInputStream(), file.getSize());
+        installers.storeBinary(Os.of(os), arch, file.getBytes(), ed25519Sig);
     }
 }

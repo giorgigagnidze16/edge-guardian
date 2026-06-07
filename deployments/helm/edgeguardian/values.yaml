@@ -99,6 +99,12 @@ mail:
   starttls: false
   appUrl: ""
 
+# OTA / agent-binary signing. publicKey (hex Ed25519) is the verification key the
+# controller uses to accept published agent binaries; agents ship the same key.
+# The private counterpart lives only in the release pipeline (OTA_SIGNING_KEY).
+ota:
+  publicKey: ""
+
 # existingSecret names are load-bearing: templates reference them as the name
 # field in secretKeyRef blocks. Do not rename without editing templates.
 secrets:
