@@ -91,3 +91,7 @@ workflow running on `main` (Workload Identity Federation is pinned to that
 repository, ref, and `job_workflow_ref`). Do not add `pull_request_target` to
 `deploy.yml`, and do not move its deploy logic into another workflow file
 without updating `wif.tf`.
+
+Kubernetes Secrets are envelope-encrypted at rest with a customer-managed Cloud
+KMS key (`kms.tf`, cluster `database_encryption`). Secrets themselves come from
+GitHub Actions secrets and are never committed.

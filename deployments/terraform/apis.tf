@@ -3,6 +3,7 @@ locals {
     "container.googleapis.com",
     "artifactregistry.googleapis.com",
     "compute.googleapis.com",
+    "cloudkms.googleapis.com",
     "iam.googleapis.com",
     "iamcredentials.googleapis.com",
     "sts.googleapis.com",

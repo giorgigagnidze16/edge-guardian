@@ -6,7 +6,16 @@ resource "google_container_cluster" "primary" {
   deletion_protection      = false
   networking_mode          = "VPC_NATIVE"
   ip_allocation_policy {}
-  depends_on = [google_project_service.enabled]
+
+  database_encryption {
+    state    = "ENCRYPTED"
+    key_name = google_kms_crypto_key.gke_secrets.id
+  }
+
+  depends_on = [
+    google_project_service.enabled,
+    google_kms_crypto_key_iam_member.gke_robot,
+  ]
 }
 
 resource "google_container_node_pool" "primary" {
