@@ -150,6 +150,13 @@ data:
     {allow, all, subscribe, ["edgeguardian/device/${clientid}/state/desired"]}.
     {allow, all, subscribe, ["edgeguardian/device/${clientid}/cert/response"]}.
 
+    %% interactive shell: agent subscribes open + per-session in/ctl, publishes out + event
+    {allow, all, subscribe, ["edgeguardian/device/${clientid}/shell/open"]}.
+    {allow, all, subscribe, ["edgeguardian/device/${clientid}/shell/+/in"]}.
+    {allow, all, subscribe, ["edgeguardian/device/${clientid}/shell/+/ctl"]}.
+    {allow, all, publish,   ["edgeguardian/device/${clientid}/shell/+/out"]}.
+    {allow, all, publish,   ["edgeguardian/device/${clientid}/shell/event"]}.
+
     {deny, all}.
 ---
 apiVersion: v1
