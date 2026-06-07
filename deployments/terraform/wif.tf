@@ -23,11 +23,12 @@ resource "google_iam_workload_identity_pool_provider" "github" {
   workload_identity_pool_id          = google_iam_workload_identity_pool.github.workload_identity_pool_id
   workload_identity_pool_provider_id = "github-provider"
   attribute_mapping = {
-    "google.subject"       = "assertion.sub"
-    "attribute.repository" = "assertion.repository"
-    "attribute.ref"        = "assertion.ref"
+    "google.subject"             = "assertion.sub"
+    "attribute.repository"       = "assertion.repository"
+    "attribute.ref"              = "assertion.ref"
+    "attribute.job_workflow_ref" = "assertion.job_workflow_ref"
   }
-  attribute_condition = "assertion.repository == \"${var.github_repo}\" && assertion.ref == \"refs/heads/main\""
+  attribute_condition = "assertion.repository == \"${var.github_repo}\" && assertion.ref == \"refs/heads/main\" && assertion.job_workflow_ref == \"${var.github_repo}/.github/workflows/deploy.yml@refs/heads/main\""
   oidc {
     issuer_uri = "https://token.actions.githubusercontent.com"
   }
@@ -36,5 +37,5 @@ resource "google_iam_workload_identity_pool_provider" "github" {
 resource "google_service_account_iam_member" "wif_bind" {
   service_account_id = google_service_account.deployer.name
   role               = "roles/iam.workloadIdentityUser"
-  member             = "principalSet://iam.googleapis.com/${google_iam_workload_identity_pool.github.name}/attribute.repository/${var.github_repo}"
+  member             = "principalSet://iam.googleapis.com/${google_iam_workload_identity_pool.github.name}/attribute.job_workflow_ref/${var.github_repo}/.github/workflows/deploy.yml@refs/heads/main"
 }

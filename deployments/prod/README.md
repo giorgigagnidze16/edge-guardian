@@ -76,3 +76,11 @@ the first org + CA and unblocks EMQX's init container.
   with auto-update on converge on their own.
 - **Teardown:** `terraform -chdir=deployments/terraform destroy` (plus
   `helm uninstall edgeguardian -n edgeguardian` first to release the LBs).
+
+## Security
+
+The deployer service account can only be impersonated by the `deploy.yml`
+workflow running on `main` (Workload Identity Federation is pinned to that
+repository, ref, and `job_workflow_ref`). Do not add `pull_request_target` to
+`deploy.yml`, and do not move its deploy logic into another workflow file
+without updating `wif.tf`.
