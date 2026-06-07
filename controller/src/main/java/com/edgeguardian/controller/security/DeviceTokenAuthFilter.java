@@ -34,7 +34,8 @@ public class DeviceTokenAuthFilter extends OncePerRequestFilter {
     private static final Set<String> PUBLIC_AGENT_PATHS = Set.of(
             ApiPaths.AGENT_ENROLL,
             ApiPaths.AGENT_INSTALLER,
-            ApiPaths.AGENT_BINARY
+            ApiPaths.AGENT_BINARY,
+            ApiPaths.AGENT_BINARIES
     );
 
     private final DeviceTokenRepository deviceTokenRepository;
