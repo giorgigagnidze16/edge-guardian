@@ -22,6 +22,7 @@ export interface Device {
   state: string;
   registeredAt: string;
   lastHeartbeat: string | null;
+  autoUpdate: boolean | null;
   status: DeviceStatus;
 }
 
@@ -31,6 +32,18 @@ export async function listDevices(token: string): Promise<Device[]> {
 
 export async function getDevice(token: string, deviceId: string): Promise<Device> {
   return apiFetch<Device>(endpoints.devices.byId(deviceId), { token });
+}
+
+export async function setDeviceAutoUpdate(
+  token: string,
+  deviceId: string,
+  enabled: boolean,
+): Promise<Device> {
+  return apiFetch<Device>(endpoints.devices.autoUpdate(deviceId), {
+    method: "PATCH",
+    token,
+    body: JSON.stringify({ enabled }),
+  });
 }
 
 export async function deleteDevice(token: string, deviceId: string): Promise<void> {

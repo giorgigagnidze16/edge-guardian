@@ -78,6 +78,14 @@ substep "Controller: ${CONTROLLER_HOST}:${CONTROLLER_PORT}"
 substep "MQTT:       $MTLS_BROKER_URL"
 substep "Config:     $CONFIG_PATH"
 
+AUTO_UPDATE="${AUTO_UPDATE:-}"
+if [ -z "$AUTO_UPDATE" ] && [ -t 0 ]; then
+  printf "Enable automatic agent updates? [Y/n] "
+  read -r _au
+  case "$_au" in [Nn]*) AUTO_UPDATE=false ;; *) AUTO_UPDATE=true ;; esac
+fi
+AUTO_UPDATE="${AUTO_UPDATE:-true}"
+
 cat > "$CONFIG_PATH" <<EOF
 device_id: ${DEVICE_ID}
 controller_address: ${CONTROLLER_HOST}
@@ -85,6 +93,8 @@ controller_port: ${CONTROLLER_PORT}
 data_dir: ${DATA_DIR}
 reconcile_interval_seconds: 30
 log_level: info
+ota:
+  auto_update: ${AUTO_UPDATE}
 auth:
   enrollment_token: ${ENROLLMENT_TOKEN}
 mqtt:

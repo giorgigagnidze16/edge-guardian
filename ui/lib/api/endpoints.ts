@@ -40,6 +40,7 @@ export const endpoints = {
     byId: (deviceId: string) => path(`/devices/${deviceId}`),
     manifest: (deviceId: string) => path(`/devices/${deviceId}/manifest`),
     labels: (deviceId: string) => path(`/devices/${deviceId}/labels`),
+    autoUpdate: (deviceId: string) => path(`/devices/${deviceId}/auto-update`),
     logs: (deviceId: string) => path(`/devices/${deviceId}/logs`),
     telemetry: (deviceId: string) => path(`/devices/${deviceId}/telemetry`),
     telemetryHourly: (deviceId: string) => path(`/devices/${deviceId}/telemetry/hourly`),

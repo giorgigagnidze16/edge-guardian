@@ -1,0 +1,23 @@
+name: Agent release
+
+on:
+  push:
+    tags: ["agent-v*"]
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.24"
+      - name: Publish agent version
+        env:
+          VERSION: ${{ github.ref_name }}
+          EG_CONTROLLER_URL: ${{ secrets.EG_CONTROLLER_URL }}
+          EG_API_KEY: ${{ secrets.EG_API_KEY }}
+          OTA_SIGNING_KEY: ${{ secrets.OTA_SIGNING_KEY }}
+        run: |
+          export VERSION="${VERSION#agent-v}"
+          ./scripts/publish-agent.sh
