@@ -25,9 +25,10 @@ type Config struct {
 
 // OTAConfig holds OTA update settings.
 type OTAConfig struct {
-	Enabled  bool   `yaml:"enabled"`
-	SignKey  string `yaml:"sign_key"`  // Ed25519 public key hex for signature verification
-	CacheDir string `yaml:"cache_dir"` // Directory for staging downloaded artifacts
+	Enabled    bool   `yaml:"enabled"`
+	AutoUpdate bool   `yaml:"auto_update"`
+	SignKey    string `yaml:"sign_key"`
+	CacheDir   string `yaml:"cache_dir"`
 }
 
 // AuthConfig holds authentication settings used during first-boot enrollment.

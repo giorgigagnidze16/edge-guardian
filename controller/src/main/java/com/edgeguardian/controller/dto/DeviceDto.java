@@ -18,6 +18,7 @@ public record DeviceDto(
     String state,
     Instant registeredAt,
     Instant lastHeartbeat,
+    Boolean autoUpdate,
     DeviceStatus status
 ) {
     public static DeviceDto from(Device device) {
@@ -35,6 +36,7 @@ public record DeviceDto(
             device.getState().name(),
             device.getRegisteredAt(),
             device.getLastHeartbeat(),
+            device.getAutoUpdate(),
             status
         );
     }

@@ -63,6 +63,9 @@ public class Device extends AbstractAuditedEntity {
     @Column(name = "organization_id", nullable = false)
     private Long organizationId;
 
+    @Column(name = "auto_update")
+    private Boolean autoUpdate;
+
     public Device(String deviceId, String hostname, String architecture, String os, String agentVersion) {
         this.deviceId = deviceId;
         this.hostname = hostname;

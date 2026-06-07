@@ -171,11 +171,13 @@ func runAgent(ctx context.Context, cfg *config.Config, logger *zap.Logger) error
 		if !lastRec.IsZero() {
 			status.LastReconcile = lastRec.Format(time.RFC3339)
 		}
+		autoUpdate := cfg.OTA.AutoUpdate
 		return &model.HeartbeatMessage{
 			DeviceID:        cfg.DeviceID,
 			AgentVersion:    agentVersion,
 			Status:          status,
 			ManifestVersion: rec.ManifestVersion(),
+			AutoUpdate:      &autoUpdate,
 			Timestamp:       time.Now(),
 		}
 	})

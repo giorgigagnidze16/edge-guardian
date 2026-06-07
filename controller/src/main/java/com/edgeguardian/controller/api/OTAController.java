@@ -3,6 +3,7 @@ package com.edgeguardian.controller.api;
 import com.edgeguardian.controller.dto.CreateOtaDeploymentRequest;
 import com.edgeguardian.controller.dto.OtaArtifactDto;
 import com.edgeguardian.controller.dto.OtaDeploymentDto;
+import com.edgeguardian.controller.dto.SetChannelRequest;
 import com.edgeguardian.controller.model.DeploymentDeviceStatus;
 import com.edgeguardian.controller.security.TenantPrincipal;
 import com.edgeguardian.controller.service.ArtifactStorageService;
@@ -39,6 +40,22 @@ public class OTAController {
         return otaService.listArtifacts(principal.organizationId()).stream()
                 .map(OtaArtifactDto::from)
                 .toList();
+    }
+
+    @PostMapping("/channel/current")
+    @PreAuthorize("@orgSecurity.hasMinRole(authentication, 'OPERATOR')")
+    public OtaArtifactDto setCurrentChannel(@RequestBody SetChannelRequest request,
+                                            @AuthenticationPrincipal TenantPrincipal principal) {
+        return OtaArtifactDto.from(otaService.publishCurrentChannel(
+                principal.organizationId(), request.artifactId(), principal.userId()));
+    }
+
+    @GetMapping("/channel/current")
+    @PreAuthorize("@orgSecurity.hasMinRole(authentication, 'VIEWER')")
+    public OtaArtifactDto getCurrentChannel(@AuthenticationPrincipal TenantPrincipal principal) {
+        return otaService.getCurrentChannel(principal.organizationId())
+                .map(OtaArtifactDto::from)
+                .orElse(null);
     }
 
     @PostMapping("/artifacts")

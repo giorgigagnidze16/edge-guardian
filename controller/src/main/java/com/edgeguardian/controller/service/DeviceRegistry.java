@@ -95,6 +95,22 @@ public class DeviceRegistry {
         return Optional.of(device);
     }
 
+    @Transactional
+    public Device setAutoUpdate(Device device, boolean enabled) {
+        device.setAutoUpdate(enabled);
+        return deviceRepository.save(device);
+    }
+
+    @Transactional
+    public void seedAutoUpdate(String deviceId, boolean value) {
+        deviceRepository.findByDeviceId(deviceId).ifPresent(device -> {
+            if (device.getAutoUpdate() == null) {
+                device.setAutoUpdate(value);
+                deviceRepository.save(device);
+            }
+        });
+    }
+
     /**
      * Get latest telemetry status for a single device.
      */

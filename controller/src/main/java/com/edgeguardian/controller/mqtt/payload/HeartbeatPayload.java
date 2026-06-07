@@ -10,5 +10,6 @@ public record HeartbeatPayload(
         String agentVersion,
         DeviceStatusPayload status,
         long manifestVersion,
+        Boolean autoUpdate,
         Instant timestamp
 ) {}

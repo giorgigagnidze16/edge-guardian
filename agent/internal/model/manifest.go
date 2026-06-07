@@ -150,6 +150,7 @@ type HeartbeatMessage struct {
 	AgentVersion    string        `json:"agentVersion"`
 	Status          *DeviceStatus `json:"status,omitempty"`
 	ManifestVersion int64         `json:"manifestVersion"`
+	AutoUpdate      *bool         `json:"autoUpdate,omitempty"`
 	Timestamp       time.Time     `json:"timestamp"`
 }
 

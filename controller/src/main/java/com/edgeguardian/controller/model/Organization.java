@@ -25,4 +25,7 @@ public class Organization extends AbstractAuditedEntity {
     private String slug;
 
     private String description;
+
+    @Column(name = "current_agent_artifact_id")
+    private Long currentAgentArtifactId;
 }

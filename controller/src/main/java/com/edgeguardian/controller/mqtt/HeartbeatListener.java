@@ -59,6 +59,10 @@ public class HeartbeatListener {
                 return;
             }
 
+            if (payload.autoUpdate() != null) {
+                registry.seedAutoUpdate(payload.deviceId(), payload.autoUpdate());
+            }
+
             // Push manifest if device's version is outdated.
             Optional<DeviceManifestEntity> manifest = registry.getManifest(payload.deviceId());
             if (manifest.isPresent() && manifest.get().getVersion() > payload.manifestVersion()) {
