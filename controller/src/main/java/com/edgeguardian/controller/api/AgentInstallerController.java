@@ -8,12 +8,18 @@ import java.io.InputStream;
 import lombok.RequiredArgsConstructor;
 import org.springframework.core.io.InputStreamResource;
 import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RequestPart;
+import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.multipart.MultipartFile;
 
 @RestController
 @RequestMapping(ApiPaths.AGENT_BASE)
@@ -45,5 +51,14 @@ public class AgentInstallerController {
             .contentType(MediaType.APPLICATION_OCTET_STREAM)
             .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=" + target.binaryName)
             .body(new InputStreamResource(stream));
+    }
+
+    @PostMapping(ApiPaths.AGENT_BINARIES_PATH)
+    @PreAuthorize("@orgSecurity.hasMinRole(authentication, 'OPERATOR')")
+    @ResponseStatus(HttpStatus.CREATED)
+    public void publishBinary(@RequestParam String os,
+                              @RequestParam(defaultValue = "amd64") String arch,
+                              @RequestPart("file") MultipartFile file) throws IOException {
+        installers.storeBinary(Os.of(os), arch, file.getInputStream(), file.getSize());
     }
 }

@@ -69,6 +69,11 @@ public class AgentInstallerService {
         }
     }
 
+    public void storeBinary(Os os, String arch, InputStream data, long size) throws IOException {
+        String key = BINARY_OBJECT_PREFIX + os.slug + "/" + arch + "/" + os.binaryName;
+        storage.putRaw(key, data, size);
+    }
+
     private Map<String, String> payloadVars(Os os, EnrollmentToken token, String arch) throws IOException {
         String binaryUrl = UriComponentsBuilder.fromUriString(props.controllerUrl())
             .path(ApiPaths.AGENT_BINARY)

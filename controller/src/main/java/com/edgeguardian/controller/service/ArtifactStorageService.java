@@ -77,6 +77,19 @@ public class ArtifactStorageService {
         }
     }
 
+    public void putRaw(String key, InputStream data, long size) throws IOException {
+        try {
+            minioClient.putObject(PutObjectArgs.builder()
+                .bucket(bucket)
+                .object(key)
+                .stream(data, size, -1L)
+                .contentType("application/octet-stream")
+                .build());
+        } catch (Exception e) {
+            throw new IOException("Failed to store object in MinIO: " + key, e);
+        }
+    }
+
     /**
      * Returns an {@link InputStream} for the artifact at the given storage path.
      * The caller is responsible for closing the stream.

@@ -18,10 +18,12 @@ public final class ApiPaths {
 
     public static final String AGENT_INSTALLER_PATH = "/installer";
     public static final String AGENT_BINARY_PATH    = "/binary";
+    public static final String AGENT_BINARIES_PATH  = "/binaries";
     public static final String AGENT_ENROLL_PATH    = "/enroll";
 
     public static final String AGENT_INSTALLER     = AGENT_BASE + AGENT_INSTALLER_PATH;
     public static final String AGENT_BINARY        = AGENT_BASE + AGENT_BINARY_PATH;
+    public static final String AGENT_BINARIES      = AGENT_BASE + AGENT_BINARIES_PATH;
     public static final String AGENT_ENROLL        = AGENT_BASE + AGENT_ENROLL_PATH;
 
     public static final String PKI_BASE             = API_V1 + "/pki";
