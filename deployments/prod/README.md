@@ -29,12 +29,11 @@ cert-manager, and the Let's Encrypt ClusterIssuer. It prints the Terraform
 outputs at the end — keep them.
 
 ### 4. Fill `values-prod.yaml` from the outputs
-Set in `deployments/helm/edgeguardian/values-prod.yaml`:
+Set just one value in `deployments/helm/edgeguardian/values-prod.yaml`:
 - `ingress.baseDomain` = `<base_domain>` output (e.g. `34-1-2-3.sslip.io`)
-- `controller.agentInstaller.controllerUrl` = `https://controller.<base_domain>`
-- `controller.agentInstaller.brokerUrl` = `tcp://<mqtt_host>:1883`
-- `controller.agentInstaller.mtlsBrokerUrl` = `ssl://<mqtt_host>:8883`
-- `emqx.external.loadBalancerIP` = `<mqtt_ip>` output
+
+The controller and MQTT URLs derive from it automatically (MQTT runs on the same
+load balancer as HTTP, at `mqtt.<base_domain>:1883/8883`).
 
 ### Email (Gmail)
 For real email in prod, set `mail.from` and `mail.username` (your Gmail address)
@@ -81,8 +80,15 @@ the first org + CA and unblocks EMQX's init container.
 - **Deploys:** every push to `main` builds + deploys automatically.
 - **Agent updates:** tag `agent-vX.Y.Z` to publish a new agent version; devices
   with auto-update on converge on their own.
+- **Run on demand (save cost):** scale the node pool down/up — compute billing
+  stops while off; the load balancer, IP, TLS cert, and data persist, so it
+  comes back at the same `https://ui.<base>`:
+  ```bash
+  ./scripts/cluster-down.sh   # off: pay only for disks + the one LB
+  ./scripts/cluster-up.sh     # on
+  ```
 - **Teardown:** `terraform -chdir=deployments/terraform destroy` (plus
-  `helm uninstall edgeguardian -n edgeguardian` first to release the LBs).
+  `helm uninstall edgeguardian -n edgeguardian` first to release the LB).
 
 ## Security
 

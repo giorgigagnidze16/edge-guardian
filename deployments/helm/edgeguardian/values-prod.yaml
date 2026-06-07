@@ -35,9 +35,8 @@ controller:
   publicUrl: ""
   crlUrl: ""
   keycloakIssuerUri: ""
-  # Agents need external MQTT access. See emqx.external.type below - for a
-  # typical cloud deployment set that to LoadBalancer and fill these with the
-  # LB hostname/IP (e.g. tcp://mqtt.<base>:1883 and ssl://mqtt.<base>:8883).
+  # Blank = derived from ingress.baseDomain (controller URL, and the MQTT broker
+  # URLs at mqtt.<base>, which the shared ingress LB carries via TCP).
   agentInstaller:
     controllerUrl: ""
     brokerUrl: ""
@@ -45,7 +44,7 @@ controller:
 
 postgres:
   image: timescale/timescaledb:2.17.2-pg16
-  storage: 100Gi
+  storage: 20Gi
   credentials:
     database: edgeguardian
     username: edgeguardian
@@ -55,32 +54,32 @@ keycloak:
 
 minio:
   image: minio/minio:RELEASE.2024-12-18T13-15-44Z
-  storage: 500Gi
+  storage: 20Gi
   credentials:
     username: edgeguardian
 
 loki:
   image: grafana/loki:3.3.0
-  storage: 100Gi
+  storage: 20Gi
 
 grafana:
   image: grafana/grafana:11.4.0
-  storage: 10Gi
+  storage: 5Gi
   admin:
     username: admin
 
 emqx:
   image: emqx/emqx:5.8
-  storage: 20Gi
+  storage: 5Gi
   mqttUsers:
     controllerUsername: controller
     bootstrapUsername: bootstrap
-  # Expose MQTT via a dedicated LoadBalancer Service so agents can reach the
-  # broker on 1883 (bootstrap) + 8883 (mTLS). HTTP ingress cannot proxy MQTT.
+  # MQTT is carried by the shared ingress-nginx LB (TCP passthrough on 1883/8883),
+  # so no dedicated broker LoadBalancer is provisioned.
   external:
-    type: LoadBalancer
+    type: ClusterIP
     annotations: {}
-    loadBalancerIP: ""   # set to the mqtt_ip Terraform output
+    loadBalancerIP: ""
 
 pkiBootstrap:
   image: alpine/k8s:1.31.1

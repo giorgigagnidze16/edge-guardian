@@ -20,12 +20,12 @@ variable "cluster_name" {
 
 variable "node_machine_type" {
   type    = string
-  default = "e2-medium"
+  default = "e2-standard-4"
 }
 
 variable "node_count" {
   type    = number
-  default = 2
+  default = 1
 }
 
 variable "github_repo" {

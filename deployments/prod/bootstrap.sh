@@ -33,7 +33,10 @@ helm repo add jetstack https://charts.jetstack.io >/dev/null 2>&1 || true
 helm repo update >/dev/null
 helm upgrade --install ingress-nginx ingress-nginx/ingress-nginx \
   -n ingress-nginx --create-namespace \
-  --set controller.service.loadBalancerIP="$INGRESS_IP" --wait
+  --set controller.service.loadBalancerIP="$INGRESS_IP" \
+  --set tcp.1883="edgeguardian/emqx:1883" \
+  --set tcp.8883="edgeguardian/emqx:8883" \
+  --wait
 
 echo ">> cert-manager"
 helm upgrade --install cert-manager jetstack/cert-manager \

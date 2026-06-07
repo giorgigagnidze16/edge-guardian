@@ -123,7 +123,7 @@ spec:
                 openssl ecparam -name prime256v1 -genkey -noout -out server.key
                 openssl req -new -key server.key -nodes -subj "/CN=emqx" -out server.csr
 
-                printf 'subjectAltName = DNS:emqx,DNS:emqx.%s.svc.cluster.local,DNS:localhost,IP:127.0.0.1\nextendedKeyUsage = serverAuth\n' "$NS" > server.ext
+                printf 'subjectAltName = DNS:emqx,DNS:emqx.%s.svc.cluster.local,DNS:localhost,IP:127.0.0.1{{- if .Values.ingress.baseDomain }},DNS:mqtt.{{ .Values.ingress.baseDomain }}{{- end }}\nextendedKeyUsage = serverAuth\n' "$NS" > server.ext
 
                 openssl x509 -req -in server.csr -CA ca.crt -CAkey ca.key -CAcreateserial \
                   -out server.crt -days 365 -sha256 -extfile server.ext
