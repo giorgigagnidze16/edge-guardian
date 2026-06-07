@@ -36,6 +36,13 @@ Set in `deployments/helm/edgeguardian/values-prod.yaml`:
 - `controller.agentInstaller.mtlsBrokerUrl` = `ssl://<mqtt_host>:8883`
 - `emqx.external.loadBalancerIP` = `<mqtt_ip>` output
 
+### Email (Gmail)
+For real email in prod, set `mail.from` and `mail.username` (your Gmail address)
+in `values-prod.yaml`, and provide a Google **App Password** (Account → Security →
+App passwords; needs 2FA) as the `MAIL_PASSWORD` secret — `gh-secrets.sh` picks it
+up from `EG_MAIL_PASSWORD`. Both the controller (invites) and Keycloak
+(verification) then send through Gmail.
+
 ### 5. Create the secrets file (local, gitignored)
 ```bash
 cp deployments/helm/edgeguardian/values-prod-secrets.yaml.example \

@@ -93,6 +93,10 @@ mail:
   host: ""
   port: 587
   from: "EdgeGuardian <no-reply@edgeguardian.local>"
+  username: ""
+  password: ""
+  auth: false
+  starttls: false
   appUrl: ""
 
 # existingSecret names are load-bearing: templates reference them as the name

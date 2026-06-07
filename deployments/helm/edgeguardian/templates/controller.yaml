@@ -8,6 +8,7 @@ metadata:
 type: Opaque
 stringData:
   ca_encryption_key: {{ .Values.controller.caEncryptionKey | default "" | quote }}
+  mail_password: {{ .Values.mail.password | default "" | quote }}
 ---
 {{- end }}
 apiVersion: v1
@@ -128,6 +129,14 @@ spec:
               value: {{ .Values.mail.port | quote }}
             - name: MAIL_FROM
               value: {{ .Values.mail.from | quote }}
+            - name: MAIL_USERNAME
+              value: {{ .Values.mail.username | default "" | quote }}
+            - name: MAIL_PASSWORD
+              valueFrom: { secretKeyRef: { name: {{ .Values.secrets.controller.existingSecret }}, key: mail_password } }
+            - name: MAIL_SMTP_AUTH
+              value: {{ .Values.mail.auth | quote }}
+            - name: MAIL_SMTP_STARTTLS
+              value: {{ .Values.mail.starttls | quote }}
             - name: MAIL_APP_URL
               value: {{ .Values.mail.appUrl | default (include "edgeguardian.nextAuthUrl" .) | quote }}
           readinessProbe:

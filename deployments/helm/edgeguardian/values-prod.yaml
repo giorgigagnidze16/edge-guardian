@@ -85,6 +85,18 @@ emqx:
 pkiBootstrap:
   image: alpine/k8s:1.31.1
 
+# Real email via Gmail SMTP. Requires a Google App Password (2FA on the account).
+# 'from' and 'username' must be the same Gmail address; the App Password goes in
+# values-prod-secrets.yaml (mail.password), never here.
+mail:
+  enabled: true
+  host: smtp.gmail.com
+  port: 587
+  auth: true
+  starttls: true
+  from: ""        # your-address@gmail.com
+  username: ""    # your-address@gmail.com
+
 secrets:
   postgres:    { create: true, existingSecret: postgres-credentials }
   keycloak:    { create: true, existingSecret: keycloak-admin }

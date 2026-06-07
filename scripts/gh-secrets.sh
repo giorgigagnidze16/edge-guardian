@@ -51,6 +51,8 @@ ui:
   keycloakClientSecret: "$KEYCLOAK_CLIENT_SECRET"
 controller:
   caEncryptionKey: "$CA_ENCRYPTION_KEY"
+mail:
+  password: "${EG_MAIL_PASSWORD:-REPLACE_ME}"
 EOF
 
 echo ">> setting GitHub Actions secrets"
@@ -74,5 +76,10 @@ set_secret NEXTAUTH_SECRET           "$NEXTAUTH_SECRET"
 set_secret KEYCLOAK_CLIENT_SECRET    "$KEYCLOAK_CLIENT_SECRET"
 set_secret CA_ENCRYPTION_KEY         "$CA_ENCRYPTION_KEY"
 
-echo "Done. Secrets written locally and pushed to GitHub. The OTA signing key"
-echo "for agent-release is set up in Phase C."
+if [ -n "${EG_MAIL_PASSWORD:-}" ]; then
+  set_secret MAIL_PASSWORD "$EG_MAIL_PASSWORD"
+fi
+
+echo "Done. Secrets written locally and pushed to GitHub."
+echo "For Gmail in prod: run with EG_MAIL_PASSWORD=<app-password> and set"
+echo "mail.from + mail.username (your Gmail address) in values-prod.yaml."

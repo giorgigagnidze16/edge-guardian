@@ -83,6 +83,8 @@ jobs:
             keycloakClientSecret: "${{ secrets.KEYCLOAK_CLIENT_SECRET }}"
           controller:
             caEncryptionKey: "${{ secrets.CA_ENCRYPTION_KEY }}"
+          mail:
+            password: "${{ secrets.MAIL_PASSWORD }}"
           EOF
 
       - name: Helm upgrade
