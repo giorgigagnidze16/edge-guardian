@@ -2,6 +2,7 @@ package com.edgeguardian.controller.service;
 
 import com.edgeguardian.controller.api.ApiPaths;
 import com.edgeguardian.controller.config.AgentInstallerProperties;
+import com.edgeguardian.controller.dto.AgentReleaseInfo;
 import com.edgeguardian.controller.exception.NotFoundException;
 import com.edgeguardian.controller.model.EnrollmentToken;
 import com.edgeguardian.controller.repository.EnrollmentTokenRepository;
@@ -82,11 +83,46 @@ public class AgentInstallerService {
         }
     }
 
-    public void storeBinary(Os os, String arch, byte[] data, String signatureHex) throws IOException {
+    public void storeBinary(Os os, String arch, byte[] data, String version, String signatureHex)
+            throws IOException {
         validateArch(arch);
+        if (version == null || version.isBlank()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Missing version");
+        }
         verifySignature(data, signatureHex);
+        String sha256 = HexFormat.of().formatHex(sha256(data));
         String key = BINARY_OBJECT_PREFIX + os.slug + "/" + arch + "/" + os.binaryName;
-        storage.putRaw(key, new ByteArrayInputStream(data), data.length);
+        storage.putRaw(key, new ByteArrayInputStream(data), data.length, Map.of(
+                "version", version.trim(),
+                "sha256", sha256,
+                "sig", signatureHex.trim()));
+        log.info("Agent binary published: {}/{} version={}", os.slug, arch, version.trim());
+    }
+
+    public AgentReleaseInfo latestRelease(Os os, String arch) {
+        validateArch(arch);
+        String key = BINARY_OBJECT_PREFIX + os.slug + "/" + arch + "/" + os.binaryName;
+        Map<String, String> meta;
+        try {
+            meta = storage.statUserMetadata(key);
+        } catch (IOException e) {
+            throw new NotFoundException("No agent release available: " + os.slug + "/" + arch);
+        }
+        Map<String, String> lower = new java.util.HashMap<>();
+        meta.forEach((k, v) -> lower.put(k.toLowerCase(java.util.Locale.ROOT), v));
+        String version = lower.get("version");
+        if (version == null) {
+            throw new NotFoundException("No agent release available: " + os.slug + "/" + arch);
+        }
+        return new AgentReleaseInfo(version, lower.get("sha256"), lower.get("sig"));
+    }
+
+    private static byte[] sha256(byte[] data) {
+        try {
+            return java.security.MessageDigest.getInstance("SHA-256").digest(data);
+        } catch (java.security.NoSuchAlgorithmException e) {
+            throw new IllegalStateException("SHA-256 not available", e);
+        }
     }
 
     private static void validateArch(String arch) {

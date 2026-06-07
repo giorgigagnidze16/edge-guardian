@@ -65,7 +65,8 @@ public class SecurityConfig {
                         .requestMatchers("/actuator/health/**", "/actuator/info").permitAll()
                         .requestMatchers(ApiPaths.AGENT_ENROLL,
                                 ApiPaths.AGENT_INSTALLER,
-                                ApiPaths.AGENT_BINARY).permitAll()
+                                ApiPaths.AGENT_BINARY,
+                                ApiPaths.AGENT_LATEST_VERSION).permitAll()
                         .requestMatchers(ApiPaths.PKI_CRL_PATTERN,
                                 ApiPaths.PKI_CA_BUNDLE,
                                 ApiPaths.PKI_BROKER_CA).permitAll()

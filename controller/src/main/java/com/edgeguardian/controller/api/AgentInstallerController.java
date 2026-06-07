@@ -1,5 +1,6 @@
 package com.edgeguardian.controller.api;
 
+import com.edgeguardian.controller.dto.AgentReleaseInfo;
 import com.edgeguardian.controller.service.AgentInstallerService;
 import com.edgeguardian.controller.service.installer.InstallerFormat;
 import com.edgeguardian.controller.service.installer.Os;
@@ -53,13 +54,20 @@ public class AgentInstallerController {
             .body(new InputStreamResource(stream));
     }
 
+    @GetMapping(ApiPaths.AGENT_LATEST_VERSION_PATH)
+    public AgentReleaseInfo latestVersion(@RequestParam String os,
+                                          @RequestParam(defaultValue = "amd64") String arch) {
+        return installers.latestRelease(Os.of(os), arch);
+    }
+
     @PostMapping(ApiPaths.AGENT_BINARIES_PATH)
     @PreAuthorize("@orgSecurity.hasMinRole(authentication, 'OPERATOR')")
     @ResponseStatus(HttpStatus.CREATED)
     public void publishBinary(@RequestParam String os,
                               @RequestParam(defaultValue = "amd64") String arch,
+                              @RequestParam String version,
                               @RequestPart("ed25519Sig") String ed25519Sig,
                               @RequestPart("file") MultipartFile file) throws IOException {
-        installers.storeBinary(Os.of(os), arch, file.getBytes(), ed25519Sig);
+        installers.storeBinary(Os.of(os), arch, file.getBytes(), version, ed25519Sig);
     }
 }
