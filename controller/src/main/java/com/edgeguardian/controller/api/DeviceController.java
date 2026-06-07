@@ -2,7 +2,6 @@ package com.edgeguardian.controller.api;
 
 import com.edgeguardian.controller.dto.CreateCommandRequest;
 import com.edgeguardian.controller.dto.DeviceDto;
-import com.edgeguardian.controller.dto.SetAutoUpdateRequest;
 import com.edgeguardian.controller.model.CommandExecution;
 import com.edgeguardian.controller.model.Device;
 import com.edgeguardian.controller.model.DeviceCommand;
@@ -26,7 +25,6 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -102,15 +100,6 @@ public class DeviceController {
             end = Instant.now().toString();
         }
         return logService.queryLogs(deviceId, start, end, limit, level, search);
-    }
-
-    @PatchMapping("/{deviceId}/auto-update")
-    @PreAuthorize("@orgSecurity.hasMinRole(authentication, 'OPERATOR')")
-    public DeviceDto setAutoUpdate(@PathVariable String deviceId,
-                                   @RequestBody SetAutoUpdateRequest request,
-                                   @AuthenticationPrincipal TenantPrincipal principal) {
-        Device device = loadForTenant(deviceId, principal);
-        return DeviceDto.from(registry.setAutoUpdate(device, request.enabled()));
     }
 
     @PostMapping("/{deviceId}/commands")

@@ -10,12 +10,10 @@ import {
   deleteDevice,
   updateDeviceManifest,
   updateDeviceLabels,
-  setDeviceAutoUpdate,
   getDeviceTelemetry,
   type TelemetryBucket,
   type TelemetryDataPoint,
 } from "@/lib/api/devices";
-import { Switch } from "@/components/ui/switch";
 import { usePollingHistory } from "@/lib/hooks/use-polling-history";
 import { MetricCard } from "@/components/metric-card";
 import dynamic from "next/dynamic";
@@ -161,15 +159,6 @@ export default function DeviceDetailPage() {
       toast.success("Labels updated");
       queryClient.invalidateQueries({ queryKey: ["device", id] });
       setEditingLabels(false);
-    },
-    onError: (err: Error) => toast.error(err.message),
-  });
-
-  const autoUpdateMutation = useMutation({
-    mutationFn: (enabled: boolean) => setDeviceAutoUpdate(token, id, enabled),
-    onSuccess: (updated) => {
-      toast.success(`Auto-update ${updated.autoUpdate ? "enabled" : "disabled"}`);
-      queryClient.invalidateQueries({ queryKey: ["device", id] });
     },
     onError: (err: Error) => toast.error(err.message),
   });
@@ -440,16 +429,7 @@ export default function DeviceDetailPage() {
                   <dt className="text-muted-foreground">Reconcile Status</dt>
                   <dd><Badge variant="outline">{status?.reconcileStatus ?? "unknown"}</Badge></dd>
                   <dt className="text-muted-foreground">Auto-update</dt>
-                  <dd className="flex items-center gap-2">
-                    <Switch
-                      checked={!!device.autoUpdate}
-                      disabled={!canOpenShell || autoUpdateMutation.isPending}
-                      onCheckedChange={(v) => autoUpdateMutation.mutate(v)}
-                    />
-                    <span className="text-xs text-muted-foreground">
-                      {device.autoUpdate ? "on" : "off"}
-                    </span>
-                  </dd>
+                  <dd><Badge variant="outline">{device.autoUpdate ? "on" : "off"}</Badge></dd>
                 </dl>
               </CardContent>
             </Card>

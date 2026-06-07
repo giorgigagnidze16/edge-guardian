@@ -6,12 +6,10 @@ import com.edgeguardian.controller.model.Device;
 import com.edgeguardian.controller.model.OtaArtifact;
 import com.edgeguardian.controller.model.OtaDeployment;
 import com.edgeguardian.controller.model.OtaDeviceState;
-import com.edgeguardian.controller.model.Organization;
 import com.edgeguardian.controller.model.RolloutStrategy;
 import com.edgeguardian.controller.mqtt.CommandPublisher;
 import com.edgeguardian.controller.repository.DeploymentDeviceStatusRepository;
 import com.edgeguardian.controller.repository.DeviceRepository;
-import com.edgeguardian.controller.repository.OrganizationRepository;
 import com.edgeguardian.controller.repository.OtaArtifactRepository;
 import com.edgeguardian.controller.repository.OtaDeploymentRepository;
 import lombok.RequiredArgsConstructor;
@@ -43,7 +41,6 @@ public class OTAService {
     private final OtaDeploymentRepository deploymentRepository;
     private final DeploymentDeviceStatusRepository deviceStatusRepository;
     private final DeviceRepository deviceRepository;
-    private final OrganizationRepository organizationRepository;
     private final CommandPublisher commandPublisher;
     private final ArtifactStorageService artifactStorageService;
 
@@ -85,40 +82,6 @@ public class OTAService {
                 .filter(d -> matchesLabels(d, labelSelector))
                 .toList();
         return deploy(orgId, artifact, strategy, labelSelector, targetDevices, createdBy);
-    }
-
-    @Transactional
-    public OtaArtifact publishCurrentChannel(Long orgId, Long artifactId, Long createdBy) {
-        var artifact = getArtifact(artifactId, orgId);
-        Organization org = organizationRepository.findById(orgId)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Organization not found"));
-        org.setCurrentAgentArtifactId(artifactId);
-        organizationRepository.save(org);
-
-        for (Device device : deviceRepository.findByOrganizationId(orgId)) {
-            if (!Boolean.TRUE.equals(device.getAutoUpdate())) continue;
-            if (artifact.getVersion().equals(device.getAgentVersion())) continue;
-            artifactForDevice(orgId, artifact, device).ifPresent(target ->
-                    deploy(orgId, target, RolloutStrategy.ROLLING, Map.of(), List.of(device), createdBy));
-        }
-
-        log.info("Channel current set for org {}: {} v{}", orgId, artifact.getName(), artifact.getVersion());
-        return artifact;
-    }
-
-    @Transactional(readOnly = true)
-    public java.util.Optional<OtaArtifact> getCurrentChannel(Long orgId) {
-        return organizationRepository.findById(orgId)
-                .map(Organization::getCurrentAgentArtifactId)
-                .flatMap(artifactRepository::findById);
-    }
-
-    private java.util.Optional<OtaArtifact> artifactForDevice(Long orgId, OtaArtifact reference, Device device) {
-        if (reference.getArchitecture().equals(device.getArchitecture())) {
-            return java.util.Optional.of(reference);
-        }
-        return artifactRepository.findFirstByOrganizationIdAndVersionAndArchitecture(
-                orgId, reference.getVersion(), device.getArchitecture());
     }
 
     private OtaDeployment deploy(Long orgId, OtaArtifact artifact, RolloutStrategy strategy,

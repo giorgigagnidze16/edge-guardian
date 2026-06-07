@@ -96,15 +96,9 @@ public class DeviceRegistry {
     }
 
     @Transactional
-    public Device setAutoUpdate(Device device, boolean enabled) {
-        device.setAutoUpdate(enabled);
-        return deviceRepository.save(device);
-    }
-
-    @Transactional
-    public void seedAutoUpdate(String deviceId, boolean value) {
+    public void recordAutoUpdate(String deviceId, boolean value) {
         deviceRepository.findByDeviceId(deviceId).ifPresent(device -> {
-            if (device.getAutoUpdate() == null) {
+            if (!Boolean.valueOf(value).equals(device.getAutoUpdate())) {
                 device.setAutoUpdate(value);
                 deviceRepository.save(device);
             }

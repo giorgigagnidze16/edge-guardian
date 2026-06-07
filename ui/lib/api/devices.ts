@@ -34,18 +34,6 @@ export async function getDevice(token: string, deviceId: string): Promise<Device
   return apiFetch<Device>(endpoints.devices.byId(deviceId), { token });
 }
 
-export async function setDeviceAutoUpdate(
-  token: string,
-  deviceId: string,
-  enabled: boolean,
-): Promise<Device> {
-  return apiFetch<Device>(endpoints.devices.autoUpdate(deviceId), {
-    method: "PATCH",
-    token,
-    body: JSON.stringify({ enabled }),
-  });
-}
-
 export async function deleteDevice(token: string, deviceId: string): Promise<void> {
   return apiFetch(endpoints.devices.byId(deviceId), { method: "DELETE", token });
 }
