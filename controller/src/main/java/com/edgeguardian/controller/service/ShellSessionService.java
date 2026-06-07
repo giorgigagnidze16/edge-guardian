@@ -3,6 +3,7 @@ package com.edgeguardian.controller.service;
 import com.edgeguardian.controller.config.ShellProperties;
 import com.edgeguardian.controller.model.Device;
 import com.edgeguardian.controller.security.TenantPrincipal;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
@@ -35,6 +36,7 @@ public class ShellSessionService {
     private final Map<String, ShellSession> sessions = new ConcurrentHashMap<>();
     private final Map<String, String> ticketIndex = new ConcurrentHashMap<>();
 
+    @Autowired
     public ShellSessionService(DeviceRegistry deviceRegistry, AuditService auditService, ShellProperties props) {
         this(deviceRegistry, auditService, props, Clock.systemUTC());
     }
