@@ -21,6 +21,7 @@ spec:
         - ui.{{ $base }}
         - keycloak.{{ $base }}
         - controller.{{ $base }}
+        - minio.{{ $base }}
       secretName: {{ .Values.ingress.tls.secretName }}
   {{- end }}
   rules:
@@ -54,4 +55,14 @@ spec:
                 name: controller
                 port:
                   number: 8443
+    - host: minio.{{ $base }}
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: minio
+                port:
+                  number: 9000
 {{- end }}

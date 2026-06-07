@@ -67,6 +67,7 @@ emqx:
   external:
     type: ""
     annotations: {}
+    loadBalancerIP: ""
 
 pki:
   brokerCa:

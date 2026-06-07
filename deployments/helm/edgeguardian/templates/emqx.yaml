@@ -194,6 +194,9 @@ metadata:
 spec:
   type: {{ include "edgeguardian.emqxServiceType" . }}
   {{- $emqxType := include "edgeguardian.emqxServiceType" . }}
+  {{- if and (eq $emqxType "LoadBalancer") .Values.emqx.external.loadBalancerIP }}
+  loadBalancerIP: {{ .Values.emqx.external.loadBalancerIP }}
+  {{- end }}
   ports:
     - name: mqtts
       port: 8883
