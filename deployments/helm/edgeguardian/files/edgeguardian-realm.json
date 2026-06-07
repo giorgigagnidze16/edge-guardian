@@ -5,9 +5,18 @@
   "registrationAllowed": true,
   "loginWithEmailAllowed": true,
   "duplicateEmailsAllowed": false,
-  "verifyEmail": false,
+  "verifyEmail": true,
   "sslRequired": "none",
   "loginTheme": "edgeguardian",
+  "smtpServer": {
+    "host": "mailpit",
+    "port": "1025",
+    "from": "no-reply@edgeguardian.local",
+    "fromDisplayName": "EdgeGuardian",
+    "ssl": "false",
+    "starttls": "false",
+    "auth": "false"
+  },
   "roles": {
     "realm": [
       { "name": "user", "description": "Default user role" },
