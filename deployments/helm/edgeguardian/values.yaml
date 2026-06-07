@@ -79,6 +79,21 @@ pki:
 pkiBootstrap:
   image: alpine/k8s:1.31.1
 
+# Mailpit: a dev SMTP catch-all with a web inbox. Off by default; prod points
+# `mail.host` at a real SMTP relay instead.
+mailpit:
+  enabled: false
+  image: axllent/mailpit:latest
+
+# Outbound email (invitations). Disabled by default - set host + enabled, or
+# enable mailpit for dev. appUrl is the dashboard link placed in emails.
+mail:
+  enabled: false
+  host: ""
+  port: 587
+  from: "EdgeGuardian <no-reply@edgeguardian.local>"
+  appUrl: ""
+
 # existingSecret names are load-bearing: templates reference them as the name
 # field in secretKeyRef blocks. Do not rename without editing templates.
 secrets:

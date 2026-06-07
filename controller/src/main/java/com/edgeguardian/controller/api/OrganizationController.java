@@ -10,11 +10,13 @@ import com.edgeguardian.controller.dto.UpdateMemberRoleRequest;
 import com.edgeguardian.controller.dto.UpdateOrganizationRequest;
 import com.edgeguardian.controller.model.AuditLog;
 import com.edgeguardian.controller.model.OrgRole;
+import com.edgeguardian.controller.model.Organization;
 import com.edgeguardian.controller.model.OrganizationMember;
 import com.edgeguardian.controller.model.User;
 import com.edgeguardian.controller.repository.UserRepository;
 import com.edgeguardian.controller.security.TenantPrincipal;
 import com.edgeguardian.controller.service.AuditService;
+import com.edgeguardian.controller.service.InvitationMailer;
 import com.edgeguardian.controller.service.OrganizationService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.PageRequest;
@@ -47,6 +49,7 @@ public class OrganizationController {
     private final AuditService auditService;
     private final UserRepository userRepository;
     private final OrganizationService organizationService;
+    private final InvitationMailer invitationMailer;
 
     @GetMapping
     @PreAuthorize("@orgSecurity.hasMinRole(authentication, 'VIEWER')")
@@ -88,11 +91,16 @@ public class OrganizationController {
     @ResponseStatus(HttpStatus.CREATED)
     public InviteResultDto inviteMember(@RequestBody InviteMemberRequest request,
                                         @AuthenticationPrincipal TenantPrincipal principal) {
+        OrgRole role = parseRole(request.role());
         var result = organizationService.inviteMember(
-                principal.organizationId(), request.email(), parseRole(request.role()), principal.userId());
+                principal.organizationId(), request.email(), role, principal.userId());
         if (result.wasAdded()) {
             return InviteResultDto.added(MemberDto.from(result.member(), result.user()));
         }
+        // Pending invite: notify the invitee. Best-effort - the invite already exists.
+        String orgName = organizationService.findById(principal.organizationId())
+                .map(Organization::getName).orElse("your organization");
+        invitationMailer.sendInvitation(result.invitation().getEmail(), orgName, role);
         return InviteResultDto.invited(InvitationDto.from(result.invitation()));
     }
 

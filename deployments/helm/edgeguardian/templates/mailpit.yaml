@@ -1,0 +1,53 @@
+{{- if .Values.mailpit.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: mailpit
+  labels:
+    {{- include "edgeguardian.componentLabels" (dict "ctx" . "component" "mailpit") | nindent 4 }}
+spec:
+  type: ClusterIP
+  ports:
+    - name: smtp
+      port: 1025
+      targetPort: smtp
+    - name: http
+      port: 8025
+      targetPort: http
+  selector:
+    {{- include "edgeguardian.componentSelector" (dict "ctx" . "component" "mailpit") | nindent 4 }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mailpit
+  labels:
+    {{- include "edgeguardian.componentLabels" (dict "ctx" . "component" "mailpit") | nindent 4 }}
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      {{- include "edgeguardian.componentSelector" (dict "ctx" . "component" "mailpit") | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "edgeguardian.componentLabels" (dict "ctx" . "component" "mailpit") | nindent 8 }}
+    spec:
+      containers:
+        - name: mailpit
+          image: {{ .Values.mailpit.image | quote }}
+          ports:
+            - name: smtp
+              containerPort: 1025
+            - name: http
+              containerPort: 8025
+          readinessProbe:
+            tcpSocket: { port: http }
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          resources:
+            requests: { cpu: 25m, memory: 64Mi }
+            limits: { memory: 128Mi }
+{{- end }}

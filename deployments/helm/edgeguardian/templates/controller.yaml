@@ -120,6 +120,16 @@ spec:
               value: {{ .Values.controller.agentInstaller.mtlsBrokerUrl | quote }}
             - name: EDGEGUARDIAN_AGENT_INSTALLER_BOOTSTRAP_PASSWORD
               valueFrom: { secretKeyRef: { name: emqx-mqtt-users, key: bootstrap_password } }
+            - name: MAIL_ENABLED
+              value: {{ .Values.mail.enabled | quote }}
+            - name: MAIL_HOST
+              value: {{ .Values.mail.host | quote }}
+            - name: MAIL_PORT
+              value: {{ .Values.mail.port | quote }}
+            - name: MAIL_FROM
+              value: {{ .Values.mail.from | quote }}
+            - name: MAIL_APP_URL
+              value: {{ .Values.mail.appUrl | default (include "edgeguardian.nextAuthUrl" .) | quote }}
           readinessProbe:
             httpGet:
               path: /actuator/health/readiness

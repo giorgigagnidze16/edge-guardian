@@ -86,6 +86,18 @@ emqx:
 pkiBootstrap:
   image: alpine/k8s:1.31.1
 
+mailpit:
+  enabled: true
+  image: axllent/mailpit:latest
+
+mail:
+  enabled: true
+  host: mailpit
+  port: 1025
+  from: "EdgeGuardian <no-reply@edgeguardian.local>"
+  # Dev dashboard runs locally; the invite link points there.
+  appUrl: http://localhost:3000
+
 secrets:
   postgres:    { create: true, existingSecret: postgres-credentials }
   keycloak:    { create: true, existingSecret: keycloak-admin }
