@@ -68,12 +68,34 @@ export default function DeviceTerminalPage() {
         fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
         fontSize: 13,
         cursorBlink: true,
+        scrollback: 2000,
         theme: { background: "#09090b", foreground: "#e4e4e7" },
       });
       fit = new FitAddon();
       term.loadAddon(fit);
       term.open(containerRef.current);
-      fit.fit();
+
+      const encoder = new TextEncoder();
+      const safeFit = () => {
+        try {
+          fit?.fit();
+        } catch {
+        }
+      };
+
+      const sendResize = (rows: number, cols: number) => {
+        if (ws?.readyState === WebSocket.OPEN) {
+          ws.send(JSON.stringify({ type: "resize", rows, cols }));
+        }
+      };
+      term.onData((data) => {
+        if (ws?.readyState === WebSocket.OPEN) ws.send(encoder.encode(data));
+      });
+      term.onResize(({ rows, cols }) => sendResize(rows, cols));
+
+      safeFit();
+      requestAnimationFrame(safeFit);
+      setTimeout(safeFit, 120);
 
       setStatus("connecting");
       let resp: { sessionId: string; wsTicket: string };
@@ -88,19 +110,18 @@ export default function DeviceTerminalPage() {
       }
       if (disposed) return;
 
-      const encoder = new TextEncoder();
       ws = new WebSocket(shellWebSocketUrl(resp.wsTicket));
       ws.binaryType = "arraybuffer";
 
       ws.onopen = () => {
         if (disposed) return;
         setStatus("open");
-        // The POST carried a pre-fit size guess; sync the actual fitted dims.
-        ws?.send(JSON.stringify({ type: "resize", rows: term!.rows, cols: term!.cols }));
+        safeFit();
+        sendResize(term!.rows, term!.cols);
         term?.focus();
       };
       ws.onmessage = (ev) => {
-        if (typeof ev.data === "string") return; // control frames, not terminal output
+        if (typeof ev.data === "string") return;
         term?.write(new Uint8Array(ev.data as ArrayBuffer));
       };
       ws.onclose = () => {
@@ -112,22 +133,7 @@ export default function DeviceTerminalPage() {
         if (!disposed) setStatus("error");
       };
 
-      term.onData((data) => {
-        if (ws?.readyState === WebSocket.OPEN) ws.send(encoder.encode(data));
-      });
-      term.onResize(({ rows, cols }) => {
-        if (ws?.readyState === WebSocket.OPEN) {
-          ws.send(JSON.stringify({ type: "resize", rows, cols }));
-        }
-      });
-
-      resizeObserver = new ResizeObserver(() => {
-        try {
-          fit?.fit();
-        } catch {
-          /* container detached mid-resize */
-        }
-      });
+      resizeObserver = new ResizeObserver(() => safeFit());
       resizeObserver.observe(containerRef.current);
     })();
 
@@ -171,11 +177,10 @@ export default function DeviceTerminalPage() {
         </Card>
       ) : (
         <Card>
-          <CardContent className="p-2">
-            <div
-              ref={containerRef}
-              className="h-[600px] w-full overflow-hidden rounded bg-[#09090b] p-2"
-            />
+          <CardContent className="p-3">
+            <div className="h-[600px] w-full overflow-hidden rounded-md bg-[#09090b] p-3">
+              <div ref={containerRef} className="h-full w-full" />
+            </div>
           </CardContent>
         </Card>
       )}
