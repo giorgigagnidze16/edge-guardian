@@ -1,0 +1,4 @@
+project_id  = "my-gcp-project"
+region      = "europe-west1"
+zone        = "europe-west1-b"
+github_repo = "myorg/edge-guardian"

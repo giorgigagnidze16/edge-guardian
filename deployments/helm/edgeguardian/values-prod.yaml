@@ -80,6 +80,7 @@ emqx:
   external:
     type: LoadBalancer
     annotations: {}
+    loadBalancerIP: ""   # set to the mqtt_ip Terraform output
 
 pkiBootstrap:
   image: alpine/k8s:1.31.1

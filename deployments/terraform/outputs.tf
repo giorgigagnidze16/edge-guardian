@@ -1,0 +1,10 @@
+output "cluster_name" { value = google_container_cluster.primary.name }
+output "zone" { value = var.zone }
+output "region" { value = var.region }
+output "registry" { value = "${var.region}-docker.pkg.dev/${var.project_id}/edgeguardian" }
+output "ingress_ip" { value = google_compute_address.ingress.address }
+output "mqtt_ip" { value = google_compute_address.mqtt.address }
+output "base_domain" { value = "${replace(google_compute_address.ingress.address, ".", "-")}.sslip.io" }
+output "mqtt_host" { value = "mqtt.${replace(google_compute_address.mqtt.address, ".", "-")}.sslip.io" }
+output "deployer_sa_email" { value = google_service_account.deployer.email }
+output "wif_provider" { value = google_iam_workload_identity_pool_provider.github.name }
