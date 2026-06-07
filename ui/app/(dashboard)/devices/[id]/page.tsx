@@ -133,7 +133,6 @@ export default function DeviceDetailPage() {
     }
   }, [device, history]);
 
-  // Delete
   const [deleteOpen, setDeleteOpen] = useState(false);
   const deleteMutation = useMutation({
     mutationFn: () => deleteDevice(token, id),
@@ -144,7 +143,6 @@ export default function DeviceDetailPage() {
     onError: (err: Error) => toast.error(err.message),
   });
 
-  // Labels
   const [editingLabels, setEditingLabels] = useState(false);
   const [newLabelKey, setNewLabelKey] = useState("");
   const [newLabelValue, setNewLabelValue] = useState("");
@@ -227,7 +225,6 @@ export default function DeviceDetailPage() {
     }
   }
 
-  // Manifest state
   const { data: manifest, isLoading: manifestLoading } = useQuery({
     queryKey: ["device-manifest", id],
     queryFn: () => getDeviceManifest(token, id),
@@ -254,7 +251,6 @@ export default function DeviceDetailPage() {
     onError: (err: Error) => toast.error(err.message),
   });
 
-  // Ctrl+S shortcut for manifest
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && e.key === "s") {
@@ -373,7 +369,6 @@ export default function DeviceDetailPage() {
         />
       </div>
 
-      {/* Tabs */}
       <Tabs defaultValue="overview" className="space-y-4">
         <TabsList>
           <TabsTrigger value="overview">Overview</TabsTrigger>
@@ -382,7 +377,6 @@ export default function DeviceDetailPage() {
           <TabsTrigger value="ota">OTA History</TabsTrigger>
         </TabsList>
 
-        {/* Overview Tab */}
         <TabsContent value="overview" className="space-y-4">
           <div className="grid gap-4 lg:grid-cols-2">
             <Card>
@@ -416,7 +410,6 @@ export default function DeviceDetailPage() {
               </CardContent>
             </Card>
 
-            {/* Device info */}
             <Card>
               <CardHeader>
                 <CardTitle>Device Information</CardTitle>
@@ -440,7 +433,6 @@ export default function DeviceDetailPage() {
             </Card>
           </div>
 
-          {/* Labels */}
           <Card>
             <CardHeader className="flex flex-row items-center justify-between">
               <CardTitle>Labels</CardTitle>
@@ -533,7 +525,6 @@ export default function DeviceDetailPage() {
           </Card>
         </TabsContent>
 
-        {/* Logs Tab */}
         <TabsContent value="logs" className="space-y-4">
           <div className="flex flex-wrap items-center gap-2">
             <div className="relative w-64">
@@ -603,7 +594,6 @@ export default function DeviceDetailPage() {
           </Card>
         </TabsContent>
 
-        {/* Manifest Tab */}
         <TabsContent value="manifest" className="space-y-4">
           <div className="flex items-center justify-between">
             <p className="text-sm text-muted-foreground">
@@ -641,7 +631,6 @@ export default function DeviceDetailPage() {
           </Card>
         </TabsContent>
 
-        {/* OTA History Tab */}
         <TabsContent value="ota">
           <Card>
             <CardContent className="p-6">
@@ -653,7 +642,6 @@ export default function DeviceDetailPage() {
         </TabsContent>
       </Tabs>
 
-      {/* Delete dialog */}
       <ConfirmDialog
         open={deleteOpen}
         onOpenChange={setDeleteOpen}

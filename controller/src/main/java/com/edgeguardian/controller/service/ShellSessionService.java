@@ -21,7 +21,7 @@ import java.util.concurrent.ConcurrentHashMap;
 /**
  * Policy and lifecycle for interactive device shell sessions: tenant + online
  * checks, one-time WebSocket tickets, concurrency limits, output routing, and
- * open/close audit. Transport-agnostic so it is unit-testable without sockets.
+ * open/close audit.
  */
 @Service
 public class ShellSessionService {
@@ -49,12 +49,11 @@ public class ShellSessionService {
         this.clock = clock;
     }
 
-    /** One-time WebSocket ticket plus the session id it unlocks. */
     public record ShellTicket(String sessionId, String ticket) {}
 
     /**
      * Reserve a shell session for an online, in-org device and mint a one-time
-     * ticket. Authorization (OPERATOR+) is enforced by the controller.
+     * ticket.
      */
     public ShellTicket create(TenantPrincipal principal, String deviceId, int rows, int cols) {
         Device device = deviceRegistry.findByIdForOrganization(deviceId, principal.organizationId())
@@ -102,7 +101,6 @@ public class ShellSessionService {
         return session;
     }
 
-    /** Route device output bytes to the browser, if the session is live. */
     public void deliverOutput(String sessionId, byte[] data) {
         ShellSession session = sessions.get(sessionId);
         if (session != null && session.sink != null) {
@@ -114,7 +112,6 @@ public class ShellSessionService {
         return Optional.ofNullable(sessions.get(sessionId));
     }
 
-    /** Tear down a session, auditing {@code shell_closed}. Idempotent. */
     public void close(String sessionId, String reason) {
         ShellSession session = sessions.remove(sessionId);
         if (session == null) {
@@ -129,7 +126,9 @@ public class ShellSessionService {
                     session.deviceId(), Map.of(
                             "sessionId", sessionId,
                             "durationMs", durationMs,
-                            "reason", reason == null ? "" : reason));
+                            "reason", reason == null ? "" : reason
+                    )
+            );
         }
     }
 
@@ -146,7 +145,6 @@ public class ShellSessionService {
         return sessions.values().stream().filter(filter).count();
     }
 
-    /** Drop pending sessions whose ticket expired before activation. */
     private void purgeExpired() {
         Instant now = clock.instant();
         sessions.values().removeIf(s -> {
