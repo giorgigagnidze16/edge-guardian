@@ -1,0 +1,96 @@
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-prod
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    env:
+      REGISTRY: ${{ secrets.GCP_REGION }}-docker.pkg.dev/${{ secrets.GCP_PROJECT }}/edgeguardian
+    steps:
+      - uses: actions/checkout@v4
+
+      - id: vars
+        run: echo "sha=$(git rev-parse --short HEAD)" >> "$GITHUB_OUTPUT"
+
+      - uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.WIF_PROVIDER }}
+          service_account: ${{ secrets.DEPLOY_SA }}
+
+      - uses: google-github-actions/setup-gcloud@v2
+
+      - name: Configure Docker for Artifact Registry
+        run: gcloud auth configure-docker ${{ secrets.GCP_REGION }}-docker.pkg.dev --quiet
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - name: Build & push controller image
+        working-directory: controller
+        run: |
+          ./gradlew bootBuildImage --no-daemon --imageName="$REGISTRY/controller:${{ steps.vars.outputs.sha }}"
+          docker push "$REGISTRY/controller:${{ steps.vars.outputs.sha }}"
+
+      - name: Build & push UI image
+        working-directory: ui
+        run: |
+          docker build -t "$REGISTRY/ui:${{ steps.vars.outputs.sha }}" .
+          docker push "$REGISTRY/ui:${{ steps.vars.outputs.sha }}"
+
+      - uses: google-github-actions/get-gke-credentials@v2
+        with:
+          cluster_name: ${{ secrets.GKE_CLUSTER }}
+          location: ${{ secrets.GKE_ZONE }}
+
+      - uses: azure/setup-helm@v4
+
+      - name: Render prod secrets
+        run: |
+          cat > /tmp/values-prod-secrets.yaml <<EOF
+          postgres:
+            credentials:
+              password: "${{ secrets.PG_PASSWORD }}"
+          keycloak:
+            admin:
+              password: "${{ secrets.KEYCLOAK_ADMIN_PASSWORD }}"
+          minio:
+            credentials:
+              password: "${{ secrets.MINIO_PASSWORD }}"
+          grafana:
+            admin:
+              password: "${{ secrets.GRAFANA_PASSWORD }}"
+          emqx:
+            dashboardPassword: "${{ secrets.EMQX_DASHBOARD_PASSWORD }}"
+            mqttUsers:
+              controllerPassword: "${{ secrets.EMQX_CONTROLLER_PASSWORD }}"
+              bootstrapPassword: "${{ secrets.EMQX_BOOTSTRAP_PASSWORD }}"
+          ui:
+            nextAuthSecret: "${{ secrets.NEXTAUTH_SECRET }}"
+            keycloakClientSecret: "${{ secrets.KEYCLOAK_CLIENT_SECRET }}"
+          controller:
+            caEncryptionKey: "${{ secrets.CA_ENCRYPTION_KEY }}"
+          EOF
+
+      - name: Helm upgrade
+        run: |
+          helm upgrade --install edgeguardian deployments/helm/edgeguardian \
+            -n edgeguardian --create-namespace \
+            -f deployments/helm/edgeguardian/values-prod.yaml \
+            -f /tmp/values-prod-secrets.yaml \
+            --set image.tag=${{ steps.vars.outputs.sha }} \
+            --set ui.image.tag=${{ steps.vars.outputs.sha }} \
+            --wait --timeout 20m
