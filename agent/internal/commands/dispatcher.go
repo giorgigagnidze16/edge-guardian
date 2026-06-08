@@ -5,13 +5,10 @@ package commands
 import (
 	"context"
 	"fmt"
-	"os"
-	"strconv"
 	"time"
 
 	"github.com/edgeguardian/agent/internal/comms"
 	"github.com/edgeguardian/agent/internal/model"
-	"github.com/edgeguardian/agent/internal/ota"
 	"go.uber.org/zap"
 )
 
@@ -27,8 +24,8 @@ type Dispatcher struct {
 }
 
 // NewDispatcher creates a new command dispatcher with default handlers.
-func NewDispatcher(updater *ota.Updater, mqttClient *comms.MQTTClient,
-	deviceID, agentVersion string, logger *zap.Logger) *Dispatcher {
+func NewDispatcher(mqttClient *comms.MQTTClient,
+	deviceID string, logger *zap.Logger) *Dispatcher {
 
 	d := &Dispatcher{
 		handlers:   make(map[string]Handler),
@@ -37,7 +34,6 @@ func NewDispatcher(updater *ota.Updater, mqttClient *comms.MQTTClient,
 		logger:     logger,
 	}
 
-	d.Register("ota_update", d.handleOtaUpdate(updater, deviceID, agentVersion))
 	d.Register("restart", d.handleRestart())
 	d.Register("script", d.handleScript())
 
@@ -57,7 +53,9 @@ func (d *Dispatcher) Dispatch(cmd model.Command) error {
 
 	// 1. Execute pre-hook if present.
 	if cmd.Hooks != nil && cmd.Hooks.Pre != nil {
-		result := ExecuteScript(d.contextWithTimeout(cmd), cmd.Hooks.Pre, d.deviceID)
+		ctx, cancel := d.contextWithTimeout(cmd)
+		result := ExecuteScript(ctx, cmd.Hooks.Pre, d.deviceID)
+		cancel()
 		result.CommandID = cmd.ID
 		result.Phase = "pre_hook"
 		d.reportResult(result)
@@ -90,7 +88,9 @@ func (d *Dispatcher) Dispatch(cmd model.Command) error {
 
 	// 3. Execute post-hook if present (always, even on failure).
 	if cmd.Hooks != nil && cmd.Hooks.Post != nil {
-		result := ExecuteScript(d.contextWithTimeout(cmd), cmd.Hooks.Post, d.deviceID)
+		ctx, cancel := d.contextWithTimeout(cmd)
+		result := ExecuteScript(ctx, cmd.Hooks.Post, d.deviceID)
+		cancel()
 		result.CommandID = cmd.ID
 		result.Phase = "post_hook"
 		d.reportResult(result)
@@ -99,12 +99,11 @@ func (d *Dispatcher) Dispatch(cmd model.Command) error {
 	return mainErr
 }
 
-func (d *Dispatcher) contextWithTimeout(cmd model.Command) context.Context {
+func (d *Dispatcher) contextWithTimeout(cmd model.Command) (context.Context, context.CancelFunc) {
 	if cmd.Timeout > 0 {
-		ctx, _ := context.WithTimeout(context.Background(), time.Duration(cmd.Timeout)*time.Second)
-		return ctx
+		return context.WithTimeout(context.Background(), time.Duration(cmd.Timeout)*time.Second)
 	}
-	return context.Background()
+	return context.WithCancel(context.Background())
 }
 
 func (d *Dispatcher) reportResult(result *model.CommandResult) {
@@ -114,74 +113,6 @@ func (d *Dispatcher) reportResult(result *model.CommandResult) {
 }
 
 // --- Built-in handlers ---
-
-func (d *Dispatcher) handleOtaUpdate(updater *ota.Updater,
-	deviceID, agentVersion string) Handler {
-
-	return func(cmd model.Command) error {
-		downloadURL := cmd.Params["download_url"]
-		if downloadURL == "" {
-			d.logger.Info("OTA update command received but no download URL")
-			return nil
-		}
-
-		deploymentID, _ := strconv.ParseInt(cmd.Params["deployment_id"], 10, 64)
-		sha256Hash := cmd.Params["sha256"]
-		ed25519Sig := cmd.Params["ed25519_sig"]
-
-		report := func(state string, progress int, errMsg string) {
-			_ = d.mqttClient.PublishOTAStatus(&model.OTAStatusReport{
-				DeploymentID: deploymentID,
-				DeviceID:     deviceID,
-				State:        state,
-				Progress:     progress,
-				ErrorMessage: errMsg,
-			})
-		}
-
-		fail := func(err error) error {
-			report("failed", 0, err.Error())
-			os.Remove(updater.StagingPath())
-			return err
-		}
-
-		d.logger.Info("starting OTA update",
-			zap.String("artifact", cmd.Params["artifact_name"]),
-			zap.String("version", cmd.Params["artifact_version"]),
-			zap.Int64("deployment_id", deploymentID))
-
-		// 1. Download (presigned URL - full URL, no prefix needed)
-		report("downloading", 10, "")
-		stagingPath, err := updater.Download(downloadURL)
-		if err != nil {
-			return fail(fmt.Errorf("download failed: %w", err))
-		}
-
-		// 2. Verify SHA-256
-		report("verifying", 50, "")
-		if sha256Hash != "" {
-			if err := ota.VerifySHA256(stagingPath, sha256Hash); err != nil {
-				return fail(fmt.Errorf("SHA-256 verification failed: %w", err))
-			}
-		}
-
-		// 3. Verify Ed25519 signature (if provided and key configured)
-		if ed25519Sig != "" && updater.Ed25519PublicKey() != nil {
-			if err := ota.VerifyEd25519(stagingPath, ed25519Sig, updater.Ed25519PublicKey()); err != nil {
-				return fail(fmt.Errorf("Ed25519 verification failed: %w", err))
-			}
-		}
-
-		// 4. Write update marker for post-restart detection
-		report("applying", 80, "")
-		if err := updater.WriteUpdateMarker(deploymentID, agentVersion); err != nil {
-			d.logger.Warn("failed to write update marker", zap.Error(err))
-		}
-
-		// 5. Apply - exits with code 42 for watchdog to swap binary
-		return updater.Apply(stagingPath)
-	}
-}
 
 func (d *Dispatcher) handleRestart() Handler {
 	return func(cmd model.Command) error {
@@ -197,8 +128,9 @@ func (d *Dispatcher) handleScript() Handler {
 			return fmt.Errorf("script command has no script spec")
 		}
 
-		ctx := d.contextWithTimeout(cmd)
+		ctx, cancel := d.contextWithTimeout(cmd)
 		result := ExecuteScript(ctx, cmd.Script, d.deviceID)
+		cancel()
 		result.CommandID = cmd.ID
 		result.Phase = "main"
 		d.reportResult(result)

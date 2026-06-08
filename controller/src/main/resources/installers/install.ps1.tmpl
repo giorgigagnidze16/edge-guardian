@@ -151,6 +151,13 @@ try {
     Write-SubStep ("Controller: {0}:{1}" -f $endpoint.Host, $endpoint.Port)
     Write-SubStep ("MQTT:       {0}" -f $MtlsBrokerUrl)
     Write-SubStep ("Config:     {0}" -f $ConfigPath)
+
+    $autoUpdate = $true
+    if ([Environment]::UserInteractive -and -not [Console]::IsInputRedirected) {
+        $ans = Read-Host "Enable automatic agent updates? [Y/n]"
+        if ($ans -match '^[Nn]') { $autoUpdate = $false }
+    }
+
     $yaml = @"
 device_id: $deviceId
 controller_address: $($endpoint.Host)
@@ -158,6 +165,8 @@ controller_port: $($endpoint.Port)
 data_dir: $dataDirYaml
 reconcile_interval_seconds: 30
 log_level: info
+ota:
+  auto_update: $($autoUpdate.ToString().ToLower())
 auth:
   enrollment_token: $EnrollmentToken
 mqtt:

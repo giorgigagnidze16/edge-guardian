@@ -91,7 +91,7 @@ type PluginState struct {
 // Command represents a controller-issued command for the agent.
 type Command struct {
 	ID        string            `json:"id"`
-	Type      string            `json:"type"` // "ota_update", "restart", "script", or custom
+	Type      string            `json:"type"` // "restart", "script", or custom
 	Params    map[string]string `json:"params,omitempty"`
 	Script    *ScriptSpec       `json:"script,omitempty"`
 	Hooks     *CommandHooks     `json:"hooks,omitempty"`
@@ -183,18 +183,3 @@ type EnrollRequest struct {
 	Sans            []string          `json:"sans,omitempty"`
 }
 
-// OTAStatus is included in heartbeat to report OTA progress.
-type OTAStatus struct {
-	DeploymentID int64  `json:"deploymentId,omitempty"`
-	State        string `json:"state,omitempty"`    // downloading, verifying, applying, completed, failed
-	Progress     int    `json:"progress,omitempty"` // 0-100
-}
-
-// OTAStatusReport is sent to the controller to report OTA update progress.
-type OTAStatusReport struct {
-	DeploymentID int64  `json:"deploymentId"`
-	DeviceID     string `json:"deviceId"`
-	State        string `json:"state"`
-	Progress     int    `json:"progress"`
-	ErrorMessage string `json:"errorMessage,omitempty"`
-}

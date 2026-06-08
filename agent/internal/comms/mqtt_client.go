@@ -250,11 +250,6 @@ func (mc *MQTTClient) RunHeartbeatLoop(ctx context.Context, interval time.Durati
 	}
 }
 
-// PublishOTAStatus reports OTA progress to the controller.
-func (mc *MQTTClient) PublishOTAStatus(report *model.OTAStatusReport) error {
-	return mc.publishWithQueue(mc.topic("ota/status"), report)
-}
-
 // PublishCommandResult sends the outcome of a command execution.
 func (mc *MQTTClient) PublishCommandResult(result *model.CommandResult) error {
 	return mc.publishWithQueue(mc.topic("command/result"), result)

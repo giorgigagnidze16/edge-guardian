@@ -5,13 +5,11 @@ import com.edgeguardian.controller.model.DeviceManifestEntity;
 import com.edgeguardian.controller.model.DeviceStatus;
 import com.edgeguardian.controller.mqtt.payload.HeartbeatPayload;
 import com.edgeguardian.controller.service.DeviceRegistry;
-import com.edgeguardian.controller.service.OTAService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.eclipse.paho.mqttv5.client.MqttClient;
-import org.eclipse.paho.mqttv5.common.MqttException;
 import org.eclipse.paho.mqttv5.common.MqttMessage;
 import org.springframework.stereotype.Component;
 
@@ -34,8 +32,6 @@ public class HeartbeatListener {
     private final MqttSubscriptions subscriptions;
     private final ObjectMapper objectMapper;
     private final DeviceRegistry registry;
-    private final OTAService otaService;
-    private final CommandPublisher commandPublisher;
 
     @PostConstruct
     void register() {
@@ -63,24 +59,9 @@ public class HeartbeatListener {
                 registry.recordAutoUpdate(payload.deviceId(), payload.autoUpdate());
             }
 
-            // Push manifest if device's version is outdated.
             Optional<DeviceManifestEntity> manifest = registry.getManifest(payload.deviceId());
             if (manifest.isPresent() && manifest.get().getVersion() > payload.manifestVersion()) {
                 pushDesiredState(payload.deviceId(), manifest.get());
-            }
-
-            // Publish pending OTA commands.
-            var pendingCommands = otaService.getPendingOtaCommands(payload.deviceId());
-            for (var cmd : pendingCommands) {
-                try {
-                    @SuppressWarnings("unchecked")
-                    var params = (Map<String, String>) cmd.get("params");
-                    commandPublisher.publishCommand(payload.deviceId(),
-                            (String) cmd.get("type"), params);
-                } catch (MqttException e) {
-                    log.error("Failed to publish pending command to device {}: {}",
-                            payload.deviceId(), e.getMessage());
-                }
             }
 
             log.debug("Heartbeat processed for device {}", payload.deviceId());

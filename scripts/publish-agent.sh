@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# Build, sign, upload, and publish an agent version as the org's current channel.
+# Build, sign, and publish every agent platform as the global latest version.
 # Used by .github/workflows/agent-release.yml. Required env:
-#   VERSION             e.g. 0.5.0
+#   VERSION             agent version, e.g. a git short SHA
 #   EG_CONTROLLER_URL   e.g. https://controller.<base>
 #   EG_API_KEY          org API key with OPERATOR+ rights
 #   OTA_SIGNING_KEY     Ed25519 private key in PEM (signs each binary)
@@ -15,8 +15,7 @@ KEY="$(mktemp)"
 printf '%s' "$OTA_SIGNING_KEY" > "$KEY"
 mkdir -p "$OUT"
 
-PLATFORMS=("linux amd64" "linux arm64" "windows amd64" "darwin amd64" "darwin arm64")
-REFERENCE_ID=""
+PLATFORMS=("linux amd64" "linux arm64" "linux arm" "windows amd64" "darwin amd64" "darwin arm64")
 
 for p in "${PLATFORMS[@]}"; do
   read -r os arch <<<"$p"
@@ -29,27 +28,11 @@ for p in "${PLATFORMS[@]}"; do
 
   sig_hex="$(openssl pkeyutl -sign -inkey "$KEY" -rawin -in "$bin" | xxd -p -c 100000 | tr -d '\n')"
 
-  echo ">> upload ${os}/${arch}"
-  id="$(curl -fsS -X POST "$EG_CONTROLLER_URL/api/v1/ota/artifacts" \
+  echo ">> publish ${os}/${arch} version ${VERSION}"
+  curl -fsS -X POST "$EG_CONTROLLER_URL/api/v1/agent/binaries?os=${os}&arch=${arch}&version=${VERSION}" \
     -H "X-API-Key: $EG_API_KEY" \
-    -F "file=@${bin}" \
-    -F "name=edgeguardian-agent" \
-    -F "version=${VERSION}" \
-    -F "architecture=${arch}" \
     -F "ed25519Sig=${sig_hex}" \
-    | sed 's/.*"id":\([0-9]*\).*/\1/')"
-  echo "   artifact id $id"
-  [ "$os" = "linux" ] && [ "$arch" = "amd64" ] && REFERENCE_ID="$id"
-
-  echo ">> refresh install binary ${os}/${arch}"
-  curl -fsS -X POST "$EG_CONTROLLER_URL/api/v1/agent/binaries?os=${os}&arch=${arch}" \
-    -H "X-API-Key: $EG_API_KEY" -F "file=@${bin}" -F "ed25519Sig=${sig_hex}" >/dev/null
+    -F "file=@${bin}" >/dev/null
 done
 
-: "${REFERENCE_ID:?no reference artifact uploaded}"
-echo ">> publish channel current = artifact $REFERENCE_ID"
-curl -fsS -X POST "$EG_CONTROLLER_URL/api/v1/ota/channel/current" \
-  -H "X-API-Key: $EG_API_KEY" -H "Content-Type: application/json" \
-  -d "{\"artifactId\":${REFERENCE_ID}}" >/dev/null
-
-echo "Published agent ${VERSION}."
+echo "Published agent ${VERSION} for ${#PLATFORMS[@]} platforms."

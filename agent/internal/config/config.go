@@ -1,6 +1,7 @@
 package config
 
 import (
+	"fmt"
 	"os"
 
 	"gopkg.in/yaml.v3"
@@ -88,6 +89,13 @@ func DefaultConfig() *Config {
 			Port:     8484,
 		},
 	}
+}
+
+// ControllerBaseURL returns the HTTPS base URL of the controller, used for
+// agent binary self-update (latest-version + binary download). The control
+// plane is otherwise MQTT-only; this is the install/update fetch path.
+func (c *Config) ControllerBaseURL() string {
+	return fmt.Sprintf("https://%s:%d", c.ControllerAddress, c.ControllerPort)
 }
 
 // Load reads a YAML config file and merges it with defaults.

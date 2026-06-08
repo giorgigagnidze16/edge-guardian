@@ -143,7 +143,6 @@ data:
     {allow, all, publish,   ["edgeguardian/device/${clientid}/telemetry"]}.
     {allow, all, publish,   ["edgeguardian/device/${clientid}/logs"]}.
     {allow, all, publish,   ["edgeguardian/device/${clientid}/heartbeat"]}.
-    {allow, all, publish,   ["edgeguardian/device/${clientid}/ota/status"]}.
     {allow, all, publish,   ["edgeguardian/device/${clientid}/command/result"]}.
     {allow, all, publish,   ["edgeguardian/device/${clientid}/cert/request"]}.
     {allow, all, subscribe, ["edgeguardian/device/${clientid}/command"]}.

@@ -60,21 +60,6 @@ export const endpoints = {
     },
   },
 
-  ota: {
-    artifacts: {
-      list: () => path("/ota/artifacts"),
-      create: () => path("/ota/artifacts"),
-      byId: (artifactId: number) => path(`/ota/artifacts/${artifactId}`),
-    },
-    deployments: {
-      list: () => path("/ota/deployments"),
-      create: () => path("/ota/deployments"),
-      byId: (deploymentId: number) => path(`/ota/deployments/${deploymentId}`),
-      devices: (deploymentId: number) =>
-        path(`/ota/deployments/${deploymentId}/devices`),
-    },
-  },
-
   agent: {
     installer: () => path("/agent/installer"),
   },

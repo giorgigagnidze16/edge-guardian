@@ -8,7 +8,6 @@ import { Fragment } from "react";
 const labelMap: Record<string, string> = {
   dashboard: "Dashboard",
   devices: "Devices",
-  ota: "OTA Updates",
   audit: "Audit Log",
   settings: "Settings",
   integrations: "Integrations",

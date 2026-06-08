@@ -4,6 +4,7 @@ package ota
 import (
 	"crypto/ed25519"
 	"crypto/sha256"
+	"crypto/tls"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -34,13 +35,20 @@ type Updater struct {
 
 // NewUpdater creates a new OTA updater. signKeyHex is the hex-encoded Ed25519
 // public key for signature verification (empty string to skip verification).
-func NewUpdater(dataDir, signKeyHex string, logger *zap.Logger) *Updater {
+// insecure disables TLS verification when fetching from the controller; it
+// mirrors the MQTT insecure_skip_verify setting and is for dev only.
+func NewUpdater(dataDir, signKeyHex string, insecure bool, logger *zap.Logger) *Updater {
 	binaryPath, _ := os.Executable()
 	u := &Updater{
 		dataDir:    dataDir,
 		binaryPath: binaryPath,
 		logger:     logger,
-		httpClient: &http.Client{Timeout: 5 * time.Minute},
+		httpClient: &http.Client{
+			Timeout: 5 * time.Minute,
+			Transport: &http.Transport{
+				TLSClientConfig: &tls.Config{InsecureSkipVerify: insecure},
+			},
+		},
 	}
 	if signKeyHex != "" {
 		key, err := hex.DecodeString(signKeyHex)

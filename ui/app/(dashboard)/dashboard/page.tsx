@@ -4,7 +4,6 @@ import { useQuery } from "@tanstack/react-query";
 import { useSession } from "next-auth/react";
 import dynamic from "next/dynamic";
 import { listDevices } from "@/lib/api/devices";
-import { listDeployments } from "@/lib/api/ota";
 import { listAuditLog } from "@/lib/api/organizations";
 import { useOrganization } from "@/lib/hooks/use-organization";
 import { MetricCard } from "@/components/metric-card";
@@ -22,7 +21,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Cpu, Wifi, Upload, Activity, AlertTriangle } from "lucide-react";
+import { Cpu, Wifi, Activity, AlertTriangle } from "lucide-react";
 import Link from "next/link";
 import { formatDistanceToNow } from "date-fns";
 
@@ -51,26 +50,17 @@ export default function DashboardHome() {
     enabled: !!token,
   });
 
-  const { data: deployments, isLoading: deploymentsLoading } = useQuery({
-    queryKey: ["deployments", orgId],
-    queryFn: () => listDeployments(token),
-    enabled: !!token && !!orgId,
-  });
-
   const { data: auditLog } = useQuery({
     queryKey: ["audit-log", orgId],
     queryFn: () => listAuditLog(token, { size: 10 }),
     enabled: !!token && !!orgId,
   });
 
-  const isLoading = devicesLoading || deploymentsLoading;
+  const isLoading = devicesLoading;
   const total = devices?.length ?? 0;
   const online = devices?.filter((d) => d.state === "ONLINE").length ?? 0;
   const degraded = devices?.filter((d) => d.state === "DEGRADED").length ?? 0;
   const offline = devices?.filter((d) => d.state === "OFFLINE").length ?? 0;
-  const activeDeployments =
-    deployments?.filter((d) => d.state !== "COMPLETED" && d.state !== "FAILED")
-      .length ?? 0;
   const avgCpu =
     devices && devices.length > 0
       ? Math.round(
@@ -86,8 +76,6 @@ export default function DashboardHome() {
         (d.status?.cpuUsagePercent ?? 0) > 80 ||
         (d.status?.memoryTotalBytes ? (d.status.memoryUsedBytes / d.status.memoryTotalBytes) * 100 : 0) > 80,
     ) ?? [];
-
-  const recentDeployments = deployments?.slice(0, 5) ?? [];
 
   return (
     <div className="space-y-6">
@@ -123,12 +111,12 @@ export default function DashboardHome() {
               href="/devices"
             />
             <MetricCard
-              title="Active Deployments"
-              value={activeDeployments}
-              description="OTA in progress"
-              icon={Upload}
-              iconColor="text-primary"
-              href="/ota"
+              title="Needs Attention"
+              value={needsAttention.length}
+              description="Degraded or high load"
+              icon={AlertTriangle}
+              iconColor="text-yellow-500"
+              href="/devices"
             />
             <MetricCard
               title="Avg CPU Usage"
@@ -173,52 +161,32 @@ export default function DashboardHome() {
           </CardContent>
         </Card>
 
-        {/* Recent Deployments */}
+        {/* Fleet State */}
         <Card>
           <CardHeader className="flex flex-row items-center justify-between">
-            <CardTitle>Recent Deployments</CardTitle>
+            <CardTitle>Fleet State</CardTitle>
             <Link
-              href="/ota"
+              href="/devices"
               className="text-sm text-primary hover:text-primary/80 transition-colors"
             >
               View all
             </Link>
           </CardHeader>
           <CardContent>
-            {recentDeployments.length > 0 ? (
-              <div className="space-y-3">
-                {recentDeployments.map((d) => (
-                  <div
-                    key={d.id}
-                    className="flex items-center justify-between rounded-lg border border-border/50 p-3 transition-colors hover:bg-muted/30"
-                  >
-                    <div>
-                      <p className="text-sm font-medium">
-                        Deployment #{d.id}
-                      </p>
-                      <p className="text-xs text-muted-foreground">
-                        Strategy: {d.strategy}
-                      </p>
-                    </div>
-                    <Badge
-                      variant={
-                        d.state === "COMPLETED"
-                          ? "default"
-                          : d.state === "FAILED"
-                            ? "destructive"
-                            : "secondary"
-                      }
-                    >
-                      {d.state}
-                    </Badge>
-                  </div>
-                ))}
+            <div className="space-y-3">
+              <div className="flex items-center justify-between rounded-lg border border-border/50 p-3">
+                <span className="text-sm text-muted-foreground">Online</span>
+                <Badge variant="default">{online}</Badge>
               </div>
-            ) : (
-              <p className="text-sm text-muted-foreground">
-                No deployments yet
-              </p>
-            )}
+              <div className="flex items-center justify-between rounded-lg border border-border/50 p-3">
+                <span className="text-sm text-muted-foreground">Degraded</span>
+                <Badge variant="secondary">{degraded}</Badge>
+              </div>
+              <div className="flex items-center justify-between rounded-lg border border-border/50 p-3">
+                <span className="text-sm text-muted-foreground">Offline</span>
+                <Badge variant="destructive">{offline}</Badge>
+              </div>
+            </div>
           </CardContent>
         </Card>
       </div>

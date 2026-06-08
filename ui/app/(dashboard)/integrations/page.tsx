@@ -5,8 +5,7 @@ import { useOrganization } from "@/lib/hooks/use-organization";
 import { PageHeader } from "@/components/page-header";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { Globe, Github, Radio, Terminal, Copy, Check } from "lucide-react";
+import { Globe, Radio, Terminal, Copy, Check } from "lucide-react";
 import { absoluteUrl } from "@/lib/api-client";
 import { endpoints } from "@/lib/api/endpoints";
 
@@ -40,26 +39,9 @@ export default function IntegrationsPage() {
 
   const apiBase = absoluteUrl("") || origin;
   const devicesUrl = `${apiBase}${endpoints.devices.list()}`;
-  const artifactsUrl = `${apiBase}${endpoints.ota.artifacts.create()}`;
 
   const curlExample = `curl -H "Authorization: Bearer YOUR_API_KEY" \\
   ${devicesUrl}`;
-
-  const githubActionsYaml = `name: OTA Deploy
-on:
-  push:
-    tags: ['v*']
-
-jobs:
-  deploy:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Create OTA Artifact
-        run: |
-          curl -X POST ${artifactsUrl} \\
-            -H "Authorization: Bearer \${{ secrets.EDGEGUARDIAN_API_KEY }}" \\
-            -H "Content-Type: application/json" \\
-            -d '{"name":"my-app","version":"\${{ github.ref_name }}","architecture":"arm64"}'`;
 
   const enrollCommand = `curl -sSL https://get.edgeguardian.io | sh -s -- --token YOUR_ENROLLMENT_TOKEN --api ${apiBase}`;
 
@@ -101,26 +83,6 @@ jobs:
                 <CopyButton text={curlExample} id="curl" />
               </div>
             </div>
-          </CardContent>
-        </Card>
-
-        {/* CI/CD */}
-        <Card>
-          <CardHeader>
-            <div className="flex items-center gap-2">
-              <Github className="h-5 w-5" />
-              <CardTitle>CI/CD</CardTitle>
-              <Badge variant="secondary">GitHub Actions</Badge>
-            </div>
-            <CardDescription>
-              Automate OTA deployments from your CI pipeline
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            <pre className="max-h-64 overflow-auto rounded-lg bg-muted/50 border border-border/50 p-3 text-xs font-mono">
-              {githubActionsYaml}
-            </pre>
-            <CopyButton text={githubActionsYaml} id="github-actions" />
           </CardContent>
         </Card>
 

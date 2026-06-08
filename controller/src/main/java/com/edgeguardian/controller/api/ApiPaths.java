@@ -43,7 +43,6 @@ public final class ApiPaths {
     public static final String DEVICES_BASE           = API_V1 + "/devices";
     public static final String TELEMETRY_BASE        = DEVICES_BASE + "/{deviceId}/telemetry";
     public static final String SHELL_WS              = DEVICES_BASE + "/shell/ws";
-    public static final String OTA_BASE               = API_V1 + "/ota";
     public static final String ORGANIZATION_BASE     = API_V1 + "/organization";
     public static final String ME_BASE                = API_V1 + "/me";
     public static final String CERTIFICATES_BASE     = API_V1 + "/certificates";

@@ -5,7 +5,6 @@ import { usePathname } from "next/navigation";
 import {
   LayoutDashboard,
   Cpu,
-  Upload,
   ShieldCheck,
   Settings,
   FileText,
@@ -33,7 +32,6 @@ import { useSession } from "next-auth/react";
 const navigation = [
   { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
   { name: "Devices", href: "/devices", icon: Cpu },
-  { name: "OTA Updates", href: "/ota", icon: Upload },
   { name: "Certificates", href: "/certificates", icon: ShieldCheck },
   { name: "Integrations", href: "/integrations", icon: Plug },
   { name: "Audit Log", href: "/audit", icon: FileText },

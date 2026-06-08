@@ -8,6 +8,7 @@ import com.edgeguardian.controller.model.EnrollmentToken;
 import com.edgeguardian.controller.repository.EnrollmentTokenRepository;
 import com.edgeguardian.controller.service.installer.InstallerFormat;
 import com.edgeguardian.controller.service.installer.Os;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.bouncycastle.crypto.params.Ed25519PublicKeyParameters;
@@ -38,11 +39,13 @@ public class AgentInstallerService {
 
     private static final int CMD_CHUNK_SIZE = 4000;
     private static final String BINARY_OBJECT_PREFIX = "public/agent/";
+    private static final String RELEASE_MANIFEST = "release.json";
     private static final Pattern ARCH = Pattern.compile("^[a-z0-9]{1,16}$");
 
     private final AgentInstallerProperties props;
     private final ArtifactStorageService storage;
     private final EnrollmentTokenRepository tokenRepository;
+    private final ObjectMapper objectMapper;
 
     @Value("${edgeguardian.controller.ota.public-key:}")
     private String otaPublicKey;
@@ -91,30 +94,23 @@ public class AgentInstallerService {
         }
         verifySignature(data, signatureHex);
         String sha256 = HexFormat.of().formatHex(sha256(data));
-        String key = BINARY_OBJECT_PREFIX + os.slug + "/" + arch + "/" + os.binaryName;
-        storage.putRaw(key, new ByteArrayInputStream(data), data.length, Map.of(
-                "version", version.trim(),
-                "sha256", sha256,
-                "sig", signatureHex.trim()));
+        String dir = BINARY_OBJECT_PREFIX + os.slug + "/" + arch + "/";
+        storage.putRaw(dir + os.binaryName, new ByteArrayInputStream(data), data.length);
+
+        AgentReleaseInfo release = new AgentReleaseInfo(version.trim(), sha256, signatureHex.trim());
+        byte[] manifest = objectMapper.writeValueAsBytes(release);
+        storage.putRaw(dir + RELEASE_MANIFEST, new ByteArrayInputStream(manifest), manifest.length);
         log.info("Agent binary published: {}/{} version={}", os.slug, arch, version.trim());
     }
 
     public AgentReleaseInfo latestRelease(Os os, String arch) {
         validateArch(arch);
-        String key = BINARY_OBJECT_PREFIX + os.slug + "/" + arch + "/" + os.binaryName;
-        Map<String, String> meta;
-        try {
-            meta = storage.statUserMetadata(key);
+        String key = BINARY_OBJECT_PREFIX + os.slug + "/" + arch + "/" + RELEASE_MANIFEST;
+        try (InputStream in = storage.load(key)) {
+            return objectMapper.readValue(in, AgentReleaseInfo.class);
         } catch (IOException e) {
             throw new NotFoundException("No agent release available: " + os.slug + "/" + arch);
         }
-        Map<String, String> lower = new java.util.HashMap<>();
-        meta.forEach((k, v) -> lower.put(k.toLowerCase(java.util.Locale.ROOT), v));
-        String version = lower.get("version");
-        if (version == null) {
-            throw new NotFoundException("No agent release available: " + os.slug + "/" + arch);
-        }
-        return new AgentReleaseInfo(version, lower.get("sha256"), lower.get("sig"));
     }
 
     private static byte[] sha256(byte[] data) {

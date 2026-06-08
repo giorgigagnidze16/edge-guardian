@@ -1,6 +1,6 @@
 # EdgeGuardian Controller
 
-Spring Boot backend for EdgeGuardian - fleet management, certificate authority, OTA orchestration, and telemetry ingestion for edge devices. Communicates with agents exclusively via MQTT 5.0.
+Spring Boot backend for EdgeGuardian - fleet management, certificate authority, agent binary distribution, and telemetry ingestion for edge devices. Communicates with agents exclusively via MQTT 5.0 (the agent binary download/self-update path is the one exception, over HTTPS).
 
 ## Tech Stack
 
@@ -12,7 +12,7 @@ Spring Boot backend for EdgeGuardian - fleet management, certificate authority, 
 | MQTT | Eclipse Paho v5 (1.2.5) |
 | Auth | Keycloak OAuth2 / JWT + API keys |
 | PKI | BouncyCastle 1.80 (ECDSA P-256) |
-| Object Storage | MinIO 9.0.0 (OTA artifacts) |
+| Object Storage | MinIO 9.0.0 (agent binaries) |
 | Migrations | Flyway |
 | Observability | OpenTelemetry + Loki |
 
@@ -68,7 +68,6 @@ The controller is the sole bridge between the dashboard and edge devices. All de
 | Device -> Controller | `logs` | Log forwarding to Loki |
 | Device -> Controller | `cert/request` | CSR submission |
 | Device -> Controller | `command/result` | Command execution results |
-| Device -> Controller | `ota/status` | OTA deployment progress |
 | Controller -> Device | `enroll/response` | Enrollment result + device token + CA cert |
 | Controller -> Device | `state/desired` | Manifest push (on heartbeat) |
 | Controller -> Device | `cert/response` | Signed certificate delivery |
@@ -84,9 +83,16 @@ Certificate request security model:
 - **RENEWAL** (valid `currentSerial`) - auto-approved, old cert rotated
 - **Any type + existing valid cert** - **BLOCKED** (compromise detection: all certs revoked, device suspended)
 
-### OTA Updates
+### Agent Binary Distribution & Self-Update
 
-Artifacts are uploaded to MinIO. Deployments target devices via label selectors. Agents download artifacts via presigned S3 URLs. Per-device progress tracking through the full lifecycle: `PENDING -> DOWNLOADING -> VERIFYING -> INSTALLING -> SUCCESS/FAILED/ROLLED_BACK`.
+There is a single global agent binary - the EdgeGuardian product itself, not per-tenant
+software. CI builds, Ed25519-signs, and publishes each platform via
+`POST /api/v1/agent/binaries` (OPERATOR+); the controller verifies the signature and stores
+the binary plus a `release.json` sidecar (version + sha256 + signature) in MinIO under
+`public/agent/<os>/<arch>/`. Devices fetch over HTTPS: installers pull `GET /api/v1/agent/binary`,
+and a running agent polls `GET /api/v1/agent/latest-version` to self-update when its install-time
+`auto_update` flag is on (or on demand via `edge-guardian --update`). The watchdog swaps the
+binary on agent exit code 42 and rolls back on repeated crashes.
 
 ## REST API
 
@@ -102,8 +108,8 @@ does flows over MQTT.
 | `/devices` | JWT (OPERATOR+) | List/get/delete devices, logs, commands |
 | `/devices/{id}/telemetry` | JWT | Raw + hourly aggregated metrics |
 | `/certificates` | JWT (OPERATOR+) | List certs, approve/reject/revoke requests, download CA |
-| `/ota/artifacts` | JWT (OPERATOR+) | Upload/list/delete OTA artifacts |
-| `/ota/deployments` | JWT (OPERATOR+) | Create/list/track OTA deployments |
+| `POST /agent/binaries` | API key (OPERATOR+) | Publish a signed agent binary as the global latest |
+| `GET /agent/binary`, `/agent/latest-version` | public | Agent binary download + self-update manifest |
 | `/organization` | JWT (VIEWER+) | Org CRUD, member management, audit log |
 | `/api-keys` | JWT (ADMIN) | Create/list/revoke API keys |
 
@@ -113,7 +119,7 @@ does flows over MQTT.
 |---------|-------------|
 | V1 | Devices, device manifests |
 | V2 | Users, organizations, members, API keys, enrollment tokens |
-| V3 | OTA artifacts, deployments, device statuses |
+| V3 | OTA artifacts/deployments (removed in V10 - superseded by agent binary distribution) |
 | V4 | TimescaleDB hypertable for telemetry (compression + retention policies) |
 | V5 | Device commands and execution results |
 | V6 | Certificate requests, issued certificates, organization CAs |

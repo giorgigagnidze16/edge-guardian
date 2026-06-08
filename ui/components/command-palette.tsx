@@ -8,7 +8,6 @@ import { useSession } from "next-auth/react";
 import {
   LayoutDashboard,
   Cpu,
-  Upload,
   Settings,
   FileText,
   Plug,
@@ -30,7 +29,6 @@ import { listDevices } from "@/lib/api/devices";
 const pages = [
   { name: "Dashboard", href: "/", icon: LayoutDashboard },
   { name: "Devices", href: "/devices", icon: Cpu },
-  { name: "OTA Updates", href: "/ota", icon: Upload },
   { name: "Integrations", href: "/integrations", icon: Plug },
   { name: "Audit Log", href: "/audit", icon: FileText },
   { name: "Settings", href: "/settings", icon: Settings },

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"io"
 	"net"
 	"net/http"
 	"os"
@@ -28,16 +29,23 @@ import (
 	"go.uber.org/zap/zapcore"
 )
 
-const agentVersion = "0.4.0"
+// agentVersion is overridden at build time via -ldflags "-X main.agentVersion=...".
+// It must stay a var (not const) for the linker flag to take effect.
+var agentVersion = "0.4.0"
 
 func main() {
 	configPath := flag.String("config", config.DefaultConfigPath, "path to agent config file")
+	updateNow := flag.Bool("update", false, "trigger an immediate self-update check on the running agent and exit")
 	flag.Parse()
 
 	cfg, err := config.Load(*configPath)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "failed to load config: %v\n", err)
 		os.Exit(1)
+	}
+
+	if *updateNow {
+		os.Exit(triggerUpdate(cfg))
 	}
 
 	logger := initLogger(cfg)
@@ -47,6 +55,26 @@ func main() {
 		logger.Error("agent terminated with error", zap.Error(err))
 		os.Exit(1)
 	}
+}
+
+// triggerUpdate asks the locally running agent to check the controller for a
+// newer build and apply it. The agent exposes a control endpoint on its health
+// port; this is what `edge-guardian --update` drives.
+func triggerUpdate(cfg *config.Config) int {
+	endpoint := fmt.Sprintf("http://127.0.0.1:%d/update", cfg.Health.Port)
+	resp, err := http.Post(endpoint, "application/json", nil)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "could not reach the running agent at %s: %v\n", endpoint, err)
+		fmt.Fprintln(os.Stderr, "is the EdgeGuardian agent service running?")
+		return 1
+	}
+	defer resp.Body.Close()
+	body, _ := io.ReadAll(resp.Body)
+	fmt.Print(string(body))
+	if resp.StatusCode >= http.StatusBadRequest {
+		return 1
+	}
+	return 0
 }
 
 // runAgent is the OS-agnostic agent lifecycle. It runs until ctx is
@@ -140,8 +168,9 @@ func runAgent(ctx context.Context, cfg *config.Config, logger *zap.Logger) error
 		}
 	})
 
-	updater := ota.NewUpdater(cfg.DataDir, cfg.OTA.SignKey, logger)
-	dispatcher := commands.NewDispatcher(updater, mqttClient, cfg.DeviceID, agentVersion, logger)
+	updater := ota.NewUpdater(cfg.DataDir, cfg.OTA.SignKey, cfg.MQTT.InsecureSkipVerify, logger)
+	puller := ota.NewPuller(updater, cfg.ControllerBaseURL(), agentVersion, logger)
+	dispatcher := commands.NewDispatcher(mqttClient, cfg.DeviceID, logger)
 
 	mqttClient.SetCommandHandler(func(cmd model.Command) {
 		if err := dispatcher.Dispatch(cmd); err != nil {
@@ -155,9 +184,13 @@ func runAgent(ctx context.Context, cfg *config.Config, logger *zap.Logger) error
 	shellManager := wireShell(mqttClient, logger)
 	defer shellManager.CloseAll()
 
-	checkPostUpdateStatus(updater, mqttClient, cfg.DeviceID, logger)
+	checkPostUpdateStatus(updater, logger)
 
-	go startHealthServer(cfg.Health.Port, logger)
+	go startHealthServer(cfg.Health.Port, puller, logger)
+
+	if cfg.OTA.AutoUpdate {
+		go runAutoUpdate(ctx, puller, logger)
+	}
 
 	healthCollector := health.New(cfg.Health.DiskPath)
 	healthCollector.Collect()
@@ -379,21 +412,15 @@ func loadCachedDesiredState(store *storage.Store, rec *reconciler.Reconciler, lo
 	}
 }
 
-// checkPostUpdateStatus reports OTA outcome when an update or rollback marker is found.
-func checkPostUpdateStatus(updater *ota.Updater,
-	mqttClient *comms.MQTTClient, deviceID string, logger *zap.Logger) {
-
+// checkPostUpdateStatus logs the outcome when a self-update or rollback marker
+// is found after restart, then clears it.
+func checkPostUpdateStatus(updater *ota.Updater, logger *zap.Logger) {
 	rollbackExists, _ := updater.ReadRollbackMarker()
 	if rollbackExists {
-		logger.Warn("rollback marker detected - previous OTA update was rolled back")
+		logger.Warn("rollback marker detected - previous agent update was rolled back")
 		if marker, err := updater.ReadUpdateMarker(); err == nil {
-			_ = mqttClient.PublishOTAStatus(&model.OTAStatusReport{
-				DeploymentID: marker.DeploymentID,
-				DeviceID:     deviceID,
-				State:        "rolled_back",
-				Progress:     0,
-				ErrorMessage: "agent crashed after update, rolled back to " + marker.PreviousVersion,
-			})
+			logger.Warn("agent rolled back after a failed update",
+				zap.String("previous_version", marker.PreviousVersion))
 			_ = updater.ClearUpdateMarker()
 		}
 		_ = updater.ClearRollbackMarker()
@@ -404,19 +431,45 @@ func checkPostUpdateStatus(updater *ota.Updater,
 	if err != nil {
 		return
 	}
-	logger.Info("update marker detected - OTA update completed successfully",
-		zap.Int64("deployment_id", marker.DeploymentID),
-		zap.String("previous_version", marker.PreviousVersion))
-	_ = mqttClient.PublishOTAStatus(&model.OTAStatusReport{
-		DeploymentID: marker.DeploymentID,
-		DeviceID:     deviceID,
-		State:        "completed",
-		Progress:     100,
-	})
+	logger.Info("agent self-update completed",
+		zap.String("previous_version", marker.PreviousVersion),
+		zap.String("current_version", agentVersion))
 	_ = updater.ClearUpdateMarker()
 }
 
-func startHealthServer(port int, logger *zap.Logger) {
+// runAutoUpdate periodically asks the controller for a newer agent build and
+// applies it. It runs only when ota.auto_update is enabled in config. A
+// successful update ends the process (exit 42) for the watchdog to swap.
+func runAutoUpdate(ctx context.Context, puller *ota.Puller, logger *zap.Logger) {
+	const interval = 30 * time.Minute
+	logger.Info("auto-update enabled", zap.Duration("interval", interval))
+
+	check := func() {
+		if _, err := puller.CheckAndApply(); err != nil {
+			logger.Warn("auto-update check failed", zap.Error(err))
+		}
+	}
+
+	select {
+	case <-ctx.Done():
+		return
+	case <-time.After(1 * time.Minute):
+		check()
+	}
+
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			check()
+		}
+	}
+}
+
+func startHealthServer(port int, puller *ota.Puller, logger *zap.Logger) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
@@ -424,6 +477,30 @@ func startHealthServer(port int, logger *zap.Logger) {
 			"status":  "ok",
 			"version": agentVersion,
 		})
+	})
+	mux.HandleFunc("/update", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			http.Error(w, "method not allowed\n", http.StatusMethodNotAllowed)
+			return
+		}
+		rel, err := puller.LatestRelease()
+		if err != nil {
+			http.Error(w, "update check failed: "+err.Error()+"\n", http.StatusBadGateway)
+			return
+		}
+		if !puller.Outdated(rel) {
+			fmt.Fprintf(w, "already up to date (%s)\n", agentVersion)
+			return
+		}
+		fmt.Fprintf(w, "updating %s -> %s\n", agentVersion, rel.Version)
+		if f, ok := w.(http.Flusher); ok {
+			f.Flush()
+		}
+		go func() {
+			if err := puller.Apply(rel); err != nil {
+				logger.Error("manual update failed", zap.Error(err))
+			}
+		}()
 	})
 
 	addr := fmt.Sprintf("127.0.0.1:%d", port)

@@ -4,13 +4,9 @@ import com.edgeguardian.controller.AbstractIntegrationTest;
 import com.edgeguardian.controller.model.ApiKey;
 import com.edgeguardian.controller.model.EnrollmentToken;
 import com.edgeguardian.controller.model.Organization;
-import com.edgeguardian.controller.model.OtaArtifact;
-import com.edgeguardian.controller.model.OtaDeployment;
 import com.edgeguardian.controller.repository.ApiKeyRepository;
 import com.edgeguardian.controller.repository.EnrollmentTokenRepository;
 import com.edgeguardian.controller.repository.OrganizationRepository;
-import com.edgeguardian.controller.repository.OtaArtifactRepository;
-import com.edgeguardian.controller.repository.OtaDeploymentRepository;
 import com.edgeguardian.controller.service.pki.OrganizationCaStore;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -23,13 +19,11 @@ import org.springframework.context.annotation.Import;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.server.ResponseStatusException;
 
-import java.util.Map;
-
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 @Import({
-        EnrollmentService.class, ApiKeyService.class, OTAService.class,
+        EnrollmentService.class, ApiKeyService.class,
         DeviceRegistry.class, CertificateService.class, CertificateAuthorityService.class,
         OrganizationCaStore.class, CaKeyEncryption.class, AuditService.class, CrlService.class,
         CrossTenantAccessTest.Mocks.class,
@@ -41,17 +35,11 @@ class CrossTenantAccessTest extends AbstractIntegrationTest {
     @Autowired
     private ApiKeyService apiKeyService;
     @Autowired
-    private OTAService otaService;
-    @Autowired
     private OrganizationRepository organizationRepository;
     @Autowired
     private EnrollmentTokenRepository enrollmentTokenRepository;
     @Autowired
     private ApiKeyRepository apiKeyRepository;
-    @Autowired
-    private OtaArtifactRepository artifactRepository;
-    @Autowired
-    private OtaDeploymentRepository deploymentRepository;
 
     private Long orgA;
     private Long orgB;
@@ -66,8 +54,6 @@ class CrossTenantAccessTest extends AbstractIntegrationTest {
 
     @AfterEach
     void tearDown() {
-        deploymentRepository.deleteAll();
-        artifactRepository.deleteAll();
         apiKeyRepository.deleteAll();
         enrollmentTokenRepository.deleteAll();
         organizationRepository.deleteAll();
@@ -94,39 +80,6 @@ class CrossTenantAccessTest extends AbstractIntegrationTest {
 
         ApiKey reloaded = apiKeyRepository.findById(orgBKey.getId()).orElseThrow();
         assertThat(reloaded.isRevoked()).isFalse();
-    }
-
-    @Test
-    void getArtifact_crossOrg_returns404() {
-        OtaArtifact orgBArtifact = artifactRepository.save(OtaArtifact.builder()
-                .organizationId(orgB).name("agent").version("1.0.0").architecture("arm64")
-                .size(1L).sha256("deadbeef").build());
-
-        assertNotFound(() -> otaService.getArtifact(orgBArtifact.getId(), orgA));
-    }
-
-    @Test
-    void deleteArtifact_crossOrg_returns404() {
-        OtaArtifact orgBArtifact = artifactRepository.save(OtaArtifact.builder()
-                .organizationId(orgB).name("agent").version("1.0.0").architecture("arm64")
-                .size(1L).sha256("deadbeef").build());
-
-        assertNotFound(() -> otaService.deleteArtifact(orgBArtifact.getId(), orgA));
-
-        assertThat(artifactRepository.findById(orgBArtifact.getId())).isPresent();
-    }
-
-    @Test
-    void getDeployment_crossOrg_returns404() {
-        OtaArtifact orgBArtifact = artifactRepository.save(OtaArtifact.builder()
-                .organizationId(orgB).name("agent").version("1.0.0").architecture("arm64")
-                .size(1L).sha256("deadbeef").build());
-        OtaDeployment orgBDeployment = deploymentRepository.save(OtaDeployment.builder()
-                .organizationId(orgB).artifactId(orgBArtifact.getId())
-                .labelSelector(Map.of()).build());
-
-        assertNotFound(() -> otaService.getDeployment(orgBDeployment.getId(), orgA));
-        assertNotFound(() -> otaService.getDeploymentDeviceStatuses(orgBDeployment.getId(), orgA));
     }
 
     private void assertNotFound(ThrowingRunnable action) {

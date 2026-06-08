@@ -33,7 +33,7 @@ src/main/java/com/edgeguardian/controller/
 src/main/resources/
 ├── application.yaml                  # Base config (port 8443, virtual threads)
 ├── application-{profile}.yaml        # Per-concern configs (db, mqtt, security, ca, storage, logging, monitoring, local)
-└── db/migration/V{1-6}__*.sql        # Flyway migrations (core, ota, commands, pki, telemetry, seed_default_org)
+└── db/migration/V{1-10}__*.sql       # Flyway migrations (core, ota[dropped by V10], commands, pki, telemetry, seed, invitations, agent_channel[dropped by V9])
 
 src/test/java/com/edgeguardian/controller/
 ├── AbstractIntegrationTest.java      # Testcontainers base (TimescaleDB)
@@ -58,8 +58,8 @@ All API responses use records from the `dto/` package. Entities in `model/` are 
 
 ### Security
 `config/SecurityConfig.java` defines the HTTP auth model (agent data-plane comms are MQTT-only):
-- **`permitAll`** - `/actuator/health/**`, `/actuator/info`, `/api/v1/agent/enroll` (bootstrap-credentials auth happens at the broker), and the public PKI endpoints: `/api/v1/pki/crl/**`, `/api/v1/pki/ca-bundle`, `/api/v1/pki/broker-ca`
-- **Authenticated** - everything else under `/api/v1/**` via JWT (Keycloak OAuth2) or `X-API-Key` header (ApiKeyAuthenticationFilter). `DeviceTokenAuthFilter` is registered but used only by legacy callers.
+- **`permitAll`** - `/actuator/health/**`, `/actuator/info`, `/api/v1/agent/enroll` (bootstrap-credentials auth happens at the broker), the agent binary fetch/self-update endpoints (`/api/v1/agent/installer`, `/api/v1/agent/binary`, `/api/v1/agent/latest-version`), and the public PKI endpoints: `/api/v1/pki/crl/**`, `/api/v1/pki/ca-bundle`, `/api/v1/pki/broker-ca`
+- **Authenticated** - everything else under `/api/v1/**` via JWT (Keycloak OAuth2) or `X-API-Key` header (ApiKeyAuthenticationFilter). `POST /api/v1/agent/binaries` (CI publishing the signed global agent binary) is OPERATOR+ via API key. `DeviceTokenAuthFilter` is registered but used only by legacy callers.
 - **`denyAll`** - any other path. Intentional backstop: new routes outside `/api/v1/` must opt in to a rule.
 - Authorization uses `@PreAuthorize("@orgSecurity.hasMinRole(authentication, 'ROLE')")` with hierarchy: VIEWER < OPERATOR < ADMIN < OWNER. Org-scoped repositories expose `findByIdForOrganization(...)` - cross-tenant access returns 404 rather than 403.
 
@@ -90,7 +90,7 @@ Every resource is scoped to an `organizationId`. The `TenantPrincipal` record ca
 
 ### Database
 - PostgreSQL 16 with TimescaleDB extension for the telemetry hypertable
-- Flyway migrations in `db/migration/`: `V1__core` (devices, auth/tenancy, API keys, enrollment tokens), `V2__ota`, `V3__commands`, `V4__pki`, `V5__telemetry` (hypertable + compression + retention), `V6__seed_default_org`
+- Flyway migrations in `db/migration/`: `V1__core` (devices, auth/tenancy, API keys, enrollment tokens), `V2__ota` (dropped by `V10__drop_ota` - old push-based OTA, superseded by global agent binary distribution), `V3__commands`, `V4__pki`, `V5__telemetry` (hypertable + compression + retention), `V6__seed_default_org`
 - Unique constraints: `devices.device_id`, `users.keycloak_id`, `users.email`, `organizations.slug`, `device_tokens.device_id`
 
 ## What NOT to Do
