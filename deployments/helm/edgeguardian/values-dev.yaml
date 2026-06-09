@@ -94,7 +94,7 @@ mail:
   enabled: true
   host: mailpit
   port: 1025
-  from: "EdgeGuardian <no-reply@edgeguardian.local>"
+  from: "no-reply@edgeguardian.local"
   # Dev dashboard runs locally; the invite link points there.
   appUrl: http://localhost:3000
 

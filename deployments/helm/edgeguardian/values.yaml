@@ -92,7 +92,7 @@ mail:
   enabled: false
   host: ""
   port: 587
-  from: "EdgeGuardian <no-reply@edgeguardian.local>"
+  from: "no-reply@edgeguardian.local"
   username: ""
   password: ""
   auth: false
