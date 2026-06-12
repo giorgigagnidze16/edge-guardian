@@ -30,6 +30,7 @@ controller:
   crlUrl: http://edgeguardian-controller:8443/api/v1/pki/crl
   keycloakIssuerUri: http://keycloak:9090/kc/realms/edgeguardian
   caEncryptionKey: nPdWJaI6QlJ899m5lSvYmWY7UnO175V1FnGqZRL+tgc=
+  agentPublishToken: dev-publish-token
   agentInstaller:
     # URLs baked into the installer script; must be reachable from the host where
     # the agent will run. For minikube + docker driver on Windows/Mac the minikube
@@ -85,6 +86,11 @@ emqx:
 
 pkiBootstrap:
   image: alpine/k8s:1.31.1
+
+# Dev-only signing keypair; private half lives in ota-signing-dev.pem at the
+# repo root (gitignored). Real releases sign with the CI secret instead.
+ota:
+  publicKey: 26f4fc99ef6f0b58f4c84654d06eea24770adfe0b95d349f2b8ca1ba734da35a
 
 mailpit:
   enabled: true

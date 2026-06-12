@@ -25,6 +25,6 @@ jobs:
         env:
           VERSION: ${{ steps.vars.outputs.version }}
           EG_CONTROLLER_URL: ${{ secrets.EG_CONTROLLER_URL }}
-          EG_API_KEY: ${{ secrets.EG_API_KEY }}
+          EG_PUBLISH_TOKEN: ${{ secrets.EG_PUBLISH_TOKEN }}
           OTA_SIGNING_KEY: ${{ secrets.OTA_SIGNING_KEY }}
         run: ./scripts/publish-agent.sh

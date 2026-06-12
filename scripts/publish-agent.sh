@@ -3,11 +3,11 @@
 # Used by .github/workflows/agent-release.yml. Required env:
 #   VERSION             agent version, e.g. a git short SHA
 #   EG_CONTROLLER_URL   e.g. https://controller.<base>
-#   EG_API_KEY          org API key with OPERATOR+ rights
+#   EG_PUBLISH_TOKEN    platform deploy token (controller.agentPublishToken)
 #   OTA_SIGNING_KEY     Ed25519 private key in PEM (signs each binary)
 set -euo pipefail
 
-: "${VERSION:?}" "${EG_CONTROLLER_URL:?}" "${EG_API_KEY:?}" "${OTA_SIGNING_KEY:?}"
+: "${VERSION:?}" "${EG_CONTROLLER_URL:?}" "${EG_PUBLISH_TOKEN:?}" "${OTA_SIGNING_KEY:?}"
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 OUT="$ROOT/build/release"
@@ -30,7 +30,7 @@ for p in "${PLATFORMS[@]}"; do
 
   echo ">> publish ${os}/${arch} version ${VERSION}"
   curl -fsS -X POST "$EG_CONTROLLER_URL/api/v1/agent/binaries?os=${os}&arch=${arch}&version=${VERSION}" \
-    -H "X-API-Key: $EG_API_KEY" \
+    -H "X-Publish-Token: $EG_PUBLISH_TOKEN" \
     -F "ed25519Sig=${sig_hex}" \
     -F "file=@${bin}" >/dev/null
 done

@@ -58,8 +58,8 @@ All API responses use records from the `dto/` package. Entities in `model/` are 
 
 ### Security
 `config/SecurityConfig.java` defines the HTTP auth model (agent data-plane comms are MQTT-only):
-- **`permitAll`** - `/actuator/health/**`, `/actuator/info`, `/api/v1/agent/enroll` (bootstrap-credentials auth happens at the broker), the agent binary fetch/self-update endpoints (`/api/v1/agent/installer`, `/api/v1/agent/binary`, `/api/v1/agent/latest-version`), and the public PKI endpoints: `/api/v1/pki/crl/**`, `/api/v1/pki/ca-bundle`, `/api/v1/pki/broker-ca`
-- **Authenticated** - everything else under `/api/v1/**` via JWT (Keycloak OAuth2) or `X-API-Key` header (ApiKeyAuthenticationFilter). `POST /api/v1/agent/binaries` (CI publishing the signed global agent binary) is OPERATOR+ via API key. `DeviceTokenAuthFilter` is registered but used only by legacy callers.
+- **`permitAll`** - `/actuator/health/**`, `/actuator/info`, `/api/v1/agent/enroll` (bootstrap-credentials auth happens at the broker), the agent binary fetch/self-update endpoints (`/api/v1/agent/installer`, `/api/v1/agent/binary`, `/api/v1/agent/latest-version`), `POST /api/v1/agent/binaries` (self-authenticated: requires the `X-Publish-Token` platform deploy token, `controller.agentPublishToken` in Helm - tenant credentials deliberately cannot publish the global agent binary; the Ed25519 signature check remains the authority on content), and the public PKI endpoints: `/api/v1/pki/crl/**`, `/api/v1/pki/ca-bundle`, `/api/v1/pki/broker-ca`
+- **Authenticated** - everything else under `/api/v1/**` via JWT (Keycloak OAuth2) or `X-API-Key` header (ApiKeyAuthenticationFilter; API keys act as OPERATOR within their own organization). `DeviceTokenAuthFilter` is registered but used only by legacy callers.
 - **`denyAll`** - any other path. Intentional backstop: new routes outside `/api/v1/` must opt in to a rule.
 - Authorization uses `@PreAuthorize("@orgSecurity.hasMinRole(authentication, 'ROLE')")` with hierarchy: VIEWER < OPERATOR < ADMIN < OWNER. Org-scoped repositories expose `findByIdForOrganization(...)` - cross-tenant access returns 404 rather than 403.
 

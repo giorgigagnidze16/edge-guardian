@@ -9,6 +9,7 @@ type: Opaque
 stringData:
   ca_encryption_key: {{ .Values.controller.caEncryptionKey | default "" | quote }}
   mail_password: {{ .Values.mail.password | default "" | quote }}
+  agent_publish_token: {{ .Values.controller.agentPublishToken | default "" | quote }}
 ---
 {{- end }}
 apiVersion: v1
@@ -113,6 +114,8 @@ spec:
               value: /pki/broker-ca/ca.crt
             - name: CA_ENCRYPTION_KEY
               valueFrom: { secretKeyRef: { name: controller-secrets, key: ca_encryption_key } }
+            - name: AGENT_PUBLISH_TOKEN
+              valueFrom: { secretKeyRef: { name: {{ .Values.secrets.controller.existingSecret }}, key: agent_publish_token } }
             - name: EDGEGUARDIAN_AGENT_INSTALLER_CONTROLLER_URL
               value: {{ coalesce .Values.controller.agentInstaller.controllerUrl (include "edgeguardian.controllerPublicUrl" .) | quote }}
             - name: EDGEGUARDIAN_AGENT_INSTALLER_BROKER_URL

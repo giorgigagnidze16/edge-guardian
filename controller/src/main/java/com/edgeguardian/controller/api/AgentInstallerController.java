@@ -12,9 +12,9 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RequestPart;
@@ -61,13 +61,14 @@ public class AgentInstallerController {
     }
 
     @PostMapping(ApiPaths.AGENT_BINARIES_PATH)
-    @PreAuthorize("@orgSecurity.hasMinRole(authentication, 'OPERATOR')")
     @ResponseStatus(HttpStatus.CREATED)
-    public void publishBinary(@RequestParam String os,
+    public void publishBinary(@RequestHeader(value = "X-Publish-Token", required = false) String publishToken,
+                              @RequestParam String os,
                               @RequestParam(defaultValue = "amd64") String arch,
                               @RequestParam String version,
                               @RequestPart("ed25519Sig") String ed25519Sig,
                               @RequestPart("file") MultipartFile file) throws IOException {
+        installers.requirePublishToken(publishToken);
         installers.storeBinary(Os.of(os), arch, file.getBytes(), version, ed25519Sig);
     }
 }

@@ -1,6 +1,7 @@
 package com.edgeguardian.controller.security;
 
 import com.edgeguardian.controller.model.ApiKey;
+import com.edgeguardian.controller.model.OrgRole;
 import com.edgeguardian.controller.repository.ApiKeyRepository;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
@@ -47,7 +48,8 @@ public class ApiKeyAuthenticationFilter extends OncePerRequestFilter {
                 .filter(ApiKey::isValid)
                 .ifPresent(key -> {
                     var principal = new TenantPrincipal(
-                            key.getOrganizationId(), null, "apikey:" + key.getKeyPrefix());
+                            key.getOrganizationId(), null, "apikey:" + key.getKeyPrefix(),
+                            OrgRole.OPERATOR);
                     var auth = UsernamePasswordAuthenticationToken.authenticated(
                             principal, null, List.of(new SimpleGrantedAuthority("ROLE_API_KEY")));
                     SecurityContextHolder.getContext().setAuthentication(auth);

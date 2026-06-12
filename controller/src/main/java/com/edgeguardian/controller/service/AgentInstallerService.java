@@ -26,6 +26,7 @@ import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
 import java.util.Base64;
 import java.util.HexFormat;
 import java.util.Map;
@@ -49,6 +50,9 @@ public class AgentInstallerService {
 
     @Value("${edgeguardian.controller.ota.public-key:}")
     private String otaPublicKey;
+
+    @Value("${edgeguardian.controller.agent-installer.publish-token:}")
+    private String publishToken;
 
     private static String stripTrailingNewline(String s) {
         if (s == null || s.isEmpty()) {
@@ -86,6 +90,24 @@ public class AgentInstallerService {
         }
     }
 
+    /**
+     * Publishing the global agent binary is a platform-owner operation, gated by a
+     * dedicated deploy token held only by the release pipeline - never by tenant
+     * credentials. The Ed25519 signature check in {@link #storeBinary} remains the
+     * authority on binary content; this token only authenticates the caller.
+     */
+    public void requirePublishToken(String provided) {
+        if (publishToken == null || publishToken.isBlank()) {
+            throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE,
+                    "Binary publishing is disabled: no publish token configured");
+        }
+        byte[] expected = publishToken.getBytes(StandardCharsets.UTF_8);
+        byte[] actual = provided == null ? new byte[0] : provided.getBytes(StandardCharsets.UTF_8);
+        if (!MessageDigest.isEqual(expected, actual)) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Invalid publish token");
+        }
+    }
+
     public void storeBinary(Os os, String arch, byte[] data, String version, String signatureHex)
             throws IOException {
         validateArch(arch);
@@ -115,7 +137,7 @@ public class AgentInstallerService {
 
     private static byte[] sha256(byte[] data) {
         try {
-            return java.security.MessageDigest.getInstance("SHA-256").digest(data);
+            return MessageDigest.getInstance("SHA-256").digest(data);
         } catch (java.security.NoSuchAlgorithmException e) {
             throw new IllegalStateException("SHA-256 not available", e);
         }

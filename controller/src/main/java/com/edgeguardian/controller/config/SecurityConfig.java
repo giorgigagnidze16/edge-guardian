@@ -32,9 +32,9 @@ import org.springframework.security.web.SecurityFilterChain;
 @RequiredArgsConstructor
 public class SecurityConfig {
 
-    private final ApiKeyAuthenticationFilter apiKeyAuthenticationFilter;
-    private final DeviceTokenAuthFilter deviceTokenAuthFilter;
     private final JwtTenantConverter jwtTenantConverter;
+    private final DeviceTokenAuthFilter deviceTokenAuthFilter;
+    private final ApiKeyAuthenticationFilter apiKeyAuthenticationFilter;
 
     @Value("${spring.security.oauth2.resourceserver.jwt.issuer-uri}")
     private String expectedIssuer;
@@ -67,10 +67,12 @@ public class SecurityConfig {
                                 ApiPaths.AGENT_INSTALLER,
                                 ApiPaths.AGENT_BINARY,
                                 ApiPaths.AGENT_LATEST_VERSION).permitAll()
+                        // Platform-owner operation: authenticated by the X-Publish-Token
+                        // deploy token inside the endpoint, never by tenant credentials.
+                        .requestMatchers(ApiPaths.AGENT_BINARIES).permitAll()
                         .requestMatchers(ApiPaths.PKI_CRL_PATTERN,
                                 ApiPaths.PKI_CA_BUNDLE,
                                 ApiPaths.PKI_BROKER_CA).permitAll()
-                        // Shell WebSocket: authenticated by a one-time ticket at the handshake.
                         .requestMatchers(ApiPaths.SHELL_WS).permitAll()
                         .requestMatchers(ApiPaths.API_V1_PATTERN).authenticated()
                         .anyRequest().denyAll()
