@@ -19,5 +19,5 @@ export default auth((req) => {
 
 export const config = {
   // Only protect app routes - landing page (/), auth, api, and static files are public
-  matcher: ["/(dashboard|devices|ota|integrations|audit|settings)(.*)"],
+  matcher: ["/(dashboard|devices|certificates|audit|settings)(.*)"],
 };

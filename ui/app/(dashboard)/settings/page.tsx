@@ -60,7 +60,7 @@ import {
 import { Skeleton } from "@/components/ui/skeleton";
 import { EmptyState } from "@/components/empty-state";
 import { Users, Key, KeyRound, Plus, Copy, Trash2, Check, Download, Mail } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { formatDistanceToNow } from "date-fns";
 import { toast } from "sonner";
 
@@ -214,6 +214,11 @@ export default function SettingsPage() {
   const [createdKey, setCreatedKey] = useState<string | null>(null);
   const [deleteKeyTarget, setDeleteKeyTarget] = useState<ApiKeyEntry | null>(null);
   const [copied, setCopied] = useState(false);
+  const [usageCopied, setUsageCopied] = useState(false);
+
+  const [origin, setOrigin] = useState("");
+  useEffect(() => setOrigin(window.location.origin), []);
+  const apiKeyUsageExample = `curl -H "X-API-Key: YOUR_API_KEY" \\\n  ${origin}/api/v1/devices`;
 
   const createApiKeyMutation = useMutation({
     mutationFn: () => createApiKey(token, { name: apiKeyName }),
@@ -608,6 +613,30 @@ export default function SettingsPage() {
                     )}
                   </TableBody>
                 </Table>
+              </div>
+              <div>
+                <div className="mb-1 flex items-center justify-between">
+                  <p className="text-xs font-medium text-muted-foreground">Usage</p>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-7 w-7"
+                    onClick={() => {
+                      navigator.clipboard.writeText(apiKeyUsageExample);
+                      setUsageCopied(true);
+                      setTimeout(() => setUsageCopied(false), 2000);
+                    }}
+                  >
+                    {usageCopied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
+                  </Button>
+                </div>
+                <pre className="rounded-lg bg-muted/50 border border-border/50 p-3 text-xs font-mono overflow-x-auto">
+                  {apiKeyUsageExample}
+                </pre>
+                <p className="mt-2 text-xs text-muted-foreground">
+                  Send the key in the <code className="font-mono">X-API-Key</code> header. Keys act at
+                  OPERATOR level, scoped to this organization.
+                </p>
               </div>
             </CardContent>
           </Card>

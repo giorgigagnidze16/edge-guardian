@@ -10,7 +10,6 @@ import {
   Cpu,
   Settings,
   FileText,
-  Plug,
   Moon,
   Sun,
   Search,
@@ -29,7 +28,6 @@ import { listDevices } from "@/lib/api/devices";
 const pages = [
   { name: "Dashboard", href: "/", icon: LayoutDashboard },
   { name: "Devices", href: "/devices", icon: Cpu },
-  { name: "Integrations", href: "/integrations", icon: Plug },
   { name: "Audit Log", href: "/audit", icon: FileText },
   { name: "Settings", href: "/settings", icon: Settings },
 ];

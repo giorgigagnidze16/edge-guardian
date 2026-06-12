@@ -10,7 +10,6 @@ const labelMap: Record<string, string> = {
   devices: "Devices",
   audit: "Audit Log",
   settings: "Settings",
-  integrations: "Integrations",
   logs: "Logs",
   manifest: "Manifest",
 };
