@@ -3,6 +3,7 @@
 import { Sidebar } from "@/components/sidebar";
 import { Breadcrumbs } from "@/components/breadcrumbs";
 import { ErrorBoundary } from "@/components/error-boundary";
+import { RefreshErrorGuard } from "@/components/refresh-error-guard";
 import { Button } from "@/components/ui/button";
 import { Menu } from "lucide-react";
 import { useState, lazy, Suspense } from "react";
@@ -47,6 +48,7 @@ export default function DashboardLayout({
 }) {
   return (
     <div className="flex h-screen ambient-glow">
+      <RefreshErrorGuard />
       {/* Desktop sidebar */}
       <div className="hidden md:flex">
         <Sidebar />

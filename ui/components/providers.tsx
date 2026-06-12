@@ -1,7 +1,7 @@
 "use client";
 
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { SessionProvider, useSession, signIn } from "next-auth/react";
+import { SessionProvider } from "next-auth/react";
 import { ThemeProvider, useTheme } from "next-themes";
 import { useState, useEffect } from "react";
 import { Toaster } from "@/components/toaster";
@@ -15,16 +15,6 @@ function ThemeCookieSync() {
       document.cookie = `eg-theme=${resolvedTheme};path=/;max-age=31536000;SameSite=Lax`;
     }
   }, [resolvedTheme]);
-  return null;
-}
-
-function RefreshErrorGuard() {
-  const { data: session } = useSession();
-  useEffect(() => {
-    if ((session as { error?: string } | null)?.error === "RefreshTokenError") {
-      signIn("keycloak");
-    }
-  }, [session]);
   return null;
 }
 
@@ -48,7 +38,6 @@ export function Providers({ children }: { children: React.ReactNode }) {
           <TooltipProvider>
             <OrganizationProvider>
               {children}
-              <RefreshErrorGuard />
               <ThemeCookieSync />
               <Toaster />
             </OrganizationProvider>
