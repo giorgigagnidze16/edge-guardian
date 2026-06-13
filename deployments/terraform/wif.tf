@@ -11,7 +11,7 @@ resource "google_project_iam_member" "deployer_ar" {
 
 resource "google_project_iam_member" "deployer_gke" {
   project = var.project_id
-  role    = "roles/container.developer"
+  role    = "roles/container.admin"
   member  = "serviceAccount:${google_service_account.deployer.email}"
 }
 
