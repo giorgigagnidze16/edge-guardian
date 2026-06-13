@@ -49,6 +49,22 @@ Tracking what's done vs. what's left to ship the thesis project.
 - [ ] DNS + TLS live (ingress-nginx + cert-manager + Let's Encrypt ClusterIssuer) validated end-to-end
 - [ ] NodePort / broker URL mapping verified for real edge devices
 
+## Production-readiness hardening (audit 2026-06)
+
+- [x] ~~Prod Spring profile (`SPRING_PROFILES_ACTIVE=prod`): wildcard-CORS + credentials disabled, error detail hidden~~
+- [x] ~~Spring Boot 4.0 config migration (`server.error.*` → `spring.web.error.*`); all YAML scanned clean against 4.0.5 metadata~~
+- [x] ~~`CA_ENCRYPTION_KEY` fail-fast outside `local` profile (no silent insecure dev-key fallback)~~
+- [x] ~~Signed auto-update enforced end-to-end: installers render `ota.sign_key`, agent refuses `auto_update` without it~~
+- [x] ~~OTA download TLS verification decoupled from the MQTT `insecure_skip_verify` flag (defaults verify-on)~~
+- [x] ~~Prod EMQX exposed via `LoadBalancer`; broker URLs use `mqtt.<baseDomain>` (in cert SAN), not a raw IP~~
+- [x] ~~Agent runtime footprint caps (`GOMAXPROCS`/soft `GOMEMLIMIT` from device RAM, post-start `FreeOSMemory`)~~
+- [ ] Staged / canary agent rollout — today a bad push converges 100% of the fleet within ~30 min, no pause/cohort
+- [ ] Watchdog health gate: wire the existing `waitForHealthy()` so a "starts-but-broken" update auto-rolls-back
+- [ ] Poll jitter on the self-update loop to avoid a thundering herd against controller/MinIO after a publish
+- [ ] UI: dead `NEXT_PUBLIC_API_URL` runtime knob, shell-WS prod route, NextAuth `debug:true`, Keycloak issuer localhost fallback
+- [ ] `pki-bootstrap` `pre-upgrade` hook `backoffLimit:1` — a transient failure aborts the whole upgrade
+- [ ] CPU limits on infra pods, Loki liveness probe, Grafana OAuth client secret from a secret
+
 ## Observability & health
 
 - [x] ~~Agent self-metrics (CPU / memory / disk / uptime) in heartbeat~~
