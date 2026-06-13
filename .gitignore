@@ -11,6 +11,7 @@ controller/.gradle/
 controller/bin/
 *.class
 *.jar
+!**/gradle/wrapper/gradle-wrapper.jar
 
 # Node / Next.js
 ui/node_modules/
