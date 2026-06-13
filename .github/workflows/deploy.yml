@@ -18,6 +18,7 @@ jobs:
     runs-on: ubuntu-latest
     env:
       REGISTRY: ${{ secrets.GCP_REGION }}-docker.pkg.dev/${{ secrets.GCP_PROJECT }}/edgeguardian
+      DOCKER_BUILDKIT: "1"
     steps:
       - uses: actions/checkout@v4
 
