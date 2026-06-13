@@ -74,6 +74,8 @@ spec:
             - name: http
               containerPort: 8443
           env:
+            - name: SPRING_PROFILES_ACTIVE
+              value: {{ .Values.controller.springProfilesActive | default "prod" | quote }}
             - name: SPRING_DATASOURCE_URL
               # currentSchema is a search_path — edgeguardian first so our CREATEs
               # land there, public second so the TimescaleDB extension functions

@@ -2,9 +2,13 @@ package com.edgeguardian.controller.service;
 
 import com.edgeguardian.controller.config.CaProperties;
 import jakarta.annotation.PostConstruct;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
+import org.springframework.core.env.Environment;
 import org.springframework.stereotype.Component;
+
+import java.util.List;
 
 import javax.crypto.Cipher;
 import javax.crypto.SecretKey;
@@ -25,24 +29,29 @@ import java.util.Base64;
 @Slf4j
 @Component
 @EnableConfigurationProperties(CaProperties.class)
+@RequiredArgsConstructor
 public class CaKeyEncryption {
 
-    private static final String AES_GCM = "AES/GCM/NoPadding";
     private static final int GCM_TAG_BITS = 128;
-    static final int IV_BYTES = 12;
+    private static final String AES_GCM = "AES/GCM/NoPadding";
 
+    static final int IV_BYTES = 12;
+    private final Environment environment;
     private final CaProperties caProperties;
+
     private SecretKey masterKey;
 
-    public CaKeyEncryption(CaProperties caProperties) {
-        this.caProperties = caProperties;
-    }
 
     @PostConstruct
     void init() {
         String configured = caProperties.encryptionKey();
         if (configured == null || configured.isBlank()) {
-            log.warn("CA_ENCRYPTION_KEY not set - using insecure default. DO NOT use in production.");
+            if (!List.of(environment.getActiveProfiles()).contains("local")) {
+                throw new IllegalStateException(
+                        "CA_ENCRYPTION_KEY must be set outside the 'local' profile - "
+                        + "refusing to encrypt CA private keys with the insecure dev fallback");
+            }
+            log.warn("CA_ENCRYPTION_KEY not set - using insecure default.");
             masterKey = new SecretKeySpec(
                     "edgeguardian-dev-key-not-4-prod!".getBytes(StandardCharsets.UTF_8), "AES");
         } else {

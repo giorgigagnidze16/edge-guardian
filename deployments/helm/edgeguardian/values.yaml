@@ -39,6 +39,9 @@ ingress:
     clusterIssuer: letsencrypt-prod
 
 controller:
+  # Spring profile. Defaults to "prod" (locks down CORS + error detail). Dev
+  # overrides to "local" to enable wildcard CORS for the cross-origin dashboard.
+  springProfilesActive: prod
   resources:
     requests: { cpu: 200m, memory: 512Mi }
     limits:   { memory: 1Gi }

@@ -24,6 +24,7 @@ ingress:
 
 controller:
   replicas: 1
+  springProfilesActive: local
   resources:
     requests: { cpu: 200m, memory: 512Mi }
     limits:   { memory: 1Gi }
