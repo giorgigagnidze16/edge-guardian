@@ -1,0 +1,6 @@
+.git/
+build/
+.gradle/
+*.iml
+bin/
+out/
