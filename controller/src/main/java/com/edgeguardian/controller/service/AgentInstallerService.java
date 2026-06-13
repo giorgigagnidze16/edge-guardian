@@ -194,6 +194,7 @@ public class AgentInstallerService {
             Map.entry("MTLS_BROKER_URL",    props.mtlsBrokerUrl()),
             Map.entry("BOOTSTRAP_PASSWORD", props.bootstrapPassword()),
             Map.entry("ENROLLMENT_TOKEN",   token.getToken()),
+            Map.entry("OTA_SIGN_KEY",       otaPublicKey == null ? "" : otaPublicKey.trim()),
             Map.entry("BINARY_URL",         binaryUrl),
             Map.entry("SYSTEMD_UNIT",       systemdUnit),
             Map.entry("LAUNCHD_PLIST",      launchdPlist),

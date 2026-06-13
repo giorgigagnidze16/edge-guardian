@@ -17,6 +17,7 @@ $MtlsBrokerUrl     = '{{MTLS_BROKER_URL}}'
 $BootstrapPassword = '{{BOOTSTRAP_PASSWORD}}'
 $EnrollmentToken   = '{{ENROLLMENT_TOKEN}}'
 $BinaryUrl         = '{{BINARY_URL}}'
+$SignKey           = '{{OTA_SIGN_KEY}}'
 
 $InstallDir  = 'C:\Program Files\EdgeGuardian'
 $ConfigDir   = 'C:\ProgramData\EdgeGuardian'
@@ -157,6 +158,7 @@ try {
         $ans = Read-Host "Enable automatic agent updates? [Y/n]"
         if ($ans -match '^[Nn]') { $autoUpdate = $false }
     }
+    if (-not $SignKey) { $autoUpdate = $false }
 
     $yaml = @"
 device_id: $deviceId
@@ -167,6 +169,7 @@ reconcile_interval_seconds: 30
 log_level: info
 ota:
   auto_update: $($autoUpdate.ToString().ToLower())
+  sign_key: $SignKey
 auth:
   enrollment_token: $EnrollmentToken
 mqtt:

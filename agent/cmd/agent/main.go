@@ -46,6 +46,11 @@ func main() {
 		os.Exit(1)
 	}
 
+	if err := cfg.Validate(); err != nil {
+		fmt.Fprintf(os.Stderr, "invalid config: %v\n", err)
+		os.Exit(1)
+	}
+
 	if *updateNow {
 		os.Exit(triggerUpdate(cfg))
 	}
@@ -197,7 +202,7 @@ func runAgent(ctx context.Context, cfg *config.Config, logger *zap.Logger) error
 		}
 	})
 
-	updater := ota.NewUpdater(cfg.DataDir, cfg.OTA.SignKey, cfg.MQTT.InsecureSkipVerify, logger)
+	updater := ota.NewUpdater(cfg.DataDir, cfg.OTA.SignKey, cfg.OTA.Insecure, logger)
 	puller := ota.NewPuller(updater, cfg.ControllerBaseURL(), agentVersion, logger)
 	dispatcher := commands.NewDispatcher(mqttClient, cfg.DeviceID, logger)
 
