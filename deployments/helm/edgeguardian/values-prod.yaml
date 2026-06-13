@@ -74,27 +74,25 @@ emqx:
   mqttUsers:
     controllerUsername: controller
     bootstrapUsername: bootstrap
-  # MQTT is carried by the shared ingress-nginx LB (TCP passthrough on 1883/8883),
-  # so no dedicated broker LoadBalancer is provisioned.
   external:
-    type: ClusterIP
+    type: LoadBalancer
     annotations: {}
     loadBalancerIP: ""
 
 pkiBootstrap:
   image: alpine/k8s:1.31.1
 
-# Real email via Gmail SMTP. Requires a Google App Password (2FA on the account).
-# 'from' and 'username' must be the same Gmail address; the App Password goes in
-# values-prod-secrets.yaml (mail.password), never here.
+ota:
+  publicKey: ""
+
 mail:
   enabled: true
   host: smtp.gmail.com
   port: 587
   auth: true
   starttls: true
-  from: ""        # your-address@gmail.com
-  username: ""    # your-address@gmail.com
+  from: ""
+  username: ""
 
 secrets:
   postgres:    { create: true, existingSecret: postgres-credentials }

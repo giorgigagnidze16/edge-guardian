@@ -35,8 +35,9 @@ type Updater struct {
 
 // NewUpdater creates a new OTA updater. signKeyHex is the hex-encoded Ed25519
 // public key for signature verification (empty string to skip verification).
-// insecure disables TLS verification when fetching from the controller; it
-// mirrors the MQTT insecure_skip_verify setting and is for dev only.
+// insecure disables TLS verification when fetching from the controller and is
+// for dev only; it is driven by ota.insecure (defaulting to verify-on) and is
+// deliberately independent of the MQTT transport settings.
 func NewUpdater(dataDir, signKeyHex string, insecure bool, logger *zap.Logger) *Updater {
 	binaryPath, _ := os.Executable()
 	u := &Updater{

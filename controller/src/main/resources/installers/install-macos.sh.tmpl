@@ -90,6 +90,9 @@ if [ -z "$AUTO_UPDATE" ] && [ -t 0 ]; then
 fi
 AUTO_UPDATE="${AUTO_UPDATE:-true}"
 
+SIGN_KEY='{{OTA_SIGN_KEY}}'
+if [ -z "$SIGN_KEY" ]; then AUTO_UPDATE=false; fi
+
 cat > "$CONFIG_PATH" <<EOF
 device_id: ${DEVICE_ID}
 controller_address: ${CONTROLLER_HOST}
@@ -99,6 +102,7 @@ reconcile_interval_seconds: 30
 log_level: info
 ota:
   auto_update: ${AUTO_UPDATE}
+  sign_key: ${SIGN_KEY}
 auth:
   enrollment_token: ${ENROLLMENT_TOKEN}
 mqtt:

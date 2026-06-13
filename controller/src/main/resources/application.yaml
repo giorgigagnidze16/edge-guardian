@@ -1,11 +1,12 @@
 server:
   port: 8443
-  error:
-    include-message: always
 
 spring:
   application:
     name: edgeguardian-controller
+  web:
+    error:
+      include-message: always
   servlet:
     multipart:
       max-file-size: 1GB

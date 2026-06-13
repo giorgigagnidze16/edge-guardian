@@ -7,7 +7,6 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-// Config holds the agent configuration.
 type Config struct {
 	DeviceID          string            `yaml:"device_id"`
 	ControllerAddress string            `yaml:"controller_address"`
@@ -24,32 +23,26 @@ type Config struct {
 	LogForwarding LogForwardingConfig `yaml:"log_forwarding"`
 }
 
-// OTAConfig holds OTA update settings.
 type OTAConfig struct {
 	Enabled    bool   `yaml:"enabled"`
 	AutoUpdate bool   `yaml:"auto_update"`
 	SignKey    string `yaml:"sign_key"`
 	CacheDir   string `yaml:"cache_dir"`
+	Insecure   bool   `yaml:"insecure"`
 }
 
-// AuthConfig holds authentication settings used during first-boot enrollment.
-// Post-enrollment, the agent authenticates via mTLS identity cert (see MQTTConfig.IdentityCertPath).
 type AuthConfig struct {
-	EnrollmentToken string `yaml:"enrollment_token"` // one-time token for initial enrollment; ignored once identity cert is persisted
+	EnrollmentToken string `yaml:"enrollment_token"`
 }
 
-// LogForwardingConfig holds log forwarding settings.
 type LogForwardingConfig struct {
 	Enabled       bool   `yaml:"enabled"`
-	Source        string `yaml:"source"`         // "journald" or "file"
-	FilePath      string `yaml:"file_path"`      // Path to log file (when source=file)
-	BatchSize     int    `yaml:"batch_size"`     // Number of lines per MQTT batch
-	FlushInterval int    `yaml:"flush_interval"` // Seconds between flushes
+	Source        string `yaml:"source"`
+	FilePath      string `yaml:"file_path"`
+	BatchSize     int    `yaml:"batch_size"`
+	FlushInterval int    `yaml:"flush_interval"`
 }
 
-// MQTTConfig holds MQTT broker connection settings.
-// BrokerURL is the enrollment broker (password auth); MutualTLSBrokerURL is the
-// production broker used after enrollment with the persisted identity cert.
 type MQTTConfig struct {
 	BrokerURL          string `yaml:"broker_url"`
 	Username           string `yaml:"username"`
@@ -63,13 +56,11 @@ type MQTTConfig struct {
 	InsecureSkipVerify bool   `yaml:"insecure_skip_verify"`
 }
 
-// HealthConfig holds health monitoring settings.
 type HealthConfig struct {
 	DiskPath string `yaml:"disk_path"`
 	Port     int    `yaml:"port"`
 }
 
-// DefaultConfig returns a config with sensible defaults.
 func DefaultConfig() *Config {
 	hostname, _ := os.Hostname()
 	return &Config{
@@ -91,14 +82,17 @@ func DefaultConfig() *Config {
 	}
 }
 
-// ControllerBaseURL returns the HTTPS base URL of the controller, used for
-// agent binary self-update (latest-version + binary download). The control
-// plane is otherwise MQTT-only; this is the install/update fetch path.
 func (c *Config) ControllerBaseURL() string {
 	return fmt.Sprintf("https://%s:%d", c.ControllerAddress, c.ControllerPort)
 }
 
-// Load reads a YAML config file and merges it with defaults.
+func (c *Config) Validate() error {
+	if c.OTA.AutoUpdate && c.OTA.SignKey == "" {
+		return fmt.Errorf("ota.auto_update requires ota.sign_key (refusing unsigned auto-update)")
+	}
+	return nil
+}
+
 func Load(path string) (*Config, error) {
 	cfg := DefaultConfig()
 
