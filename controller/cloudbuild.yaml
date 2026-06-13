@@ -1,0 +1,11 @@
+timeout: 1200s
+options:
+  logging: CLOUD_LOGGING_ONLY
+substitutions:
+  _IMAGE: ''
+steps:
+  - name: 'gcr.io/cloud-builders/docker'
+    entrypoint: bash
+    args:
+      - -c
+      - 'DOCKER_BUILDKIT=1 docker build -t "$_IMAGE" . && docker push "$_IMAGE"'

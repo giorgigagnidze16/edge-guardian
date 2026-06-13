@@ -34,15 +34,10 @@ jobs:
       - name: Configure Docker for Artifact Registry
         run: gcloud auth configure-docker ${{ secrets.GCP_REGION }}-docker.pkg.dev --quiet
 
-      - uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: "21"
-
       - name: Build & push controller image
         working-directory: controller
         run: |
-          ./gradlew bootBuildImage --no-daemon --imageName="$REGISTRY/controller:${{ steps.vars.outputs.sha }}"
+          docker build -t "$REGISTRY/controller:${{ steps.vars.outputs.sha }}" .
           docker push "$REGISTRY/controller:${{ steps.vars.outputs.sha }}"
 
       - name: Build & push UI image
@@ -93,6 +88,9 @@ jobs:
             -n edgeguardian --create-namespace \
             -f deployments/helm/edgeguardian/values-prod.yaml \
             -f /tmp/values-prod-secrets.yaml \
+            --set image.repository="$REGISTRY/controller" \
             --set image.tag=${{ steps.vars.outputs.sha }} \
+            --set ui.image.repository="$REGISTRY/ui" \
             --set ui.image.tag=${{ steps.vars.outputs.sha }} \
-            --wait --timeout 20m
+            --set ingress.baseDomain=${{ secrets.BASE_DOMAIN }} \
+            --timeout 20m
