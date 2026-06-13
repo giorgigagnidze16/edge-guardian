@@ -79,6 +79,8 @@ jobs:
           controller:
             caEncryptionKey: "${{ secrets.CA_ENCRYPTION_KEY }}"
           mail:
+            from: "${{ secrets.MAIL_FROM }}"
+            username: "${{ secrets.MAIL_USERNAME }}"
             password: "${{ secrets.MAIL_PASSWORD }}"
           EOF
 
