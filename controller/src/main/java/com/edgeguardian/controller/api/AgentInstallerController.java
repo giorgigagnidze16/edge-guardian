@@ -4,8 +4,6 @@ import com.edgeguardian.controller.dto.AgentReleaseInfo;
 import com.edgeguardian.controller.service.AgentInstallerService;
 import com.edgeguardian.controller.service.installer.InstallerFormat;
 import com.edgeguardian.controller.service.installer.Os;
-import java.io.IOException;
-import java.io.InputStream;
 import lombok.RequiredArgsConstructor;
 import org.springframework.core.io.InputStreamResource;
 import org.springframework.http.HttpHeaders;
@@ -21,6 +19,9 @@ import org.springframework.web.bind.annotation.RequestPart;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
+
+import java.io.IOException;
+import java.io.InputStream;
 
 @RestController
 @RequestMapping(ApiPaths.AGENT_BASE)
@@ -38,9 +39,9 @@ public class AgentInstallerController {
         InstallerFormat fmt = InstallerFormat.resolve(target, format);
         String body = installers.renderInstaller(target, fmt, token, arch);
         return ResponseEntity.ok()
-            .header(HttpHeaders.CONTENT_TYPE, "text/plain; charset=utf-8")
-            .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=" + fmt.filename)
-            .body(body);
+                .header(HttpHeaders.CONTENT_TYPE, "text/plain; charset=utf-8")
+                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=" + fmt.filename)
+                .body(body);
     }
 
     @GetMapping(ApiPaths.AGENT_BINARY_PATH)
@@ -49,9 +50,9 @@ public class AgentInstallerController {
         Os target = Os.of(os);
         InputStream stream = installers.openBinary(target, arch);
         return ResponseEntity.ok()
-            .contentType(MediaType.APPLICATION_OCTET_STREAM)
-            .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=" + target.binaryName)
-            .body(new InputStreamResource(stream));
+                .contentType(MediaType.APPLICATION_OCTET_STREAM)
+                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=" + target.binaryName)
+                .body(new InputStreamResource(stream));
     }
 
     @GetMapping(ApiPaths.AGENT_LATEST_VERSION_PATH)

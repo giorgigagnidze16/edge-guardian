@@ -10,13 +10,13 @@ import com.edgeguardian.controller.repository.OrganizationMemberRepository;
 import com.edgeguardian.controller.security.TenantPrincipal;
 import com.edgeguardian.controller.service.OrganizationService;
 import com.edgeguardian.controller.service.UserService;
+import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ResponseStatusException;
-import lombok.RequiredArgsConstructor;
 
 import java.util.ArrayList;
 import java.util.List;

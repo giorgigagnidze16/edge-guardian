@@ -5,9 +5,6 @@ import com.edgeguardian.controller.model.OrganizationCa;
 import com.edgeguardian.controller.repository.OrganizationCaRepository;
 import com.edgeguardian.controller.service.BrokerCaProvider;
 import com.edgeguardian.controller.service.CrlService;
-import java.nio.charset.StandardCharsets;
-import java.util.List;
-import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
@@ -17,16 +14,20 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.nio.charset.StandardCharsets;
+import java.util.List;
+import java.util.stream.Collectors;
+
 @RestController
 @RequestMapping(ApiPaths.PKI_BASE)
 @RequiredArgsConstructor
 public class PkiController {
 
     private static final MediaType APPLICATION_PKIX_CRL =
-        new MediaType("application", "pkix-crl");
+            new MediaType("application", "pkix-crl");
 
     private static final MediaType APPLICATION_X_PEM_FILE =
-        new MediaType("application", "x-pem-file");
+            new MediaType("application", "x-pem-file");
 
     private final CrlService crlService;
     private final OrganizationCaRepository caRepository;
@@ -46,9 +47,9 @@ public class PkiController {
     public ResponseEntity<byte[]> getCaBundle() {
         List<OrganizationCa> all = caRepository.findAll();
         String concatenated = all.stream()
-            .map(OrganizationCa::getCaCertPem)
-            .map(pem -> pem.endsWith("\n") ? pem : pem + "\n")
-            .collect(Collectors.joining());
+                .map(OrganizationCa::getCaCertPem)
+                .map(pem -> pem.endsWith("\n") ? pem : pem + "\n")
+                .collect(Collectors.joining());
 
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(APPLICATION_X_PEM_FILE);

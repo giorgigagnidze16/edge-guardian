@@ -51,6 +51,14 @@ public class OrganizationController {
     private final OrganizationService organizationService;
     private final InvitationMailer invitationMailer;
 
+    private static OrgRole parseRole(String role) {
+        try {
+            return OrgRole.valueOf(role == null ? "" : role.trim().toUpperCase());
+        } catch (IllegalArgumentException e) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid role: " + role);
+        }
+    }
+
     @GetMapping
     @PreAuthorize("@orgSecurity.hasMinRole(authentication, 'VIEWER')")
     public OrganizationDto get(@AuthenticationPrincipal TenantPrincipal principal) {
@@ -138,14 +146,6 @@ public class OrganizationController {
     public void revokeInvitation(@PathVariable Long invitationId,
                                  @AuthenticationPrincipal TenantPrincipal principal) {
         organizationService.revokeInvitation(invitationId, principal.organizationId());
-    }
-
-    private static OrgRole parseRole(String role) {
-        try {
-            return OrgRole.valueOf(role == null ? "" : role.trim().toUpperCase());
-        } catch (IllegalArgumentException e) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid role: " + role);
-        }
     }
 
     @GetMapping("/audit-log")

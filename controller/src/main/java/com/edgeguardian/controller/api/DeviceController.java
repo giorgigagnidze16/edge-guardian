@@ -14,11 +14,7 @@ import com.edgeguardian.controller.service.DeviceLifecycleService;
 import com.edgeguardian.controller.service.DeviceRegistry;
 import com.edgeguardian.controller.service.LogService;
 import com.fasterxml.jackson.databind.JsonNode;
-import java.time.Instant;
-import java.time.temporal.ChronoUnit;
-import java.util.List;
-import java.util.Map;
-import java.util.UUID;
+import lombok.RequiredArgsConstructor;
 import org.eclipse.paho.mqttv5.common.MqttException;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -33,7 +29,12 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ResponseStatusException;
-import lombok.RequiredArgsConstructor;
+
+import java.time.Instant;
+import java.time.temporal.ChronoUnit;
+import java.util.List;
+import java.util.Map;
+import java.util.UUID;
 
 @RestController
 @RequestMapping(ApiPaths.DEVICES_BASE)
@@ -54,8 +55,8 @@ public class DeviceController {
         Map<String, DeviceStatus> statusMap =
                 registry.getLatestStatusForOrganization(principal.organizationId());
         return devices.stream()
-            .map(d -> DeviceDto.from(d, statusMap.get(d.getDeviceId())))
-            .toList();
+                .map(d -> DeviceDto.from(d, statusMap.get(d.getDeviceId())))
+                .toList();
     }
 
     @GetMapping("/{deviceId}")
@@ -85,13 +86,13 @@ public class DeviceController {
     @GetMapping("/{deviceId}/logs")
     @PreAuthorize("@orgSecurity.hasMinRole(authentication, 'VIEWER')")
     public JsonNode getDeviceLogs(
-        @PathVariable String deviceId,
-        @RequestParam(defaultValue = "") String start,
-        @RequestParam(defaultValue = "") String end,
-        @RequestParam(defaultValue = "100") int limit,
-        @RequestParam(required = false) String level,
-        @RequestParam(required = false) String search,
-        @AuthenticationPrincipal TenantPrincipal principal) {
+            @PathVariable String deviceId,
+            @RequestParam(defaultValue = "") String start,
+            @RequestParam(defaultValue = "") String end,
+            @RequestParam(defaultValue = "100") int limit,
+            @RequestParam(required = false) String level,
+            @RequestParam(required = false) String search,
+            @AuthenticationPrincipal TenantPrincipal principal) {
         loadForTenant(deviceId, principal);
         if (start.isEmpty()) {
             start = Instant.now().minus(1, ChronoUnit.HOURS).toString();
@@ -149,8 +150,8 @@ public class DeviceController {
     @GetMapping("/{deviceId}/commands/{commandId}/results")
     @PreAuthorize("@orgSecurity.hasMinRole(authentication, 'VIEWER')")
     public List<CommandExecution> getCommandResults(@PathVariable String deviceId,
-                                                     @PathVariable String commandId,
-                                                     @AuthenticationPrincipal TenantPrincipal principal) {
+                                                    @PathVariable String commandId,
+                                                    @AuthenticationPrincipal TenantPrincipal principal) {
         loadForTenant(deviceId, principal);
         return executionRepository.findByCommandIdOrderByReceivedAtAsc(commandId);
     }
