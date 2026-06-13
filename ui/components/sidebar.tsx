@@ -32,8 +32,8 @@ const navigation = [
   { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
   { name: "Devices", href: "/devices", icon: Cpu },
   { name: "Certificates", href: "/certificates", icon: ShieldCheck },
-  { name: "Audit Log", href: "/audit", icon: FileText },
   { name: "Settings", href: "/settings", icon: Settings },
+  { name: "Audit Log", href: "/audit", icon: FileText },
 ];
 
 export function Sidebar() {

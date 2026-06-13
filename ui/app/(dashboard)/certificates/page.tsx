@@ -93,6 +93,9 @@ export default function CertificatesPage() {
 
   const [revokeTarget, setRevokeTarget] = useState<Certificate | null>(null);
   const [rejectTarget, setRejectTarget] = useState<CertificateRequest | null>(null);
+  const [showResolved, setShowResolved] = useState(false);
+  const [reqPage, setReqPage] = useState(0);
+  const [certPage, setCertPage] = useState(0);
 
   const { data: requests, isLoading: reqLoading } = useQuery({
     queryKey: ["cert-requests", orgId],
@@ -177,6 +180,27 @@ export default function CertificatesPage() {
 
   const pendingCount = requests?.filter((r) => r.state === "pending").length ?? 0;
 
+  // Default view is the actionable queue: pending (+ blocked, a compromise
+  // alert). Approved/rejected/revoked are resolved history - they live in the
+  // Issued Certificates tab, and surface here only behind the toggle.
+  const isActionable = (r: CertificateRequest) =>
+    r.state === "pending" || r.state === "blocked";
+  const resolvedCount = (requests ?? []).filter((r) => !isActionable(r)).length;
+  const visibleRequests = useMemo(
+    () => (requests ?? []).filter((r) => showResolved || isActionable(r)),
+    [requests, showResolved],
+  );
+
+  const pageSize = 20;
+  const reqTotalPages = Math.max(1, Math.ceil(visibleRequests.length / pageSize));
+  const reqPageSafe = Math.min(reqPage, reqTotalPages - 1);
+  const pagedRequests = visibleRequests.slice(reqPageSafe * pageSize, (reqPageSafe + 1) * pageSize);
+
+  const certList = certs ?? [];
+  const certTotalPages = Math.max(1, Math.ceil(certList.length / pageSize));
+  const certPageSafe = Math.min(certPage, certTotalPages - 1);
+  const pagedCerts = certList.slice(certPageSafe * pageSize, (certPageSafe + 1) * pageSize);
+
   return (
     <div className="space-y-6">
       <PageHeader title="Certificates" description="Manage X.509 certificates for your devices">
@@ -198,6 +222,13 @@ export default function CertificatesPage() {
         </TabsList>
 
         <TabsContent value="requests" className="mt-4">
+          {resolvedCount > 0 && (
+            <div className="mb-2 flex justify-end">
+              <Button variant="ghost" size="sm" onClick={() => { setShowResolved((v) => !v); setReqPage(0); }}>
+                {showResolved ? "Hide resolved" : `Show resolved (${resolvedCount})`}
+              </Button>
+            </div>
+          )}
           <Table>
             <TableHeader>
               <TableRow>
@@ -213,18 +244,22 @@ export default function CertificatesPage() {
             <TableBody>
               {reqLoading ? (
                 Array.from({ length: 3 }).map((_, i) => <TableRowSkeleton key={i} columns={7} />)
-              ) : !requests || requests.length === 0 ? (
+              ) : visibleRequests.length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={7}>
                     <EmptyState
                       icon={ShieldCheck}
-                      title="No certificate requests"
-                      description="Certificate requests from devices will appear here."
+                      title={resolvedCount > 0 ? "No pending requests" : "No certificate requests"}
+                      description={
+                        resolvedCount > 0
+                          ? `All requests are resolved. Use "Show resolved" to view ${resolvedCount} past request${resolvedCount === 1 ? "" : "s"}.`
+                          : "Certificate requests from devices will appear here."
+                      }
                     />
                   </TableCell>
                 </TableRow>
               ) : (
-                requests.map((req) => (
+                pagedRequests.map((req) => (
                   <TableRow key={req.id} className={req.state === "blocked" ? "bg-red-500/5" : ""}>
                     <TableCell className="font-mono text-sm">{req.deviceId}</TableCell>
                     <TableCell>{req.name}</TableCell>
@@ -263,6 +298,21 @@ export default function CertificatesPage() {
               )}
             </TableBody>
           </Table>
+          {visibleRequests.length > pageSize && (
+            <div className="mt-3 flex items-center justify-between">
+              <p className="text-sm text-muted-foreground">
+                Showing {reqPageSafe * pageSize + 1}-{Math.min((reqPageSafe + 1) * pageSize, visibleRequests.length)} of {visibleRequests.length}
+              </p>
+              <div className="flex gap-2">
+                <Button variant="outline" size="sm" disabled={reqPageSafe === 0} onClick={() => setReqPage((p) => p - 1)}>
+                  Previous
+                </Button>
+                <Button variant="outline" size="sm" disabled={reqPageSafe >= reqTotalPages - 1} onClick={() => setReqPage((p) => p + 1)}>
+                  Next
+                </Button>
+              </div>
+            </div>
+          )}
         </TabsContent>
 
         <TabsContent value="certificates" className="mt-4">
@@ -292,7 +342,7 @@ export default function CertificatesPage() {
                   </TableCell>
                 </TableRow>
               ) : (
-                certs.map((cert) => (
+                pagedCerts.map((cert) => (
                   <TableRow key={cert.id}>
                     <TableCell className="font-mono text-sm">{cert.deviceId}</TableCell>
                     <TableCell>{cert.name}</TableCell>
@@ -321,6 +371,21 @@ export default function CertificatesPage() {
               )}
             </TableBody>
           </Table>
+          {certList.length > pageSize && (
+            <div className="mt-3 flex items-center justify-between">
+              <p className="text-sm text-muted-foreground">
+                Showing {certPageSafe * pageSize + 1}-{Math.min((certPageSafe + 1) * pageSize, certList.length)} of {certList.length}
+              </p>
+              <div className="flex gap-2">
+                <Button variant="outline" size="sm" disabled={certPageSafe === 0} onClick={() => setCertPage((p) => p - 1)}>
+                  Previous
+                </Button>
+                <Button variant="outline" size="sm" disabled={certPageSafe >= certTotalPages - 1} onClick={() => setCertPage((p) => p + 1)}>
+                  Next
+                </Button>
+              </div>
+            </div>
+          )}
         </TabsContent>
       </Tabs>
 

@@ -258,7 +258,7 @@ public class CertificateService {
     /** Publish the revocation: refresh the CRL + evict the device's live broker session. */
     private void broadcastRevocation(Long orgId, String deviceId) {
         crlService.rebuild(orgId);
-        emqxAdminClient.kickout(deviceId);
+        emqxAdminClient.kickoutPersistent(deviceId);
     }
 
     private CertificateRequest saveRequest(String deviceId, Long orgId, String name,

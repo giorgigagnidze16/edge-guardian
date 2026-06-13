@@ -375,7 +375,7 @@ spec:
             - name: EMQX_LISTENERS__SSL__DEFAULT__SSL_OPTIONS__ENABLE_CRL_CHECK
               value: "true"
             - name: EMQX_CRL_CACHE__REFRESH_INTERVAL
-              value: 300s
+              value: 30s
             - name: EMQX_CRL_CACHE__HTTP_TIMEOUT
               value: 15s
           volumeMounts:
