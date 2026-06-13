@@ -19,14 +19,23 @@ public class LogService {
 
     private final RestClient restClient;
 
-    @Value("${edgeguardian.controller.loki.push-url:http://localhost:3100/loki/api/v1/push}")
-    private String lokiPushUrl;
-
-    @Value("${edgeguardian.controller.loki.query-url:http://localhost:3100/loki/api/v1/query_range}")
-    private String lokiQueryUrl;
+    @Value("${edgeguardian.controller.loki.url:http://localhost:3100}")
+    private String lokiBaseUrl;
 
     public LogService(RestClient restClient) {
         this.restClient = restClient;
+    }
+
+    static String pushEndpoint(String baseUrl) {
+        return trimTrailingSlash(baseUrl) + "/loki/api/v1/push";
+    }
+
+    static String queryEndpoint(String baseUrl) {
+        return trimTrailingSlash(baseUrl) + "/loki/api/v1/query_range";
+    }
+
+    private static String trimTrailingSlash(String url) {
+        return url.endsWith("/") ? url.substring(0, url.length() - 1) : url;
     }
 
     public void pushToLoki(String deviceId, JsonNode entries) {
@@ -57,7 +66,7 @@ public class LogService {
             )));
 
             restClient.post()
-                    .uri(lokiPushUrl)
+                    .uri(pushEndpoint(lokiBaseUrl))
                     .contentType(MediaType.APPLICATION_JSON)
                     .body(payload)
                     .retrieve()
@@ -80,7 +89,7 @@ public class LogService {
                 query.append(" |= \"").append(search.replace("\"", "\\\"")).append("\"");
             }
 
-            String uri = UriComponentsBuilder.fromUriString(lokiQueryUrl)
+            String uri = UriComponentsBuilder.fromUriString(queryEndpoint(lokiBaseUrl))
                     .queryParam("query", query.toString())
                     .queryParam("start", start)
                     .queryParam("end", end)

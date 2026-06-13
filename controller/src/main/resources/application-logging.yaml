@@ -9,5 +9,4 @@ logging:
 edgeguardian:
   controller:
     loki:
-      push-url: http://localhost:3100/loki/api/v1/push
-      query-url: http://localhost:3100/loki/api/v1/query_range
+      url: ${EDGEGUARDIAN_CONTROLLER_LOKI_URL:http://localhost:3100}

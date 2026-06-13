@@ -106,7 +106,7 @@ spec:
               valueFrom: { secretKeyRef: { name: minio-credentials, key: username } }
             - name: EDGEGUARDIAN_CONTROLLER_MINIO_SECRET_KEY
               valueFrom: { secretKeyRef: { name: minio-credentials, key: password } }
-            - name: EDGEGUARDIAN_CONTROLLER_LOGGING_LOKI_URL
+            - name: EDGEGUARDIAN_CONTROLLER_LOKI_URL
               value: http://loki:3100
             - name: PKI_CRL_URL
               value: {{ include "edgeguardian.crlUrl" . | quote }}

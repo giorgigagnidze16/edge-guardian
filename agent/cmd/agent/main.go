@@ -11,6 +11,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"runtime/debug"
 	"time"
 
 	"github.com/edgeguardian/agent/internal/bootstrap"
@@ -21,6 +22,7 @@ import (
 	"github.com/edgeguardian/agent/internal/model"
 	"github.com/edgeguardian/agent/internal/ota"
 	"github.com/edgeguardian/agent/internal/reconciler"
+	"github.com/edgeguardian/agent/internal/runtimetune"
 	"github.com/edgeguardian/agent/internal/storage"
 	"github.com/edgeguardian/agent/plugins/certificate"
 	"github.com/edgeguardian/agent/plugins/filemanager"
@@ -77,9 +79,34 @@ func triggerUpdate(cfg *config.Config) int {
 	return 0
 }
 
-// runAgent is the OS-agnostic agent lifecycle. It runs until ctx is
-// cancelled - by the interactive signal handler (unix/console) or by the
-// Windows Service Control Manager dispatcher.
+const startupScavengeDelay = 15 * time.Second
+
+func tuneRuntime(cfg *config.Config, logger *zap.Logger) {
+	totalRAM := health.New(cfg.Health.DiskPath).Collect().MemoryTotalBytes
+	limits := runtimetune.Compute(runtime.NumCPU(), totalRAM,
+		os.Getenv("GOMAXPROCS"), os.Getenv("GOMEMLIMIT"))
+	runtimetune.Apply(limits)
+
+	memLimitMB := int64(0)
+	if limits.SetMemLimit {
+		memLimitMB = limits.MemLimitBytes / (1 << 20)
+	}
+	logger.Info("runtime tuned",
+		zap.Int("gomaxprocs", runtime.GOMAXPROCS(-1)),
+		zap.Int64("mem_limit_mb", memLimitMB),
+		zap.Int64("detected_ram_mb", totalRAM/(1<<20)),
+	)
+}
+
+func scavengeAfterStartup(ctx context.Context, logger *zap.Logger) {
+	select {
+	case <-ctx.Done():
+	case <-time.After(startupScavengeDelay):
+		debug.FreeOSMemory()
+		logger.Debug("released startup memory slack to OS")
+	}
+}
+
 func runAgent(ctx context.Context, cfg *config.Config, logger *zap.Logger) error {
 	logger.Info("EdgeGuardian agent starting",
 		zap.String("version", agentVersion),
@@ -88,6 +115,8 @@ func runAgent(ctx context.Context, cfg *config.Config, logger *zap.Logger) error
 		zap.String("os", runtime.GOOS),
 		zap.String("data_dir", cfg.DataDir),
 	)
+
+	tuneRuntime(cfg, logger)
 
 	if err := os.MkdirAll(cfg.DataDir, 0750); err != nil {
 		return fmt.Errorf("create data directory: %w", err)
@@ -187,6 +216,7 @@ func runAgent(ctx context.Context, cfg *config.Config, logger *zap.Logger) error
 	checkPostUpdateStatus(updater, logger)
 
 	go startHealthServer(cfg.Health.Port, puller, logger)
+	go scavengeAfterStartup(ctx, logger)
 
 	if cfg.OTA.AutoUpdate {
 		go runAutoUpdate(ctx, puller, logger)
