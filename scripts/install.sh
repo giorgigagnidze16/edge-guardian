@@ -1,6 +1,4 @@
 #!/usr/bin/env bash
-# Minikube dev bring-up: build images into minikube's docker, then helm install.
-# Prod: just run `helm install` yourself - see deployments/helm/edgeguardian/README.md.
 
 set -euo pipefail
 
@@ -28,9 +26,26 @@ if ! minikube status | grep -q "host: Running"; then
 fi
 eval "$(minikube -p minikube docker-env)"
 
+for img in \
+    timescale/timescaledb:2.17.2-pg16 \
+    quay.io/keycloak/keycloak:26.0 \
+    minio/minio:RELEASE.2024-12-18T13-15-44Z \
+    grafana/loki:3.3.0 \
+    grafana/grafana:11.4.0 \
+    emqx/emqx:5.8 \
+    axllent/mailpit:latest \
+    alpine/k8s:1.31.1; do
+    docker pull -q "$img" >/dev/null 2>&1 &
+done
+
 if [ "$SKIP_BUILD" -ne 1 ]; then
-    (cd "$ROOT/controller" && ./gradlew bootBuildImage)
-    (cd "$ROOT/ui" && docker build -t edgeguardian/ui:latest .)
+    cl="$(mktemp)"; ul="$(mktemp)"
+    docker build -t edgeguardian/controller:latest "$ROOT/controller" >"$cl" 2>&1 & cpid=$!
+    docker build -t edgeguardian/ui:latest         "$ROOT/ui"         >"$ul" 2>&1 & upid=$!
+    echo "building controller + ui images in parallel..."
+    wait "$cpid" || { echo "controller build failed:"; cat "$cl"; exit 1; }
+    wait "$upid" || { echo "ui build failed:";         cat "$ul"; exit 1; }
+    rm -f "$cl" "$ul"
 fi
 
 if [ "$CLEAN" -eq 1 ]; then

@@ -14,7 +14,16 @@ Instructions for Claude Code when working in the `controller/` directory.
 Infrastructure runs in Kubernetes via Helm. For iterative backend work, bring up the full stack once
 with `../scripts/install.sh`, then either port-forward the dependencies you need
 (`kubectl -n edgeguardian port-forward svc/postgres 5432:5432`, etc.) or re-deploy the controller
-image into minikube by rebuilding with `./gradlew bootBuildImage` and rolling the deployment.
+image into minikube by rebuilding and rolling the deployment:
+
+```bash
+eval $(minikube -p minikube docker-env)
+docker build -t edgeguardian/controller:latest .          # layered-jar Dockerfile (Gradle cache mount)
+kubectl -n edgeguardian rollout restart deploy/controller
+```
+
+The image is built from `Dockerfile` (Spring Boot `tools`-jarmode layered jar with a Gradle cache mount);
+`install.sh` builds it the same way. The old `bootBuildImage` (Paketo) path has been removed.
 
 ## Project Structure
 

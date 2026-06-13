@@ -63,11 +63,3 @@ dependencies {
 test {
     useJUnitPlatform()
 }
-
-bootBuildImage {
-    imageName = "edgeguardian/controller:${project.version}"
-    tags = ["edgeguardian/controller:latest"]
-    environment = [
-        "BP_JVM_VERSION" : "21",
-    ]
-}
