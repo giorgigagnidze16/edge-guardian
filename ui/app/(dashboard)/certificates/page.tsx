@@ -36,7 +36,7 @@ import {
   X,
   Ban,
 } from "lucide-react";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { toast } from "sonner";
 
 function statusBadge(status: string) {
@@ -62,6 +62,8 @@ function requestStateBadge(state: string) {
       return <Badge className="bg-emerald-500/10 text-emerald-500 border-emerald-500/20">Approved</Badge>;
     case "rejected":
       return <Badge className="bg-red-500/10 text-red-500 border-red-500/20">Rejected</Badge>;
+    case "revoked":
+      return <Badge className="bg-zinc-500/10 text-zinc-500 border-zinc-500/20">Revoked</Badge>;
     case "blocked":
       return <Badge className="bg-red-600/20 text-red-400 border-red-600/30">Blocked - Compromise</Badge>;
     default:
@@ -150,6 +152,29 @@ export default function CertificatesPage() {
     }
   }
 
+  const certsByDeviceName = useMemo(() => {
+    const map = new Map<string, Certificate[]>();
+    for (const c of certs ?? []) {
+      const key = `${c.deviceId}|${c.name}`;
+      const list = map.get(key) ?? [];
+      list.push(c);
+      map.set(key, list);
+    }
+    return map;
+  }, [certs]);
+
+  // An approved request reads as "revoked" once its device identity has a
+  // revoked cert and no still-valid one - so the screen reflects the revoke
+  // instead of a stale "Approved".
+  function requestEffectiveState(req: CertificateRequest): string {
+    if (req.state !== "approved") return req.state;
+    const matches = certsByDeviceName.get(`${req.deviceId}|${req.name}`) ?? [];
+    if (matches.length === 0) return req.state;
+    const hasActive = matches.some((c) => !c.revoked);
+    const hasRevoked = matches.some((c) => c.revoked);
+    return !hasActive && hasRevoked ? "revoked" : req.state;
+  }
+
   const pendingCount = requests?.filter((r) => r.state === "pending").length ?? 0;
 
   return (
@@ -205,7 +230,7 @@ export default function CertificatesPage() {
                     <TableCell>{req.name}</TableCell>
                     <TableCell className="text-muted-foreground">{req.commonName}</TableCell>
                     <TableCell><Badge variant="outline">{req.type}</Badge></TableCell>
-                    <TableCell>{requestStateBadge(req.state)}</TableCell>
+                    <TableCell>{requestStateBadge(requestEffectiveState(req))}</TableCell>
                     <TableCell className="text-muted-foreground">{formatDate(req.createdAt)}</TableCell>
                     <TableCell>
                       {req.state === "pending" && (

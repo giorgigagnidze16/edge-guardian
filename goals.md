@@ -58,12 +58,15 @@ Tracking what's done vs. what's left to ship the thesis project.
 - [x] ~~OTA download TLS verification decoupled from the MQTT `insecure_skip_verify` flag (defaults verify-on)~~
 - [x] ~~Prod EMQX exposed via `LoadBalancer`; broker URLs use `mqtt.<baseDomain>` (in cert SAN), not a raw IP~~
 - [x] ~~Agent runtime footprint caps (`GOMAXPROCS`/soft `GOMEMLIMIT` from device RAM, post-start `FreeOSMemory`)~~
+- [x] ~~Revocation kickout fixed: EMQX admin client pinned to HTTP/1.1 (Java's h2c upgrade was rejected as `unexpected_api_access`, so kickout silently never fired)~~
 - [ ] Staged / canary agent rollout — today a bad push converges 100% of the fleet within ~30 min, no pause/cohort
 - [ ] Watchdog health gate: wire the existing `waitForHealthy()` so a "starts-but-broken" update auto-rolls-back
 - [ ] Poll jitter on the self-update loop to avoid a thundering herd against controller/MinIO after a publish
 - [ ] UI: dead `NEXT_PUBLIC_API_URL` runtime knob, shell-WS prod route, NextAuth `debug:true`, Keycloak issuer localhost fallback
 - [ ] `pki-bootstrap` `pre-upgrade` hook `backoffLimit:1` — a transient failure aborts the whole upgrade
 - [ ] CPU limits on infra pods, Loki liveness probe, Grafana OAuth client secret from a secret
+- [ ] Loki log queries broken — LogQL `{...}` parsed as URI-template vars in `LogService.queryLogs` (RestClient expands `{}`); dashboard device-log views return nothing
+- [ ] `GET /api/v1/devices/{id}/manifest` → 404 `NoResourceFoundException` — caller (UI?) GETs a manifest endpoint that only exists as PUT
 
 ## Observability & health
 
