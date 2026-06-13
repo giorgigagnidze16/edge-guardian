@@ -7,6 +7,10 @@ resource "google_container_cluster" "primary" {
   networking_mode          = "VPC_NATIVE"
   ip_allocation_policy {}
 
+  workload_identity_config {
+    workload_pool = "${var.project_id}.svc.id.goog"
+  }
+
   database_encryption {
     state    = "ENCRYPTED"
     key_name = google_kms_crypto_key.gke_secrets.id
