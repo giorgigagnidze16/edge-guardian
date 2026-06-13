@@ -24,6 +24,7 @@ public class EmqxAdminClient {
     public EmqxAdminClient(EmqxProperties properties) {
         this.properties = properties;
         this.httpClient = HttpClient.newBuilder()
+                .version(HttpClient.Version.HTTP_1_1)
                 .connectTimeout(Duration.ofMillis(properties.timeoutMs()))
                 .build();
         this.basicAuthHeader = buildBasicAuth(properties.username(), properties.password());
