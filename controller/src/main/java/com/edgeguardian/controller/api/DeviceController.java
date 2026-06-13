@@ -2,6 +2,7 @@ package com.edgeguardian.controller.api;
 
 import com.edgeguardian.controller.dto.CreateCommandRequest;
 import com.edgeguardian.controller.dto.DeviceDto;
+import com.edgeguardian.controller.dto.ManifestUpdateRequest;
 import com.edgeguardian.controller.model.CommandExecution;
 import com.edgeguardian.controller.model.Device;
 import com.edgeguardian.controller.model.DeviceCommand;
@@ -13,7 +14,9 @@ import com.edgeguardian.controller.security.TenantPrincipal;
 import com.edgeguardian.controller.service.DeviceLifecycleService;
 import com.edgeguardian.controller.service.DeviceRegistry;
 import com.edgeguardian.controller.service.LogService;
+import com.edgeguardian.controller.service.ManifestYaml;
 import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import org.eclipse.paho.mqttv5.common.MqttException;
 import org.springframework.http.HttpStatus;
@@ -23,6 +26,7 @@ import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -43,6 +47,7 @@ public class DeviceController {
 
     private final LogService logService;
     private final DeviceRegistry registry;
+    private final ObjectMapper objectMapper;
     private final CommandPublisher commandPublisher;
     private final DeviceCommandRepository commandRepository;
     private final CommandExecutionRepository executionRepository;
@@ -101,6 +106,33 @@ public class DeviceController {
             end = Instant.now().toString();
         }
         return logService.queryLogs(deviceId, start, end, limit, level, search);
+    }
+
+    @GetMapping("/{deviceId}/manifest")
+    @PreAuthorize("@orgSecurity.hasMinRole(authentication, 'VIEWER')")
+    public JsonNode getManifest(@PathVariable String deviceId,
+                                @AuthenticationPrincipal TenantPrincipal principal) {
+        loadForTenant(deviceId, principal);
+        String yaml = registry.getManifest(deviceId)
+                .map(ManifestYaml::toYaml)
+                .orElseGet(() -> ManifestYaml.skeleton(deviceId));
+        return objectMapper.valueToTree(yaml);
+    }
+
+    @PutMapping("/{deviceId}/manifest")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    @PreAuthorize("@orgSecurity.hasMinRole(authentication, 'OPERATOR')")
+    public void updateManifest(@PathVariable String deviceId,
+                               @RequestBody ManifestUpdateRequest request,
+                               @AuthenticationPrincipal TenantPrincipal principal) {
+        loadForTenant(deviceId, principal);
+        ManifestYaml.Parsed parsed;
+        try {
+            parsed = ManifestYaml.parse(request.content());
+        } catch (IllegalArgumentException e) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, e.getMessage());
+        }
+        registry.saveManifest(deviceId, parsed.metadata(), parsed.spec());
     }
 
     @PostMapping("/{deviceId}/commands")

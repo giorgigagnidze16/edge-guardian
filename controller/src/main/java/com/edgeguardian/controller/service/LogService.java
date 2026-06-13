@@ -8,8 +8,10 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.util.UriComponentsBuilder;
 
+import java.net.URI;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -36,6 +38,23 @@ public class LogService {
 
     private static String trimTrailingSlash(String url) {
         return url.endsWith("/") ? url.substring(0, url.length() - 1) : url;
+    }
+
+    static URI buildQueryUri(String baseUrl, String logql, String start, String end, int limit) {
+        Map<String, Object> vars = new HashMap<>();
+        vars.put("query", logql);
+        vars.put("start", start == null ? "" : start);
+        vars.put("end", end == null ? "" : end);
+        vars.put("limit", limit);
+        return UriComponentsBuilder.fromUriString(queryEndpoint(baseUrl))
+                .queryParam("query", "{query}")
+                .queryParam("start", "{start}")
+                .queryParam("end", "{end}")
+                .queryParam("limit", "{limit}")
+                .queryParam("direction", "backward")
+                .encode()
+                .buildAndExpand(vars)
+                .toUri();
     }
 
     public void pushToLoki(String deviceId, JsonNode entries) {
@@ -89,14 +108,7 @@ public class LogService {
                 query.append(" |= \"").append(search.replace("\"", "\\\"")).append("\"");
             }
 
-            String uri = UriComponentsBuilder.fromUriString(queryEndpoint(lokiBaseUrl))
-                    .queryParam("query", query.toString())
-                    .queryParam("start", start)
-                    .queryParam("end", end)
-                    .queryParam("limit", limit)
-                    .queryParam("direction", "backward")
-                    .build()
-                    .toUriString();
+            URI uri = buildQueryUri(lokiBaseUrl, query.toString(), start, end, limit);
 
             return restClient.get()
                     .uri(uri)
